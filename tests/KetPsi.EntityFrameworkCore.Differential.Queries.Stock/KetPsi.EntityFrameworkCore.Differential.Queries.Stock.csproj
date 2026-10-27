@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The shared queries without the generator: they run on EF Core's own query pipeline. -->
+  <PropertyGroup>
+    <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\KetPsi.EntityFrameworkCore.Differential.Queries\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KetPsi.EntityFrameworkCore.Differential.Model\KetPsi.EntityFrameworkCore.Differential.Model.csproj" />
+  </ItemGroup>
+
+</Project>

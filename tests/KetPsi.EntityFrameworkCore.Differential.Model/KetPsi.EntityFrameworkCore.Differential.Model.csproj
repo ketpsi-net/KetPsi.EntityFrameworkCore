@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The model both query builds share. The generator runs here too, because query filters are translated where
+       HasQueryFilter is written. -->
+  <Import Project="..\..\src\KetPsi.EntityFrameworkCore.Generator\build\KetPsi.EntityFrameworkCore.Generator.props" />
+
+  <PropertyGroup>
+    <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore\KetPsi.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore.Generator\KetPsi.EntityFrameworkCore.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Import Project="..\..\src\KetPsi.EntityFrameworkCore.Generator\build\KetPsi.EntityFrameworkCore.Generator.targets" />
+
+</Project>

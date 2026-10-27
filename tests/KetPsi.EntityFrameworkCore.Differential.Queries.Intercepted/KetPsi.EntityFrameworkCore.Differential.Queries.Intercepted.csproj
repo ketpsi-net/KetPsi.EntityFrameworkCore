@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The shared queries with the generator: every query runs through KetPsi.EntityFrameworkCore. -->
+  <Import Project="..\..\src\KetPsi.EntityFrameworkCore.Generator\build\KetPsi.EntityFrameworkCore.Generator.props" />
+
+  <PropertyGroup>
+    <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\KetPsi.EntityFrameworkCore.Differential.Queries\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KetPsi.EntityFrameworkCore.Differential.Model\KetPsi.EntityFrameworkCore.Differential.Model.csproj" />
+    <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore.SqlServer\KetPsi.EntityFrameworkCore.SqlServer.csproj" />
+    <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore.Generator\KetPsi.EntityFrameworkCore.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Import Project="..\..\src\KetPsi.EntityFrameworkCore.Generator\build\KetPsi.EntityFrameworkCore.Generator.targets" />
+
+</Project>

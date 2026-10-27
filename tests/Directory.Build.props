@@ -2,17 +2,18 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
   <PropertyGroup>
-    <IsTestUtilities>$(MSBuildProjectName.EndsWith('.TestUtilities'))</IsTestUtilities>
+    <!-- Only *.Tests projects run tests; the others are fixtures and test doubles they use. -->
+    <IsKetPsiTestProject>$(MSBuildProjectName.EndsWith('.Tests'))</IsKetPsiTestProject>
     <IsPackable>false</IsPackable>
     <!-- Test classes are public for xUnit but are not API. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(IsTestUtilities)' != 'true'">
+  <PropertyGroup Condition="'$(IsKetPsiTestProject)' == 'true'">
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(IsTestUtilities)' != 'true'">
+  <ItemGroup Condition="'$(IsKetPsiTestProject)' == 'true'">
     <PackageReference Include="xunit.v3" />
     <Using Include="Xunit" />
   </ItemGroup>

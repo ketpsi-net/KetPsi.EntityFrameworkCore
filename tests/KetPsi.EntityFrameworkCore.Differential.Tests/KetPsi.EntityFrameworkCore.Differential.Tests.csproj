@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Testcontainers.MsSql" />
+  </ItemGroup>
+
+  <!-- The same query source, built twice; the aliases tell the two Queries classes apart. -->
+  <ItemGroup>
+    <ProjectReference Include="..\KetPsi.EntityFrameworkCore.Differential.Model\KetPsi.EntityFrameworkCore.Differential.Model.csproj" />
+    <ProjectReference Include="..\KetPsi.EntityFrameworkCore.Differential.Queries.Stock\KetPsi.EntityFrameworkCore.Differential.Queries.Stock.csproj"
+                      Aliases="Stock" />
+    <ProjectReference Include="..\KetPsi.EntityFrameworkCore.Differential.Queries.Intercepted\KetPsi.EntityFrameworkCore.Differential.Queries.Intercepted.csproj"
+                      Aliases="Intercepted" />
+  </ItemGroup>
+
+</Project>
