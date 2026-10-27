@@ -1,4 +1,5 @@
 using KetPsi.EntityFrameworkCore.Infrastructure;
+using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.Query;
 using KetPsi.EntityFrameworkCore.Tests.TestModel;
 using Microsoft.EntityFrameworkCore;
@@ -67,6 +68,72 @@ public sealed class SqlQueryTests : IDisposable
     [Fact]
     public void ToSqlQueryable_NullSource_Throws()
         => Assert.Throws<ArgumentNullException>("source", () => SqlQuery.ToSqlQueryable<Blog>(null!));
+
+    [Fact]
+    public void Where_AppendsPredicateWithValues()
+    {
+        var predicate = new ComparisonTemplate(nameof(Blog.Rating), ComparisonOperator.GreaterThan, 0);
+        object?[] values = [3];
+
+        var query = AsSql(SqlQuery.Where(_db.Blogs, predicate, values));
+
+        var node = Assert.IsType<WhereNode>(query.Tail);
+        Assert.Same(predicate, node.Predicate);
+        Assert.Same(values, node.Values);
+        Assert.IsType<RootNode>(node.Parent);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void Where_WrongValueCount_Throws(int valueCount)
+    {
+        var predicate = new ComparisonTemplate(nameof(Blog.Rating), ComparisonOperator.GreaterThan, 0);
+
+        var exception = Assert.Throws<ArgumentException>("values", () => SqlQuery.Where(_db.Blogs, predicate, new object?[valueCount]));
+
+        Assert.Contains($"{valueCount} were supplied", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Where_NullArguments_Throw()
+    {
+        var predicate = new BooleanPropertyTemplate("IsActive");
+
+        Assert.Throws<ArgumentNullException>("predicate", () => SqlQuery.Where(_db.Blogs, null!, []));
+        Assert.Throws<ArgumentNullException>("values", () => SqlQuery.Where(_db.Blogs, predicate, null!));
+    }
+
+    [Fact]
+    public void WhereIf_True_AppendsPredicate()
+    {
+        var predicate = new ComparisonTemplate(nameof(Blog.Rating), ComparisonOperator.Equal, 0);
+
+        var query = AsSql(SqlQuery.WhereIf(_db.Blogs, condition: true, predicate, [5]));
+
+        Assert.Same(predicate, Assert.IsType<WhereNode>(query.Tail).Predicate);
+    }
+
+    [Fact]
+    public void WhereIf_False_ReturnsChainUnchanged()
+    {
+        var source = AsSql(SqlQuery.AsNoTracking(_db.Blogs));
+        var predicate = new ComparisonTemplate(nameof(Blog.Rating), ComparisonOperator.Equal, 0);
+
+        var query = AsSql(SqlQuery.WhereIf(source, condition: false, predicate, [5]));
+
+        Assert.Same(source.Tail, query.Tail);
+    }
+
+    [Fact]
+    public void WhereIf_FalseOnDbSet_StillReturnsKetPsiQuery()
+    {
+        var predicate = new ComparisonTemplate(nameof(Blog.Rating), ComparisonOperator.Equal, 0);
+
+        var query = AsSql(SqlQuery.WhereIf(_db.Blogs, condition: false, predicate, [5]));
+
+        Assert.IsType<RootNode>(query.Tail);
+    }
 
     [Fact]
     public void AsNoTracking_AppendsNoTrackingNode()

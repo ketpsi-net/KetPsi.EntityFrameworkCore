@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
+using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -41,6 +42,37 @@ public static class SqlQuery
 
         return false;
     }
+
+    /// <summary>Appends <c>Where</c>.</summary>
+    /// <param name="source">The query.</param>
+    /// <param name="predicate">The predicate translated at build time.</param>
+    /// <param name="values">The predicate's value slots, read from the lambda when the operator ran. The query takes ownership of the array.</param>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IQueryable<T> Where<T>(IQueryable<T> source, PredicateTemplate predicate, object?[] values)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        ArgumentNullException.ThrowIfNull(values);
+        if (values.Length != predicate.ValueCount)
+        {
+            throw new ArgumentException(
+                string.Format(CultureInfo.InvariantCulture, ExceptionMessages.ValueCountMismatch, predicate.ValueCount, values.Length),
+                nameof(values));
+        }
+
+        var query = ToSqlQueryable(source);
+        return query.WithTail(new WhereNode(query.Tail, predicate, values));
+    }
+
+    /// <summary>Appends <c>Where</c> when <paramref name="condition"/> is <see langword="true"/>; otherwise returns the query unchanged.</summary>
+    /// <param name="source">The query.</param>
+    /// <param name="condition">Whether to apply the predicate.</param>
+    /// <param name="predicate">The predicate translated at build time.</param>
+    /// <param name="values">The predicate's value slots, read from the lambda when the operator ran. The query takes ownership of the array.</param>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IQueryable<T> WhereIf<T>(IQueryable<T> source, bool condition, PredicateTemplate predicate, object?[] values)
+        where T : class
+        => condition ? Where(source, predicate, values) : ToSqlQueryable(source);
 
     /// <summary>Appends <c>AsNoTracking</c>.</summary>
     public static IQueryable<T> AsNoTracking<T>(IQueryable<T> source)

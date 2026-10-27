@@ -17,6 +17,36 @@ internal static class ExceptionMessages
     public const string NotAnEntityQuery =
         "KetPsi.EntityFrameworkCore can only compose queries rooted at a DbSet, but the source is of type '{0}'.";
 
+    public const string ValueCountMismatch =
+        "The predicate reads {0} value(s), but {1} were supplied.";
+
+    public const string EntityNotInModel =
+        "The type '{0}' is not an entity type in the EF Core model.";
+
+    public const string EntityNotMappedToTable =
+        "The entity type '{0}' is not mapped to a table. KetPsi.EntityFrameworkCore only queries entities mapped to a table.";
+
+    public const string EntityInheritanceNotSupported =
+        "The entity type '{0}' is part of an inheritance hierarchy, which KetPsi.EntityFrameworkCore does not support yet.";
+
+    public const string OwnedEntityNotSupported =
+        "The entity type '{0}' is owned, or owns other entity types, which KetPsi.EntityFrameworkCore does not support yet.";
+
+    public const string ComplexPropertyNotSupported =
+        "The entity type '{0}' has complex properties, which KetPsi.EntityFrameworkCore does not support yet.";
+
+    public const string ValueConverterNotSupported =
+        "The property '{0}.{1}' has a value converter, which KetPsi.EntityFrameworkCore does not support yet.";
+
+    public const string PropertyColumnMissing =
+        "The property '{0}.{1}' has no column in table '{2}'.";
+
+    public const string PropertyNotMapped =
+        "The entity type '{0}' has no mapped property '{1}'. The property may be ignored in the EF Core model.";
+
+    public const string PropertyNotBoolean =
+        "The property '{0}.{1}' is used as a boolean predicate, but its type is '{2}'.";
+
     public const string DialectAlreadyRegistered =
         "The EF Core provider '{0}' already has the SQL dialect '{1}' registered; '{2}' cannot replace it.";
 
