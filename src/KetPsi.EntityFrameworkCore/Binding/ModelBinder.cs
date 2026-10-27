@@ -55,8 +55,16 @@ internal static class ModelBinder
             .Select(property => BindProperty(property, storeObject, clrType, table))
             .ToArray();
 
-        return new BoundEntity(clrType, table, schema, properties);
+        return new BoundEntity(clrType, table, schema, properties, GetFilterKeys(entityType));
     }
+
+    // EF Core 10 added named filters; earlier versions allow one unnamed filter per entity.
+    private static string?[] GetFilterKeys(IEntityType entityType)
+#if NET10_0_OR_GREATER
+        => entityType.GetDeclaredQueryFilters().Select(static f => f.IsAnonymous ? null : f.Key).ToArray();
+#else
+        => entityType.GetQueryFilter() is null ? [] : [null];
+#endif
 
     private static BoundProperty BindProperty(IProperty property, StoreObjectIdentifier storeObject, Type entityClrType, string table)
     {

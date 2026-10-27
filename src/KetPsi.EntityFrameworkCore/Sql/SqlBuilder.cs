@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using KetPsi.EntityFrameworkCore.Binding;
+using KetPsi.EntityFrameworkCore.Filters;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.Query;
 
@@ -31,14 +32,16 @@ internal sealed class SqlBuilder
 
     private readonly BoundEntity _entity;
     private readonly ISqlDialect _dialect;
+    private readonly IReadOnlyList<ResolvedQueryFilter> _filters;
     private readonly List<QueryParameter> _parameters = [];
     private int _aliasCount;
     private SelectState? _state;
 
-    private SqlBuilder(BoundEntity entity, ISqlDialect dialect)
+    private SqlBuilder(BoundEntity entity, ISqlDialect dialect, IReadOnlyList<ResolvedQueryFilter> filters)
     {
         _entity = entity;
         _dialect = dialect;
+        _filters = filters;
     }
 
     private SelectState State => _state ?? throw new UnreachableException("The chain did not start with a root node.");
@@ -49,7 +52,14 @@ internal sealed class SqlBuilder
     /// <param name="dialect">The database dialect.</param>
     /// <param name="terminal">What the statement returns.</param>
     /// <param name="rowLimit">For <see cref="QueryTerminal.Rows"/>, a limit applied after every operator, such as 1 for <c>First</c>.</param>
-    public static SqlStatement Build(BoundEntity entity, QueryNode tail, ISqlDialect dialect, QueryTerminal terminal, int? rowLimit = null)
+    /// <param name="filters">The model query filters to apply to the root table, already resolved against the context.</param>
+    public static SqlStatement Build(
+        BoundEntity entity,
+        QueryNode tail,
+        ISqlDialect dialect,
+        QueryTerminal terminal,
+        int? rowLimit = null,
+        IReadOnlyList<ResolvedQueryFilter>? filters = null)
     {
         ArgumentNullException.ThrowIfNull(entity);
         ArgumentNullException.ThrowIfNull(tail);
@@ -63,7 +73,7 @@ internal sealed class SqlBuilder
             }
         }
 
-        var builder = new SqlBuilder(entity, dialect);
+        var builder = new SqlBuilder(entity, dialect, filters ?? []);
         foreach (var node in Chain(tail))
         {
             builder.Apply(node);
@@ -114,7 +124,7 @@ internal sealed class SqlBuilder
                 State.Limit = AddParameter(take.Count, property: null);
                 break;
             case NoTrackingNode or IgnoreQueryFiltersNode:
-                // Tracking and query filters don't change the SQL built here.
+                // Tracking doesn't change the SQL, and ignored filters were already left out of the resolved filters.
                 break;
             default:
                 throw new UnreachableException(node.GetType().ToString());
@@ -135,6 +145,13 @@ internal sealed class SqlBuilder
         }
 
         _state = new SelectState(_dialect.QualifyTable(_entity.Table, _entity.Schema), NextAlias());
+
+        // Query filters restrict the entity set itself, so they apply before any operator, like in EF Core.
+        foreach (var filter in _filters)
+        {
+            var predicate = _entity.BindPredicate(filter.Predicate);
+            _state.Predicates.Add(RenderPredicate(predicate, filter.Values, negated: false));
+        }
     }
 
     private string Finish(QueryTerminal terminal, int? rowLimit)

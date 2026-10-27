@@ -10,12 +10,13 @@ internal sealed class BoundEntity
     private readonly Dictionary<string, BoundProperty> _propertiesByName;
     private readonly ConcurrentDictionary<PredicateTemplate, BoundPredicate> _predicates = new();
 
-    public BoundEntity(Type clrType, string table, string? schema, IReadOnlyList<BoundProperty> properties)
+    public BoundEntity(Type clrType, string table, string? schema, IReadOnlyList<BoundProperty> properties, IReadOnlyList<string?> filterKeys)
     {
         ClrType = clrType;
         Table = table;
         Schema = schema;
         Properties = properties;
+        FilterKeys = filterKeys;
         _propertiesByName = properties.ToDictionary(static p => p.Name, StringComparer.Ordinal);
     }
 
@@ -27,6 +28,9 @@ internal sealed class BoundEntity
 
     /// <summary>Every mapped property, in model order.</summary>
     public IReadOnlyList<BoundProperty> Properties { get; }
+
+    /// <summary>The keys of the query filters the model declares for the entity; <see langword="null"/> for an unnamed filter.</summary>
+    public IReadOnlyList<string?> FilterKeys { get; }
 
     /// <exception cref="InvalidOperationException">The entity has no mapped property named <paramref name="propertyName"/>.</exception>
     public BoundProperty GetProperty(string propertyName)

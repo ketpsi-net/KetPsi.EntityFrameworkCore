@@ -56,6 +56,20 @@ internal static class ExceptionMessages
     public const string ContainsListNotEnumerable =
         "The list passed to Contains for property '{0}' must be a collection, but it was '{1}'.";
 
+    public const string NotADbContextType =
+        "The type '{0}' does not derive from DbContext.";
+
+    public const string QueryFilterAlreadyRegistered =
+        "A different translation of the query filter '{1}' on '{0}' is already registered for '{2}'.";
+
+    public const string QueryFilterNotTranslated =
+        "The EF Core model declares the query filter '{1}' on '{0}', but KetPsi.EntityFrameworkCore has no build-time " +
+        "translation of it for '{2}'. Configure the filter with HasQueryFilter in code KetPsi.EntityFrameworkCore.Generator " +
+        "can see, or use IgnoreQueryFilters.";
+
+    public const string QueryFilterValueCountMismatch =
+        "The query filter '{1}' on '{0}' reads {2} value(s), but its value reader returned {3}.";
+
     public const string DialectAlreadyRegistered =
         "The EF Core provider '{0}' already has the SQL dialect '{1}' registered; '{2}' cannot replace it.";
 
