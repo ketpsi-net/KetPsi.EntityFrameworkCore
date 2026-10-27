@@ -3,7 +3,7 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Data.SqlClient;
 
-namespace KetPsi.EntityFrameworkCore.Tests.Fakes;
+namespace KetPsi.EntityFrameworkCore.TestUtilities;
 
 public sealed class FakeDbCommand(FakeDbConnection connection) : DbCommand
 {

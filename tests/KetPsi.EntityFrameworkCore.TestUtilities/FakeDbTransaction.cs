@@ -1,7 +1,7 @@
 using System.Data;
 using System.Data.Common;
 
-namespace KetPsi.EntityFrameworkCore.Tests.Fakes;
+namespace KetPsi.EntityFrameworkCore.TestUtilities;
 
 public sealed class FakeDbTransaction(FakeDbConnection connection, IsolationLevel isolationLevel) : DbTransaction
 {

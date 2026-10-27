@@ -1,6 +1,7 @@
 using System.Data;
 using KetPsi.EntityFrameworkCore.Infrastructure;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
+using KetPsi.EntityFrameworkCore.TestUtilities;
 using KetPsi.EntityFrameworkCore.Tests.Fakes;
 using KetPsi.EntityFrameworkCore.Tests.TestModel;
 using Microsoft.EntityFrameworkCore;

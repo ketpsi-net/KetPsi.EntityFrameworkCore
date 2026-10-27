@@ -2,13 +2,17 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
+    <IsTestUtilities>$(MSBuildProjectName.EndsWith('.TestUtilities'))</IsTestUtilities>
     <IsPackable>false</IsPackable>
     <!-- Test classes are public for xUnit but are not API. -->
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
-  <ItemGroup>
+  <PropertyGroup Condition="'$(IsTestUtilities)' != 'true'">
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestUtilities)' != 'true'">
     <PackageReference Include="xunit.v3" />
     <Using Include="Xunit" />
   </ItemGroup>

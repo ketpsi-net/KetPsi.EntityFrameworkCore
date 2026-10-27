@@ -2,6 +2,7 @@ using System.Data;
 using System.Data.Common;
 using KetPsi.EntityFrameworkCore.Infrastructure;
 using KetPsi.EntityFrameworkCore.SqlServer;
+using KetPsi.EntityFrameworkCore.TestUtilities;
 using KetPsi.EntityFrameworkCore.Tests.TestModel;
 using Microsoft.EntityFrameworkCore;
 

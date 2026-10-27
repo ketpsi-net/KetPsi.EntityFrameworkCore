@@ -3,6 +3,7 @@ using KetPsi.EntityFrameworkCore.Binding;
 using KetPsi.EntityFrameworkCore.Execution;
 using KetPsi.EntityFrameworkCore.Sql;
 using KetPsi.EntityFrameworkCore.SqlServer;
+using KetPsi.EntityFrameworkCore.TestUtilities;
 using KetPsi.EntityFrameworkCore.Tests.Fakes;
 using KetPsi.EntityFrameworkCore.Tests.TestModel;
 using Microsoft.EntityFrameworkCore;

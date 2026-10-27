@@ -2,7 +2,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 
-namespace KetPsi.EntityFrameworkCore.Tests.Fakes;
+namespace KetPsi.EntityFrameworkCore.TestUtilities;
 
 /// <summary>An in-memory connection that records the commands it creates and answers them with canned results.</summary>
 public sealed class FakeDbConnection : DbConnection
