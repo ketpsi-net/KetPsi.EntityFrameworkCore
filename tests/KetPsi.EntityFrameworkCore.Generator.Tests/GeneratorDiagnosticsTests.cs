@@ -188,8 +188,4 @@ public sealed class GeneratorDiagnosticsTests
 
         Assert.Equal("KP1001", Assert.Single(run.Diagnostics).Id);
     }
-
-    [Fact]
-    public void Step8_GeneratesNoSourceYet()
-        => Assert.Empty(GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.AsNoTracking().ToList();")).Result.GeneratedTrees);
 }

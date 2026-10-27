@@ -13,3 +13,5 @@ KP1003 | KetPsi.EntityFrameworkCore | Error | Tracking query not supported
 KP1004 | KetPsi.EntityFrameworkCore | Error | Raw SQL not supported
 KP1005 | KetPsi.EntityFrameworkCore | Error | Lambda expression required
 KP1006 | KetPsi.EntityFrameworkCore | Error | Operator overload not supported
+KP3001 | KetPsi.EntityFrameworkCore | Error | Property type not supported
+KP3004 | KetPsi.EntityFrameworkCore | Error | Entity cannot be constructed

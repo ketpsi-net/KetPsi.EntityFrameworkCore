@@ -27,15 +27,16 @@ public sealed class EntityReadersTests
         Assert.Same(first, EntityReaders.Get<EntityB>());
     }
 
+    // Each assembly that queries an entity generates its own reader type for it.
     [Fact]
-    public void Register_DifferentReaderType_ThrowsNamingBoth()
+    public void Register_ReaderFromAnotherAssembly_KeepsFirst()
     {
-        EntityReaders.Register(new Reader<EntityC>());
+        var first = new Reader<EntityC>();
 
-        var exception = Assert.Throws<InvalidOperationException>(() => EntityReaders.Register(new OtherReader<EntityC>()));
+        EntityReaders.Register(first);
+        EntityReaders.Register(new OtherReader<EntityC>());
 
-        Assert.Contains(typeof(Reader<EntityC>).ToString(), exception.Message, StringComparison.Ordinal);
-        Assert.Contains(typeof(OtherReader<EntityC>).ToString(), exception.Message, StringComparison.Ordinal);
+        Assert.Same(first, EntityReaders.Get<EntityC>());
     }
 
     [Fact]

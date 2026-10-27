@@ -14,6 +14,13 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore.Generator\KetPsi.EntityFrameworkCore.Generator.csproj" />
     <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore\KetPsi.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore.SqlServer\KetPsi.EntityFrameworkCore.SqlServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Snapshots are expected generator output, not part of the test assembly. -->
+    <Compile Remove="**\*.verified.cs" />
+    <None Include="**\*.verified.cs" />
   </ItemGroup>
 
 </Project>

@@ -113,7 +113,7 @@ internal static class CallSiteAnalyzer
         }
 
         var nameSyntax = ((MemberAccessExpressionSyntax)invocation.Expression).Name;
-        var site = new SiteBuilder(EntityDiscovery.TypeName(elementType), LocationInfo.From(nameSyntax.GetLocation()), method.Name, operation);
+        var site = new SiteBuilder(elementType, LocationInfo.From(nameSyntax.GetLocation()), method.Name, operation, semanticModel.Compilation);
 
         return family switch
         {
@@ -285,16 +285,25 @@ internal static class CallSiteAnalyzer
         _ => OperatorKind.LongCount,
     };
 
-    private sealed class SiteBuilder(string elementType, LocationInfo location, string methodName, IInvocationOperation operation)
+    private sealed class SiteBuilder(
+        INamedTypeSymbol elementSymbol,
+        LocationInfo location,
+        string methodName,
+        IInvocationOperation operation,
+        Compilation compilation)
     {
+        private readonly string _elementType = EntityDiscovery.TypeName(elementSymbol);
+
         public CallSite Supported(OperatorKind kind, int? lambdaOrdinal = null, bool hasPredicate = false, bool isAsync = false)
         {
             if (lambdaOrdinal is { } ordinal && RequireLambda(ordinal) is { } diagnostic)
             {
-                return new CallSite(elementType, location, Operator: null, isAsync, hasPredicate, diagnostic);
+                return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, diagnostic);
             }
 
-            return new CallSite(elementType, location, kind, isAsync, hasPredicate, Diagnostic: null);
+            // Only classes can be entities; the shape is kept only if the element type turns out to be one.
+            var entity = elementSymbol.TypeKind == TypeKind.Class ? EntityShapeBuilder.Build(elementSymbol, compilation, location) : null;
+            return new CallSite(_elementType, location, kind, isAsync, hasPredicate, Diagnostic: null, entity);
         }
 
         public CallSite Unsupported() => Reject(DiagnosticDescriptors.UnsupportedOperator, methodName);
@@ -302,7 +311,7 @@ internal static class CallSiteAnalyzer
         public CallSite Overload(string reason) => Reject(DiagnosticDescriptors.UnsupportedOverload, methodName, reason);
 
         public CallSite Reject(DiagnosticDescriptor descriptor, params string[] messageArgs)
-            => new(elementType, location, Operator: null, IsAsync: false, HasPredicate: false, DiagnosticInfo.Create(descriptor, location, messageArgs));
+            => new(_elementType, location, Operator: null, IsAsync: false, HasPredicate: false, DiagnosticInfo.Create(descriptor, location, messageArgs));
 
         // Lambdas are translated at build time, so the argument must be the lambda itself.
         private DiagnosticInfo? RequireLambda(int ordinal)

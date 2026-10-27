@@ -51,6 +51,18 @@ internal static class DiagnosticDescriptors
         "Operator overload not supported",
         "This overload of '{0}' is not supported: {1}");
 
+    public static readonly DiagnosticDescriptor PropertyTypeNotSupported = Error(
+        "KP3001",
+        "Property type not supported",
+        "The property '{0}.{1}' has the type '{2}', which KetPsi.EntityFrameworkCore cannot read yet. " +
+        "Mark it [NotMapped] if EF Core does not map it.");
+
+    public static readonly DiagnosticDescriptor EntityNotConstructible = Error(
+        "KP3004",
+        "Entity cannot be constructed",
+        "The entity type '{0}' needs a non-abstract class with a parameterless constructor, accessible to the generated " +
+        "code when the entity has init-only properties");
+
     private static DiagnosticDescriptor Error(string id, string title, string messageFormat)
         => new(id, title, messageFormat, Category, DiagnosticSeverity.Error, isEnabledByDefault: true);
 }

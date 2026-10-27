@@ -10,10 +10,12 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// <param name="IsAsync">Whether the operator is an EF Core async terminal.</param>
 /// <param name="HasPredicate">Whether a terminal takes a predicate, such as <c>First(x =&gt; ...)</c>.</param>
 /// <param name="Diagnostic">Why the call is not supported, or <see langword="null"/>.</param>
+/// <param name="Entity">For supported operators on a class, how to read the element type.</param>
 internal sealed record CallSite(
     string ElementType,
     LocationInfo Location,
     OperatorKind? Operator,
     bool IsAsync,
     bool HasPredicate,
-    DiagnosticInfo? Diagnostic);
+    DiagnosticInfo? Diagnostic,
+    EntityShape? Entity = null);

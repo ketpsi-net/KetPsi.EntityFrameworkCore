@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using KetPsi.EntityFrameworkCore.Generator.Diagnostics;
 using KetPsi.EntityFrameworkCore.Generator.Discovery;
+using KetPsi.EntityFrameworkCore.Generator.Emit;
 using KetPsi.EntityFrameworkCore.Generator.Model;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -19,6 +20,9 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
 
     internal const string InterceptorsNamespacesProperty = "build_property.InterceptorsNamespaces";
     internal const string InterceptorsPreviewNamespacesProperty = "build_property.InterceptorsPreviewNamespaces";
+
+    private const string RuntimeReaderRegistry = "KetPsi.EntityFrameworkCore.Infrastructure.EntityReaders";
+    private const string SqlServerDialectType = "KetPsi.EntityFrameworkCore.SqlServer.SqlServerDialect";
 
     private static readonly char[] NamespaceSeparators = [';', ','];
 
@@ -45,7 +49,42 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
         var interceptorsEnabled = context.AnalyzerConfigOptionsProvider
             .Select(static (options, _) => InterceptorsEnabled(options.GlobalOptions));
 
+        var references = context.CompilationProvider.Select(static (compilation, _) => GetReferences(compilation));
+
         context.RegisterSourceOutput(entitySites.Combine(interceptorsEnabled), static (spc, pair) => Report(spc, pair.Left, pair.Right));
+        context.RegisterSourceOutput(entitySites.Combine(references), static (spc, pair) => EmitReaders(spc, pair.Left, pair.Right));
+    }
+
+    /// <summary>The entities that get a reader: element types of supported operators, once each.</summary>
+    internal static IReadOnlyList<EntityShape> ReadableEntities(EquatableArray<CallSite> sites)
+        => sites
+            .Where(static s => s.Operator is not null && s.Entity is not null)
+            .Select(static s => s.Entity!)
+            .GroupBy(static e => e.TypeName, StringComparer.Ordinal)
+            .Select(static g => g.First())
+            .OrderBy(static e => e.TypeName, StringComparer.Ordinal)
+            .ToList();
+
+    internal static GenerationReferences GetReferences(Compilation compilation)
+        => new(
+            HasRuntime: compilation.GetTypeByMetadataName(RuntimeReaderRegistry) is not null,
+            HasSqlServer: compilation.GetTypeByMetadataName(SqlServerDialectType) is not null);
+
+    private static void EmitReaders(SourceProductionContext context, EquatableArray<CallSite> sites, GenerationReferences references)
+    {
+        var entities = ReadableEntities(sites);
+        foreach (var diagnostic in entities.SelectMany(static e => e.Diagnostics))
+        {
+            context.ReportDiagnostic(diagnostic.ToDiagnostic());
+        }
+
+        var readable = entities.Where(static e => e.CanRead).ToList();
+        if (!references.HasRuntime || readable.Count == 0)
+        {
+            return;
+        }
+
+        context.AddSource(ReaderEmitter.HintName, ReaderEmitter.Emit(readable, references.HasSqlServer));
     }
 
     /// <summary>Keeps the calls on entity queries, plus internal errors, which are reported whatever the query is.</summary>

@@ -67,9 +67,6 @@ internal static class ExceptionMessages
     public const string QueryFilterValueCountMismatch =
         "The query filter '{1}' on '{0}' reads {2} value(s), but its value reader returned {3}.";
 
-    public const string EntityReaderAlreadyRegistered =
-        "The entity type '{0}' already has the reader '{1}' registered; '{2}' cannot replace it.";
-
     public const string EntityReaderNotRegistered =
         "No generated reader is registered for the entity type '{0}'. Make sure the project that declares the query " +
         "references KetPsi.EntityFrameworkCore.Generator.";

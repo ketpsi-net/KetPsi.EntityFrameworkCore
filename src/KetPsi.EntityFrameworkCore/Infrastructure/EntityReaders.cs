@@ -10,18 +10,16 @@ namespace KetPsi.EntityFrameworkCore.Infrastructure;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static class EntityReaders
 {
-    /// <summary>Registers the reader for <typeparamref name="T"/>. Registering the same reader type again does nothing.</summary>
-    /// <exception cref="InvalidOperationException">A reader of a different type is already registered for <typeparamref name="T"/>.</exception>
+    /// <summary>
+    /// Registers the reader for <typeparamref name="T"/> unless one is already registered. Every assembly that
+    /// queries an entity generates its own reader, and readers generated for the same entity are equivalent,
+    /// so the first registration is kept.
+    /// </summary>
     public static void Register<T>(IEntityReader<T> reader)
     {
         ArgumentNullException.ThrowIfNull(reader);
 
-        var registered = Interlocked.CompareExchange(ref Holder<T>.Reader, reader, comparand: null);
-        if (registered is not null && registered.GetType() != reader.GetType())
-        {
-            throw new InvalidOperationException(string.Format(
-                CultureInfo.InvariantCulture, ExceptionMessages.EntityReaderAlreadyRegistered, typeof(T), registered.GetType(), reader.GetType()));
-        }
+        Interlocked.CompareExchange(ref Holder<T>.Reader, reader, comparand: null);
     }
 
     /// <exception cref="InvalidOperationException">No reader is registered for <typeparamref name="T"/>.</exception>
