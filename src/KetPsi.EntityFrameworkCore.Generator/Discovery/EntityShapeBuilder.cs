@@ -128,6 +128,9 @@ internal static class EntityShapeBuilder
             setter);
     }
 
+    /// <summary>Whether a property of this type is a column the reader can read: a scalar, not a navigation.</summary>
+    internal static bool IsReadableScalar(ITypeSymbol type) => Classify(type) is { IsScalar: true, Read: not null };
+
     private static Setter GetSetter(IMethodSymbol setMethod, Compilation compilation)
     {
         if (!compilation.IsSymbolAccessibleWithin(setMethod, compilation.Assembly))

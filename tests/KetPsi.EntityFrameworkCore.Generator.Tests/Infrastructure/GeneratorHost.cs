@@ -9,7 +9,9 @@ internal static class GeneratorHost
 {
     public const string TestFilePath = "Queries.cs";
 
-    private static readonly CSharpParseOptions ParseOptions = new(LanguageVersion.Latest);
+    // Interceptors are enabled the way the generator package's props enable them.
+    private static readonly CSharpParseOptions ParseOptions = new CSharpParseOptions(LanguageVersion.Latest)
+        .WithFeatures([new("InterceptorsNamespaces", QueryInterceptorGenerator.GeneratedNamespace)]);
 
     // Every assembly the test process can load: the .NET runtime, EF Core and the SQL Server provider, KetPsi.
     private static readonly Lazy<ImmutableArray<MetadataReference>> References = new(static () =>

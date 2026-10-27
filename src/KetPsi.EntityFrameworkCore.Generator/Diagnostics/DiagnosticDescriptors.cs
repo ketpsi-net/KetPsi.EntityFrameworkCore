@@ -51,6 +51,43 @@ internal static class DiagnosticDescriptors
         "Operator overload not supported",
         "This overload of '{0}' is not supported: {1}");
 
+    public static readonly DiagnosticDescriptor ExpressionNotSupported = Error(
+        "KP2001",
+        "Expression not supported",
+        "The expression '{0}' cannot be translated to SQL by KetPsi.EntityFrameworkCore. Predicates compare entity " +
+        "properties with values and combine the comparisons with !, && and ||.");
+
+    public static readonly DiagnosticDescriptor NavigationNotSupported = Error(
+        "KP2002",
+        "Navigation not supported",
+        "'{0}' uses a navigation, which is not supported yet");
+
+    public static readonly DiagnosticDescriptor MethodNotSupported = Error(
+        "KP2003",
+        "Method or member not supported",
+        "'{0}' calls a method or member that cannot be translated to SQL yet");
+
+    public static readonly DiagnosticDescriptor DbFunctionsNotSupported = Error(
+        "KP2004",
+        "EF.Functions not supported",
+        "'{0}' uses EF.Functions, which is not supported yet");
+
+    public static readonly DiagnosticDescriptor CollectionNotSupported = Error(
+        "KP2005",
+        "Collection query not supported",
+        "'{0}' queries a related collection, which is not supported yet");
+
+    public static readonly DiagnosticDescriptor MemberComparisonNotSupported = Error(
+        "KP2006",
+        "Property comparison not supported",
+        "'{0}' compares two entity properties, which is not supported yet");
+
+    public static readonly DiagnosticDescriptor ValueNotSupported = Error(
+        "KP2007",
+        "Value not supported",
+        "The value '{0}' must be a constant, a variable, or a field or property of one. Compute it into a local " +
+        "variable before the query.");
+
     public static readonly DiagnosticDescriptor PropertyTypeNotSupported = Error(
         "KP3001",
         "Property type not supported",

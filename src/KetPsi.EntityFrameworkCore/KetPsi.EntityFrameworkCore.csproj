@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="KetPsi.EntityFrameworkCore.Tests" />
+    <!-- Generator tests run generated interceptors and inspect the operator chain and SQL they produce. -->
+    <InternalsVisibleTo Include="KetPsi.EntityFrameworkCore.Generator.Tests" />
   </ItemGroup>
 
 </Project>

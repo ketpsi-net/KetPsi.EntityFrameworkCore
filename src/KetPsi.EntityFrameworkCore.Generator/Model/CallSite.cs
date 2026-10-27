@@ -11,6 +11,8 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// <param name="HasPredicate">Whether a terminal takes a predicate, such as <c>First(x =&gt; ...)</c>.</param>
 /// <param name="Diagnostic">Why the call is not supported, or <see langword="null"/>.</param>
 /// <param name="Entity">For supported operators on a class, how to read the element type.</param>
+/// <param name="Interception">For supported operators, the <c>InterceptsLocation</c> attribute that targets the call.</param>
+/// <param name="Predicate">For operators that take a predicate, its translation.</param>
 internal sealed record CallSite(
     string ElementType,
     LocationInfo Location,
@@ -18,4 +20,6 @@ internal sealed record CallSite(
     bool IsAsync,
     bool HasPredicate,
     DiagnosticInfo? Diagnostic,
-    EntityShape? Entity = null);
+    EntityShape? Entity = null,
+    string? Interception = null,
+    PredicateModel? Predicate = null);

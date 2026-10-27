@@ -1,6 +1,7 @@
 using KetPsi.EntityFrameworkCore.Generator.Diagnostics;
 using KetPsi.EntityFrameworkCore.Generator.Model;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
 
@@ -113,7 +114,8 @@ internal static class CallSiteAnalyzer
         }
 
         var nameSyntax = ((MemberAccessExpressionSyntax)invocation.Expression).Name;
-        var site = new SiteBuilder(elementType, LocationInfo.From(nameSyntax.GetLocation()), method.Name, operation, semanticModel.Compilation);
+        var site = new SiteBuilder(
+            elementType, LocationInfo.From(nameSyntax.GetLocation()), method.Name, operation, invocation, semanticModel, cancellationToken);
 
         return family switch
         {
@@ -290,21 +292,50 @@ internal static class CallSiteAnalyzer
         LocationInfo location,
         string methodName,
         IInvocationOperation operation,
-        Compilation compilation)
+        InvocationExpressionSyntax invocation,
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken)
     {
         private readonly string _elementType = EntityDiscovery.TypeName(elementSymbol);
 
+        /// <param name="kind">The operator.</param>
+        /// <param name="lambdaOrdinal">The parameter that must be a lambda written at the call site.</param>
+        /// <param name="hasPredicate">Whether that lambda is a predicate, which is translated here.</param>
+        /// <param name="isAsync">Whether the operator is an async terminal.</param>
         public CallSite Supported(OperatorKind kind, int? lambdaOrdinal = null, bool hasPredicate = false, bool isAsync = false)
         {
-            if (lambdaOrdinal is { } ordinal && RequireLambda(ordinal) is { } diagnostic)
+            PredicateModel? predicate = null;
+            if (lambdaOrdinal is { } ordinal)
             {
-                return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, diagnostic);
+                var (lambda, lambdaDiagnostic) = RequireLambda(ordinal);
+                if (lambdaDiagnostic is not null)
+                {
+                    return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, lambdaDiagnostic);
+                }
+
+                if (IsPredicate(kind, hasPredicate) && lambda is not null)
+                {
+                    var (translated, translationDiagnostic) = PredicateTranslator.Translate(lambda, semanticModel, cancellationToken);
+                    if (translationDiagnostic is not null)
+                    {
+                        return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, translationDiagnostic);
+                    }
+
+                    predicate = translated;
+                }
             }
 
             // Only classes can be entities; the shape is kept only if the element type turns out to be one.
-            var entity = elementSymbol.TypeKind == TypeKind.Class ? EntityShapeBuilder.Build(elementSymbol, compilation, location) : null;
-            return new CallSite(_elementType, location, kind, isAsync, hasPredicate, Diagnostic: null, entity);
+            var entity = elementSymbol.TypeKind == TypeKind.Class
+                ? EntityShapeBuilder.Build(elementSymbol, semanticModel.Compilation, location)
+                : null;
+            var interception = semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax();
+
+            return new CallSite(_elementType, location, kind, isAsync, hasPredicate, Diagnostic: null, entity, interception, predicate);
         }
+
+        private static bool IsPredicate(OperatorKind kind, bool hasPredicate)
+            => hasPredicate || kind is OperatorKind.Where or OperatorKind.WhereIf;
 
         public CallSite Unsupported() => Reject(DiagnosticDescriptors.UnsupportedOperator, methodName);
 
@@ -314,12 +345,12 @@ internal static class CallSiteAnalyzer
             => new(_elementType, location, Operator: null, IsAsync: false, HasPredicate: false, DiagnosticInfo.Create(descriptor, location, messageArgs));
 
         // Lambdas are translated at build time, so the argument must be the lambda itself.
-        private DiagnosticInfo? RequireLambda(int ordinal)
+        private (LambdaExpressionSyntax? Lambda, DiagnosticInfo? Diagnostic) RequireLambda(int ordinal)
         {
             var argument = operation.Arguments.FirstOrDefault(a => a.Parameter?.Ordinal == ordinal);
             if (argument?.Value.Syntax is not { } syntax)
             {
-                return null;
+                return (null, null);
             }
 
             while (syntax is ParenthesizedExpressionSyntax parenthesized)
@@ -327,13 +358,13 @@ internal static class CallSiteAnalyzer
                 syntax = parenthesized.Expression;
             }
 
-            return syntax is LambdaExpressionSyntax
-                ? null
-                : DiagnosticInfo.Create(
+            return syntax is LambdaExpressionSyntax lambda
+                ? (lambda, null)
+                : (null, DiagnosticInfo.Create(
                     DiagnosticDescriptors.LambdaRequired,
                     LocationInfo.From(argument.Value.Syntax.GetLocation()),
                     argument.Parameter!.Name,
-                    methodName);
+                    methodName));
         }
     }
 }

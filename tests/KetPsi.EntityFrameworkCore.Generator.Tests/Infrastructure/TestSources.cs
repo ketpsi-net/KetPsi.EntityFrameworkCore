@@ -15,13 +15,30 @@ internal static class TestSources
         """;
 
     public const string Model = """
+        public enum Status { Draft, Published }
+
         public sealed class Blog
         {
             public int Id { get; set; }
             public string Name { get; set; } = "";
             public int Rating { get; set; }
             public bool IsActive { get; set; }
+            public int? Views { get; set; }
+            public Status Status { get; set; }
+            public Author? Author { get; set; }
             public List<Post> Posts { get; set; } = [];
+        }
+
+        public sealed class Author
+        {
+            public int Id { get; set; }
+        }
+
+        public sealed record Request(int Min, string? Name);
+
+        public static class Limits
+        {
+            public static int Max = 10;
         }
 
         public sealed class Post

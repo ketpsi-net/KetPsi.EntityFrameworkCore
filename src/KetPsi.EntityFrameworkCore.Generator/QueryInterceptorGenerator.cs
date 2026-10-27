@@ -53,6 +53,30 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
 
         context.RegisterSourceOutput(entitySites.Combine(interceptorsEnabled), static (spc, pair) => Report(spc, pair.Left, pair.Right));
         context.RegisterSourceOutput(entitySites.Combine(references), static (spc, pair) => EmitReaders(spc, pair.Left, pair.Right));
+        context.RegisterSourceOutput(
+            entitySites.Combine(interceptorsEnabled).Combine(references),
+            static (spc, pair) => EmitInterceptors(spc, pair.Left.Left, pair.Left.Right, pair.Right));
+    }
+
+    /// <summary>The sites that get an interceptor, in source order so the output is stable.</summary>
+    internal static IReadOnlyList<CallSite> InterceptedSites(EquatableArray<CallSite> sites)
+        => sites
+            .Where(InterceptorEmitter.CanIntercept)
+            .OrderBy(static s => s.Location.FilePath, StringComparer.Ordinal)
+            .ThenBy(static s => s.Location.Span.Start)
+            .ToList();
+
+    // Without interceptors enabled the compiler would reject the generated code, and KP0002 already explains why.
+    private static void EmitInterceptors(
+        SourceProductionContext context, EquatableArray<CallSite> sites, bool interceptorsEnabled, GenerationReferences references)
+    {
+        var intercepted = InterceptedSites(sites);
+        if (!interceptorsEnabled || !references.HasRuntime || intercepted.Count == 0)
+        {
+            return;
+        }
+
+        context.AddSource(InterceptorEmitter.HintName, InterceptorEmitter.Emit(intercepted));
     }
 
     /// <summary>The entities that get a reader: element types of supported operators, once each.</summary>

@@ -80,6 +80,10 @@ internal static class ExceptionMessages
 
     public const string SequenceContainsMoreThanOneElement = "Sequence contains more than one element";
 
+    public const string CapturedValueNotSupported =
+        "The predicate value '{1}' ({0}) cannot be read. The generated interceptor does not match the expression tree " +
+        "the compiler built; please report this with the query.";
+
     public const string DialectAlreadyRegistered =
         "The EF Core provider '{0}' already has the SQL dialect '{1}' registered; '{2}' cannot replace it.";
 
