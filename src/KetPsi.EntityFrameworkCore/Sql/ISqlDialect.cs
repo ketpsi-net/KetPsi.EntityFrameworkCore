@@ -31,8 +31,8 @@ public interface ISqlDialect
     string Exists(string subquery);
 
     /// <summary>Returns the clauses that apply <c>Skip</c> and <c>Take</c>.</summary>
-    /// <param name="offsetParameter">The parameter holding the <c>Skip</c> count, or <see langword="null"/>.</param>
-    /// <param name="limitParameter">The parameter holding the <c>Take</c> count, or <see langword="null"/>.</param>
+    /// <param name="offsetParameter">The SQL for the <c>Skip</c> count, a parameter or an integer literal; or <see langword="null"/>.</param>
+    /// <param name="limitParameter">The SQL for the <c>Take</c> count, a parameter or an integer literal; or <see langword="null"/>.</param>
     /// <param name="hasOrderBy">Whether the statement already has an <c>ORDER BY</c>.</param>
     SqlPaging Paging(string? offsetParameter, string? limitParameter, bool hasOrderBy);
 

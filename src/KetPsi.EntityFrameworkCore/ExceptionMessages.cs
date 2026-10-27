@@ -47,6 +47,15 @@ internal static class ExceptionMessages
     public const string PropertyNotBoolean =
         "The property '{0}.{1}' is used as a boolean predicate, but its type is '{2}'.";
 
+    public const string RowLimitRequiresRows =
+        "A row limit only applies to statements that return entity rows.";
+
+    public const string RootEntityMismatch =
+        "The query reads '{0}', but the statement is being built for '{1}'.";
+
+    public const string ContainsListNotEnumerable =
+        "The list passed to Contains for property '{0}' must be a collection, but it was '{1}'.";
+
     public const string DialectAlreadyRegistered =
         "The EF Core provider '{0}' already has the SQL dialect '{1}' registered; '{2}' cannot replace it.";
 

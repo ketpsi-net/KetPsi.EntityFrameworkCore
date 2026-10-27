@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore\KetPsi.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore.SqlServer\KetPsi.EntityFrameworkCore.SqlServer.csproj" />
   </ItemGroup>
 
 </Project>
