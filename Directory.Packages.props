@@ -7,12 +7,17 @@
   <!-- Framework-aligned packages: each target framework uses the latest patch of its own major version. -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.33" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.33" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.22" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.22" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />
+    <!-- Transitive pin: Microsoft.Data.SqlClient 6.1.7 brings 9.0.11, which has known vulnerabilities. -->
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
   </ItemGroup>
 
   <!-- Generator: 4.12 is the oldest Roslyn with GetInterceptableLocation, so the generator loads in the .NET 9 and 10 SDK compilers. -->
