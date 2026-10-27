@@ -24,19 +24,33 @@ internal sealed class PredicateTranslator
 
     private readonly SemanticModel _model;
     private readonly IParameterSymbol _parameter;
+    private readonly Func<ExpressionSyntax, string>? _readValue;
     private readonly CancellationToken _cancellationToken;
     private readonly List<string> _valuePaths = [];
 
-    private PredicateTranslator(SemanticModel model, IParameterSymbol parameter, CancellationToken cancellationToken)
+    private PredicateTranslator(
+        SemanticModel model, IParameterSymbol parameter, Func<ExpressionSyntax, string>? readValue, CancellationToken cancellationToken)
     {
         _model = model;
         _parameter = parameter;
+        _readValue = readValue;
         _cancellationToken = cancellationToken;
     }
 
     /// <summary>Translates <paramref name="lambda"/>, returning either the predicate or why it cannot be translated.</summary>
+    /// <param name="lambda">The predicate.</param>
+    /// <param name="model">The semantic model of the lambda's tree.</param>
+    /// <param name="cancellationToken">Cancels the translation.</param>
+    /// <param name="readValue">
+    /// Produces the C# that reads a value, for predicates whose values do not come from the expression tree, such as
+    /// query filters. It throws <see cref="TranslationException"/> for values it cannot read. When omitted, values are
+    /// read from the tree and <see cref="PredicateModel.ValuePaths"/> holds tree paths.
+    /// </param>
     public static (PredicateModel? Predicate, DiagnosticInfo? Diagnostic) Translate(
-        LambdaExpressionSyntax lambda, SemanticModel model, CancellationToken cancellationToken)
+        LambdaExpressionSyntax lambda,
+        SemanticModel model,
+        CancellationToken cancellationToken,
+        Func<ExpressionSyntax, string>? readValue = null)
     {
         var parameterSyntax = lambda switch
         {
@@ -52,7 +66,7 @@ internal sealed class PredicateTranslator
             return (null, Diagnostic(DiagnosticDescriptors.ExpressionNotSupported, lambda));
         }
 
-        var translator = new PredicateTranslator(model, parameter, cancellationToken);
+        var translator = new PredicateTranslator(model, parameter, readValue, cancellationToken);
         try
         {
             var code = translator.TranslatePredicate(body, BodyVariable);
@@ -265,6 +279,12 @@ internal sealed class PredicateTranslator
     /// <summary>Records a value slot, after checking the value is something the runtime can read from the tree.</summary>
     private int AddValue(ExpressionSyntax value, string path)
     {
+        if (_readValue is not null)
+        {
+            _valuePaths.Add(_readValue(value));
+            return _valuePaths.Count - 1;
+        }
+
         if (!IsReadableValue(value))
         {
             throw Fail(DiagnosticDescriptors.ValueNotSupported, value);
@@ -375,9 +395,10 @@ internal sealed class PredicateTranslator
         => DiagnosticInfo.Create(descriptor, LocationInfo.From(node.GetLocation()), node.ToString());
 
     private static TranslationException Fail(DiagnosticDescriptor descriptor, SyntaxNode node) => new(Diagnostic(descriptor, node));
+}
 
-    private sealed class TranslationException(DiagnosticInfo diagnostic) : Exception(diagnostic.Descriptor.Id)
-    {
-        public DiagnosticInfo Diagnostic { get; } = diagnostic;
-    }
+/// <summary>Ends a translation with the diagnostic that explains why the construct cannot be translated.</summary>
+internal sealed class TranslationException(DiagnosticInfo diagnostic) : Exception(diagnostic.Descriptor.Id)
+{
+    public DiagnosticInfo Diagnostic { get; } = diagnostic;
 }

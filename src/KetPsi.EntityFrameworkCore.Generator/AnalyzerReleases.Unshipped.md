@@ -22,4 +22,7 @@ KP2006 | KetPsi.EntityFrameworkCore | Error | Property comparison not supported
 KP2007 | KetPsi.EntityFrameworkCore | Error | Value not supported
 KP2008 | KetPsi.EntityFrameworkCore | Error | Order key not supported
 KP3001 | KetPsi.EntityFrameworkCore | Error | Property type not supported
+KP3002 | KetPsi.EntityFrameworkCore | Error | Value converter not supported
+KP3003 | KetPsi.EntityFrameworkCore | Error | Owned, complex or JSON mapping not supported
 KP3004 | KetPsi.EntityFrameworkCore | Error | Entity cannot be constructed
+KP3005 | KetPsi.EntityFrameworkCore | Error | Query filter not translatable

@@ -118,7 +118,7 @@ internal static class CallSiteAnalyzer
 
         var nameSyntax = ((MemberAccessExpressionSyntax)invocation.Expression).Name;
         var site = new SiteBuilder(
-            elementType, LocationInfo.From(nameSyntax.GetLocation()), method.Name, operation, invocation, semanticModel, cancellationToken);
+            elementType, LocationInfo.From(nameSyntax.Identifier.GetLocation()), method.Name, operation, invocation, semanticModel, cancellationToken);
 
         return family switch
         {

@@ -60,6 +60,13 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
 
         var references = context.CompilationProvider.Select(static (compilation, _) => GetReferences(compilation));
 
+        var configurations = context.SyntaxProvider
+            .CreateSyntaxProvider(ModelConfigurationAnalyzer.IsCandidate, ModelConfigurationAnalyzer.Analyze)
+            .Where(static configuration => configuration is not null)
+            .Collect()
+            .Select(static (items, _) => items.Select(static c => c!).ToEquatableArray());
+        context.RegisterSourceOutput(configurations.Combine(references), static (spc, pair) => EmitQueryFilters(spc, pair.Left, pair.Right));
+
         context.RegisterSourceOutput(
             entitySites.Combine(interceptorsEnabled).Combine(trackingBehaviorConfigured),
             static (spc, pair) => Report(spc, pair.Left.Left, pair.Left.Right, pair.Right));
@@ -76,6 +83,24 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
             .OrderBy(static s => s.Location.FilePath, StringComparer.Ordinal)
             .ThenBy(static s => s.Location.Span.Start)
             .ToList();
+
+    private static void EmitQueryFilters(
+        SourceProductionContext context, EquatableArray<ModelConfiguration> configurations, GenerationReferences references)
+    {
+        foreach (var configuration in configurations)
+        {
+            if (configuration.Diagnostic is { } diagnostic)
+            {
+                context.ReportDiagnostic(diagnostic.ToDiagnostic());
+            }
+        }
+
+        var filters = configurations.Where(static c => c.Filter is not null).Select(static c => c.Filter!).ToList();
+        if (references.HasRuntime && filters.Count > 0)
+        {
+            context.AddSource(QueryFilterEmitter.HintName, QueryFilterEmitter.Emit(filters));
+        }
+    }
 
     // Without interceptors enabled the compiler would reject the generated code, and KP0002 already explains why.
     private static void EmitInterceptors(

@@ -100,6 +100,21 @@ internal static class DiagnosticDescriptors
         "The property '{0}.{1}' has the type '{2}', which KetPsi.EntityFrameworkCore cannot read yet. " +
         "Mark it [NotMapped] if EF Core does not map it.");
 
+    public static readonly DiagnosticDescriptor ValueConverterNotSupported = Error(
+        "KP3002",
+        "Value converter not supported",
+        "'{0}' configures a value converter, which KetPsi.EntityFrameworkCore does not support yet");
+
+    public static readonly DiagnosticDescriptor OwnedOrComplexNotSupported = Error(
+        "KP3003",
+        "Owned, complex or JSON mapping not supported",
+        "'{0}' configures an owned type, a complex type or a JSON column, which KetPsi.EntityFrameworkCore does not support yet");
+
+    public static readonly DiagnosticDescriptor QueryFilterNotTranslatable = Error(
+        "KP3005",
+        "Query filter not translatable",
+        "The query filter cannot be translated at build time: {0}");
+
     public static readonly DiagnosticDescriptor EntityNotConstructible = Error(
         "KP3004",
         "Entity cannot be constructed",
