@@ -16,4 +16,11 @@ internal static class ExceptionMessages
 
     public const string NotAnEntityQuery =
         "KetPsi.EntityFrameworkCore can only compose queries rooted at a DbSet, but the source is of type '{0}'.";
+
+    public const string DialectAlreadyRegistered =
+        "The EF Core provider '{0}' already has the SQL dialect '{1}' registered; '{2}' cannot replace it.";
+
+    public const string DialectNotRegistered =
+        "No KetPsi.EntityFrameworkCore SQL dialect is registered for the EF Core provider '{0}'. " +
+        "Reference the dialect package for your database, such as KetPsi.EntityFrameworkCore.SqlServer.";
 }

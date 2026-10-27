@@ -5,6 +5,7 @@
     <Project Path="src/KetPsi.EntityFrameworkCore/KetPsi.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/KetPsi.EntityFrameworkCore.SqlServer.Tests/KetPsi.EntityFrameworkCore.SqlServer.Tests.csproj" />
     <Project Path="tests/KetPsi.EntityFrameworkCore.Tests/KetPsi.EntityFrameworkCore.Tests.csproj" />
   </Folder>
 </Solution>
