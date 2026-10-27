@@ -18,5 +18,12 @@ internal static class KnownTypes
     public const string KetPsiQueryableExtensions = "KetPsi.EntityFrameworkCore.KetPsiQueryableExtensions";
 
     public const string EntityFrameworkCoreAssembly = "Microsoft.EntityFrameworkCore";
-    public const string KetPsiAssemblyPrefix = "KetPsi.EntityFrameworkCore";
+
+    /// <summary>KetPsi's own packages, which declare no application entities.</summary>
+    public static readonly IReadOnlyCollection<string> KetPsiAssemblies = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "KetPsi.EntityFrameworkCore",
+        "KetPsi.EntityFrameworkCore.SqlServer",
+        "KetPsi.EntityFrameworkCore.Generator",
+    };
 }

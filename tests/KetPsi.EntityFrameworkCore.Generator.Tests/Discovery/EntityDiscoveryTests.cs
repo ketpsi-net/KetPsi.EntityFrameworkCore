@@ -102,6 +102,22 @@ public sealed class EntityDiscoveryTests
         Assert.Equal(["global::Shop.Model.Tag"], EntityDiscovery.FromSymbols(compilation, TestContext.Current.CancellationToken));
     }
 
+    // Application assemblies may share KetPsi's name prefix; only KetPsi's own packages are skipped.
+    [Fact]
+    public void FromSymbols_ReferencedAssemblyWithKetPsiPrefix_IsScanned()
+    {
+        var model = GeneratorHost.CompileReference("KetPsi.EntityFrameworkCore.Samples.Model", TestSources.Usings + "namespace Samples;\n" + Entities + """
+            public sealed class SampleDb : DbContext
+            {
+                public DbSet<Tag> Tags => Set<Tag>();
+            }
+            """);
+
+        var compilation = GeneratorHost.Compile("public static class Empty { }", model);
+
+        Assert.Equal(["global::Samples.Tag"], EntityDiscovery.FromSymbols(compilation, TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public void FromSymbols_WithoutEntityFrameworkCore_IsEmpty()
     {

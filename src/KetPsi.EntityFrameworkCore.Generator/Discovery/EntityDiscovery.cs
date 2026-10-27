@@ -96,7 +96,7 @@ internal static class EntityDiscovery
     // EF Core's own assemblies and KetPsi's declare no application entities.
     private static bool UsesEntityFrameworkCore(IAssemblySymbol assembly)
         => !assembly.Name.StartsWith(KnownTypes.EntityFrameworkCoreAssembly, StringComparison.Ordinal)
-            && !assembly.Name.StartsWith(KnownTypes.KetPsiAssemblyPrefix, StringComparison.Ordinal)
+            && !KnownTypes.KetPsiAssemblies.Contains(assembly.Name)
             && assembly.Modules.Any(static m => m.ReferencedAssemblies.Any(static r => r.Name == KnownTypes.EntityFrameworkCoreAssembly));
 
     private sealed class Walker(
