@@ -7,9 +7,6 @@ internal static class ExceptionMessages
         "must be translated at build time; make sure the project containing this call references " +
         "KetPsi.EntityFrameworkCore.Generator and that the build reported no KP diagnostics.";
 
-    public const string EnumerationNotSupported =
-        "Enumerating a KetPsi.EntityFrameworkCore query directly is not supported yet. Use a terminal operator such as ToList.";
-
     public const string UninterceptedEntityFrameworkOperator =
         "The query was composed by an Entity Framework Core operator that KetPsi.EntityFrameworkCore did not intercept, " +
         "so it would run through EF Core's runtime query pipeline. Remove the operator or replace it with a supported one.";
@@ -69,6 +66,22 @@ internal static class ExceptionMessages
 
     public const string QueryFilterValueCountMismatch =
         "The query filter '{1}' on '{0}' reads {2} value(s), but its value reader returned {3}.";
+
+    public const string EntityReaderAlreadyRegistered =
+        "The entity type '{0}' already has the reader '{1}' registered; '{2}' cannot replace it.";
+
+    public const string EntityReaderNotRegistered =
+        "No generated reader is registered for the entity type '{0}'. Make sure the project that declares the query " +
+        "references KetPsi.EntityFrameworkCore.Generator.";
+
+    public const string TrackingQueryNotSupported =
+        "KetPsi.EntityFrameworkCore does not support tracking queries yet. Add AsNoTracking() to the query, or set the " +
+        "context's QueryTrackingBehavior to NoTracking.";
+
+    // Same messages as LINQ and EF Core, so callers see the same exceptions.
+    public const string SequenceContainsNoElements = "Sequence contains no elements";
+
+    public const string SequenceContainsMoreThanOneElement = "Sequence contains more than one element";
 
     public const string DialectAlreadyRegistered =
         "The EF Core provider '{0}' already has the SQL dialect '{1}' registered; '{2}' cannot replace it.";

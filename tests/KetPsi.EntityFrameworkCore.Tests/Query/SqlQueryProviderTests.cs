@@ -58,5 +58,7 @@ public sealed class SqlQueryProviderTests : IDisposable
     public void Throw_NullExpression_ThrowsArgumentNull()
         => Assert.Throws<ArgumentNullException>("expression", () => SqlQueryProvider.Instance.Execute(null!));
 
-    private SqlQueryable<Blog> CreateQuery() => SqlQuery.ToSqlQueryable(_db.Blogs);
+    // Typed as IQueryable, like application code sees it: on net10.0 SqlQueryable's IAsyncEnumerable makes
+    // LINQ calls ambiguous with System.Linq.AsyncEnumerable.
+    private IQueryable<Blog> CreateQuery() => SqlQuery.ToSqlQueryable(_db.Blogs);
 }

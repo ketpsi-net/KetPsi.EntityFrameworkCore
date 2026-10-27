@@ -1,3 +1,5 @@
+using System.Data.Common;
+
 namespace KetPsi.EntityFrameworkCore.Sql;
 
 /// <summary>
@@ -44,6 +46,14 @@ public interface ISqlDialect
     /// <param name="listParameter">The parameter holding the value from <see cref="CreateListParameterValue"/>.</param>
     /// <param name="storeType">The column's store type, used to type the list elements.</param>
     string InList(string column, string listParameter, string storeType);
+
+    /// <summary>Sets the parameter's database type and facets so the value compares like the column it's compared with.</summary>
+    /// <param name="parameter">The parameter, with its value already set.</param>
+    /// <param name="storeType">
+    /// The store type of the compared column, such as <c>nvarchar(100)</c>; or <see langword="null"/> when the value is not
+    /// compared with a column, such as a paging count or a <c>Contains</c> list.
+    /// </param>
+    void ConfigureParameter(DbParameter parameter, string? storeType);
 
     /// <summary>Converts the values of a <c>Contains</c> list into the single parameter value <see cref="InList"/> expects.</summary>
     /// <exception cref="NotSupportedException">A value has a type the dialect cannot pass in a list.</exception>

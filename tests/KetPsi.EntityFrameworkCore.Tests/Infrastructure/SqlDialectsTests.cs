@@ -93,6 +93,8 @@ public sealed class SqlDialectsTests
 
         public string InList(string column, string listParameter, string storeType) => throw new NotSupportedException();
 
+        public void ConfigureParameter(System.Data.Common.DbParameter parameter, string? storeType) => throw new NotSupportedException();
+
         public object CreateListParameterValue(IEnumerable<object?> values) => throw new NotSupportedException();
     }
 

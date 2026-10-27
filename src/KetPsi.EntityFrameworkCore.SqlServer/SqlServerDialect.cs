@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Data;
+using System.Data.Common;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -21,6 +23,28 @@ public sealed class SqlServerDialect : ISqlDialect
     private const string DateOnlyFormat = "yyyy-MM-dd";
     private const string TimeOnlyFormat = "HH:mm:ss.fffffff";
     private const string TimeSpanFormat = @"hh\:mm\:ss\.fffffff";
+
+    private const string MaxFacet = "max";
+    private const int MaxSize = -1;
+
+    // Store types whose parameter type has no facets to set.
+    private static readonly Dictionary<string, DbType> SimpleTypes = new(StringComparer.Ordinal)
+    {
+        ["bit"] = DbType.Boolean,
+        ["tinyint"] = DbType.Byte,
+        ["smallint"] = DbType.Int16,
+        ["int"] = DbType.Int32,
+        ["bigint"] = DbType.Int64,
+        ["real"] = DbType.Single,
+        ["float"] = DbType.Double,
+        ["uniqueidentifier"] = DbType.Guid,
+        ["date"] = DbType.Date,
+        ["time"] = DbType.Time,
+        ["datetime"] = DbType.DateTime,
+        ["smalldatetime"] = DbType.DateTime,
+        ["datetime2"] = DbType.DateTime2,
+        ["datetimeoffset"] = DbType.DateTimeOffset,
+    };
 
     private SqlServerDialect()
     {
@@ -96,6 +120,57 @@ public sealed class SqlServerDialect : ISqlDialect
         ArgumentException.ThrowIfNullOrEmpty(storeType);
 
         return $"{column} IN (SELECT [value] FROM OPENJSON({listParameter}) WITH ([value] {storeType} '$'))";
+    }
+
+    /// <inheritdoc/>
+    public void ConfigureParameter(DbParameter parameter, string? storeType)
+    {
+        ArgumentNullException.ThrowIfNull(parameter);
+
+        if (storeType is null)
+        {
+            // Only Contains lists are strings without a column; they can be any length.
+            if (parameter.Value is string)
+            {
+                parameter.DbType = DbType.String;
+                parameter.Size = MaxSize;
+            }
+
+            return;
+        }
+
+        var (baseType, facets) = ParseStoreType(storeType);
+        switch (baseType)
+        {
+            case "nvarchar":
+                SetString(parameter, DbType.String, facets);
+                break;
+            case "varchar":
+                SetString(parameter, DbType.AnsiString, facets);
+                break;
+            case "nchar":
+                SetString(parameter, DbType.StringFixedLength, facets);
+                break;
+            case "char":
+                SetString(parameter, DbType.AnsiStringFixedLength, facets);
+                break;
+            case "decimal" or "numeric":
+                parameter.DbType = DbType.Decimal;
+                if (facets.Length == 2)
+                {
+                    parameter.Precision = byte.Parse(facets[0], CultureInfo.InvariantCulture);
+                    parameter.Scale = byte.Parse(facets[1], CultureInfo.InvariantCulture);
+                }
+
+                break;
+            default:
+                if (SimpleTypes.TryGetValue(baseType, out var dbType))
+                {
+                    parameter.DbType = dbType;
+                }
+
+                break;
+        }
     }
 
     /// <inheritdoc/>
@@ -191,6 +266,31 @@ public sealed class SqlServerDialect : ISqlDialect
             default:
                 throw new NotSupportedException(
                     string.Format(CultureInfo.InvariantCulture, ExceptionMessages.UnsupportedListValueType, value.GetType()));
+        }
+    }
+
+    private static (string BaseType, string[] Facets) ParseStoreType(string storeType)
+    {
+        var open = storeType.IndexOf('(', StringComparison.Ordinal);
+        if (open < 0)
+        {
+            return (storeType.Trim().ToLowerInvariant(), []);
+        }
+
+        var close = storeType.LastIndexOf(')');
+        var facets = storeType[(open + 1)..(close > open ? close : storeType.Length)]
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return (storeType[..open].Trim().ToLowerInvariant(), facets);
+    }
+
+    private static void SetString(DbParameter parameter, DbType dbType, string[] facets)
+    {
+        parameter.DbType = dbType;
+        if (facets.Length == 1)
+        {
+            parameter.Size = string.Equals(facets[0], MaxFacet, StringComparison.OrdinalIgnoreCase)
+                ? MaxSize
+                : int.Parse(facets[0], CultureInfo.InvariantCulture);
         }
     }
 

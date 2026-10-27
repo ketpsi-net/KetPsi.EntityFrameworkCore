@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 
@@ -9,6 +10,7 @@ internal sealed class BoundEntity
 {
     private readonly Dictionary<string, BoundProperty> _propertiesByName;
     private readonly ConcurrentDictionary<PredicateTemplate, BoundPredicate> _predicates = new();
+    private readonly ConcurrentDictionary<IReadOnlyList<string>, int[]> _ordinals = new(ReferenceEqualityComparer.Instance);
 
     public BoundEntity(Type clrType, string table, string? schema, IReadOnlyList<BoundProperty> properties, IReadOnlyList<string?> filterKeys)
     {
@@ -38,6 +40,41 @@ internal sealed class BoundEntity
             ? property
             : throw new InvalidOperationException(
                 string.Format(CultureInfo.InvariantCulture, ExceptionMessages.PropertyNotMapped, ClrType, propertyName));
+
+    /// <summary>
+    /// Maps each property name to the ordinal of its column in a statement that selects <see cref="Properties"/>
+    /// in order, or -1 when the model does not map the property. Cached per name list instance.
+    /// </summary>
+    public int[] GetOrdinals(IReadOnlyList<string> propertyNames)
+    {
+        ArgumentNullException.ThrowIfNull(propertyNames);
+
+        return _ordinals.GetOrAdd(propertyNames, static (names, entity) => entity.MapOrdinals(names), this);
+    }
+
+    private int[] MapOrdinals(IReadOnlyList<string> propertyNames)
+    {
+        var ordinals = new int[propertyNames.Count];
+        for (var i = 0; i < ordinals.Length; i++)
+        {
+            ordinals[i] = _propertiesByName.TryGetValue(propertyNames[i], out var property) ? IndexOf(property) : -1;
+        }
+
+        return ordinals;
+    }
+
+    private int IndexOf(BoundProperty property)
+    {
+        for (var i = 0; i < Properties.Count; i++)
+        {
+            if (ReferenceEquals(Properties[i], property))
+            {
+                return i;
+            }
+        }
+
+        throw new UnreachableException(property.Name);
+    }
 
     /// <summary>Binds <paramref name="template"/> against this entity, once per template instance.</summary>
     public BoundPredicate BindPredicate(PredicateTemplate template)

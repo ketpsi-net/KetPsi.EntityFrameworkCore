@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Linq.Expressions;
 using KetPsi.EntityFrameworkCore.Infrastructure;
 using KetPsi.EntityFrameworkCore.Query;
@@ -43,15 +42,16 @@ public sealed class SqlQueryableTests : IDisposable
     }
 
     [Fact]
-    public void GetEnumerator_Throws()
+    public void Root_IsFirstNodeOfChain()
     {
-        var exception = Assert.Throws<NotSupportedException>(() => CreateQuery().GetEnumerator());
-        Assert.Equal(ExceptionMessages.EnumerationNotSupported, exception.Message);
-    }
+        var query = CreateQuery();
+        var root = query.Tail;
 
-    [Fact]
-    public void NonGenericGetEnumerator_Throws()
-        => Assert.Throws<NotSupportedException>(() => ((IEnumerable)CreateQuery()).GetEnumerator());
+        var longer = SqlQuery.ToSqlQueryable(SqlQuery.Take(SqlQuery.AsNoTracking(query), 3));
+
+        Assert.Same(root, longer.Root);
+        Assert.Same(root, query.Root);
+    }
 
     private SqlQueryable<Blog> CreateQuery() => SqlQuery.ToSqlQueryable(_db.Blogs);
 }
