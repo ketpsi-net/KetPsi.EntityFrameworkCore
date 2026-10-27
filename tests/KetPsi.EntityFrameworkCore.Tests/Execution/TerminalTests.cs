@@ -124,6 +124,19 @@ public sealed class TerminalTests : IDisposable
         await Assert.ThrowsAsync<InvalidOperationException>(() => SqlQuery.FirstAsync(Items, Token));
     }
 
+    // EF Core's async terminals use their own messages, which end with a period.
+    [Fact]
+    public async Task AsyncTerminals_UseEfCoreMessages()
+    {
+        _connection.Rows = FakeItemContext.Table();
+        var none = await Assert.ThrowsAsync<InvalidOperationException>(() => SqlQuery.SingleAsync(Items, Token));
+        Assert.Equal("Sequence contains no elements.", none.Message);
+
+        _connection.Rows = FakeItemContext.Table(Alpha, Beta);
+        var many = await Assert.ThrowsAsync<InvalidOperationException>(() => SqlQuery.SingleOrDefaultAsync(Items, Token));
+        Assert.Equal("Sequence contains more than one element.", many.Message);
+    }
+
     [Fact]
     public void FirstOrDefault_NoRows_ReturnsNull()
     {

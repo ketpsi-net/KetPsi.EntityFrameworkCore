@@ -37,10 +37,10 @@ internal static class QueryRunner
         => ReadRowsAsync(query, rowLimit: null, cancellationToken);
 
     public static T First<T>(SqlQueryable<T> query)
-        => FirstOf(ReadRows(query, FirstRowLimit));
+        => FirstOf(ReadRows(query, FirstRowLimit), isAsync: false);
 
     public static async Task<T> FirstAsync<T>(SqlQueryable<T> query, CancellationToken cancellationToken)
-        => FirstOf(await ReadRowsAsync(query, FirstRowLimit, cancellationToken).ConfigureAwait(false));
+        => FirstOf(await ReadRowsAsync(query, FirstRowLimit, cancellationToken).ConfigureAwait(false), isAsync: true);
 
     public static T? FirstOrDefault<T>(SqlQueryable<T> query)
         => FirstOrDefaultOf(ReadRows(query, FirstRowLimit));
@@ -49,16 +49,16 @@ internal static class QueryRunner
         => FirstOrDefaultOf(await ReadRowsAsync(query, FirstRowLimit, cancellationToken).ConfigureAwait(false));
 
     public static T Single<T>(SqlQueryable<T> query)
-        => SingleOf(ReadRows(query, SingleRowLimit));
+        => SingleOf(ReadRows(query, SingleRowLimit), isAsync: false);
 
     public static async Task<T> SingleAsync<T>(SqlQueryable<T> query, CancellationToken cancellationToken)
-        => SingleOf(await ReadRowsAsync(query, SingleRowLimit, cancellationToken).ConfigureAwait(false));
+        => SingleOf(await ReadRowsAsync(query, SingleRowLimit, cancellationToken).ConfigureAwait(false), isAsync: true);
 
     public static T? SingleOrDefault<T>(SqlQueryable<T> query)
-        => SingleOrDefaultOf(ReadRows(query, SingleRowLimit));
+        => SingleOrDefaultOf(ReadRows(query, SingleRowLimit), isAsync: false);
 
     public static async Task<T?> SingleOrDefaultAsync<T>(SqlQueryable<T> query, CancellationToken cancellationToken)
-        => SingleOrDefaultOf(await ReadRowsAsync(query, SingleRowLimit, cancellationToken).ConfigureAwait(false));
+        => SingleOrDefaultOf(await ReadRowsAsync(query, SingleRowLimit, cancellationToken).ConfigureAwait(false), isAsync: true);
 
     public static int Count<T>(SqlQueryable<T> query)
         => Convert.ToInt32(ExecuteScalar(query, QueryTerminal.Count), CultureInfo.InvariantCulture);
@@ -154,24 +154,30 @@ internal static class QueryRunner
         throw new InvalidOperationException(ExceptionMessages.TrackingQueryNotSupported);
     }
 
-    private static T FirstOf<T>(List<T> rows)
-        => rows.Count > 0 ? rows[0] : throw new InvalidOperationException(ExceptionMessages.SequenceContainsNoElements);
+    // LINQ's messages for sync terminals and EF Core's for async ones, so callers see the exceptions EF Core throws.
+    private static T FirstOf<T>(List<T> rows, bool isAsync) => rows.Count > 0 ? rows[0] : throw NoElements(isAsync);
 
     private static T? FirstOrDefaultOf<T>(List<T> rows) => rows.Count > 0 ? rows[0] : default;
 
-    private static T SingleOf<T>(List<T> rows) => rows.Count switch
+    private static T SingleOf<T>(List<T> rows, bool isAsync) => rows.Count switch
     {
-        0 => throw new InvalidOperationException(ExceptionMessages.SequenceContainsNoElements),
+        0 => throw NoElements(isAsync),
         1 => rows[0],
-        _ => throw new InvalidOperationException(ExceptionMessages.SequenceContainsMoreThanOneElement),
+        _ => throw MoreThanOneElement(isAsync),
     };
 
-    private static T? SingleOrDefaultOf<T>(List<T> rows) => rows.Count switch
+    private static T? SingleOrDefaultOf<T>(List<T> rows, bool isAsync) => rows.Count switch
     {
         0 => default,
         1 => rows[0],
-        _ => throw new InvalidOperationException(ExceptionMessages.SequenceContainsMoreThanOneElement),
+        _ => throw MoreThanOneElement(isAsync),
     };
+
+    private static InvalidOperationException NoElements(bool isAsync)
+        => new(isAsync ? ExceptionMessages.SequenceContainsNoElementsAsync : ExceptionMessages.SequenceContainsNoElements);
+
+    private static InvalidOperationException MoreThanOneElement(bool isAsync)
+        => new(isAsync ? ExceptionMessages.SequenceContainsMoreThanOneElementAsync : ExceptionMessages.SequenceContainsMoreThanOneElement);
 
     private sealed record PreparedRows<T>(ISqlDialect Dialect, SqlStatement Statement, IEntityReader<T> Reader, int[] Ordinals);
 }

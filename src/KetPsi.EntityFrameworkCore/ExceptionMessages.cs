@@ -80,6 +80,11 @@ internal static class ExceptionMessages
 
     public const string SequenceContainsMoreThanOneElement = "Sequence contains more than one element";
 
+    // EF Core's async terminals throw their own messages, which end with a period.
+    public const string SequenceContainsNoElementsAsync = "Sequence contains no elements.";
+
+    public const string SequenceContainsMoreThanOneElementAsync = "Sequence contains more than one element.";
+
     public const string CapturedValueNotSupported =
         "The predicate value '{1}' ({0}) cannot be read. The generated interceptor does not match the expression tree " +
         "the compiler built; please report this with the query.";
