@@ -1,11 +1,7 @@
 <Project>
-  <!-- Lets the compiler accept the generated interceptors, and lets the generator check that it does. -->
+  <!-- Lets the compiler accept the generated interceptors. -->
   <PropertyGroup>
-    <InterceptorsNamespaces>$(InterceptorsNamespaces);KetPsi.EntityFrameworkCore.Generated</InterceptorsNamespaces>
+    <InterceptorsNamespaces Condition="'$(InterceptorsNamespaces)' == ''">KetPsi.EntityFrameworkCore.Generated</InterceptorsNamespaces>
+    <InterceptorsNamespaces Condition="!$(InterceptorsNamespaces.Contains('KetPsi.EntityFrameworkCore.Generated'))">$(InterceptorsNamespaces);KetPsi.EntityFrameworkCore.Generated</InterceptorsNamespaces>
   </PropertyGroup>
-
-  <ItemGroup>
-    <CompilerVisibleProperty Include="InterceptorsNamespaces" />
-    <CompilerVisibleProperty Include="InterceptorsPreviewNamespaces" />
-  </ItemGroup>
 </Project>

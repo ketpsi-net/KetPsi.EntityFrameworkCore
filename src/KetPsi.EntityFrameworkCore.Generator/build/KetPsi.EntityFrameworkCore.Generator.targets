@@ -1,0 +1,11 @@
+<Project>
+  <!-- Lets the generator check that interceptors are enabled. The list is read after every other import has set it,
+       and prefixed because a value starting with ';' reads as a comment in the analyzer config. -->
+  <PropertyGroup>
+    <KetPsiInterceptorsNamespaces>list:$(InterceptorsNamespaces);$(InterceptorsPreviewNamespaces)</KetPsiInterceptorsNamespaces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="KetPsiInterceptorsNamespaces" />
+  </ItemGroup>
+</Project>

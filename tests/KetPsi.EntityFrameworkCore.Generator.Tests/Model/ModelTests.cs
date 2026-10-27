@@ -117,6 +117,9 @@ public sealed class ModelTests
     [InlineData(QueryInterceptorGenerator.InterceptorsNamespacesProperty, "A;KetPsi.EntityFrameworkCore.Generated", true)]
     [InlineData(QueryInterceptorGenerator.InterceptorsNamespacesProperty, "A, KetPsi.EntityFrameworkCore.Generated ,B", true)]
     [InlineData(QueryInterceptorGenerator.InterceptorsPreviewNamespacesProperty, ";KetPsi.EntityFrameworkCore.Generated", true)]
+    [InlineData(QueryInterceptorGenerator.KetPsiInterceptorsNamespacesProperty, "list:;KetPsi.EntityFrameworkCore.Generated", true)]
+    [InlineData(QueryInterceptorGenerator.KetPsiInterceptorsNamespacesProperty, "list:A;B", false)]
+    [InlineData(QueryInterceptorGenerator.KetPsiInterceptorsNamespacesProperty, "list:", false)]
     [InlineData(QueryInterceptorGenerator.InterceptorsNamespacesProperty, "KetPsi.EntityFrameworkCore", false)]
     [InlineData(QueryInterceptorGenerator.InterceptorsNamespacesProperty, "", false)]
     public void InterceptorsEnabled_ReadsNamespaceLists(string property, string value, bool expected)

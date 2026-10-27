@@ -21,6 +21,10 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
 
     internal const string InterceptorsNamespacesProperty = "build_property.InterceptorsNamespaces";
     internal const string InterceptorsPreviewNamespacesProperty = "build_property.InterceptorsPreviewNamespaces";
+    internal const string KetPsiInterceptorsNamespacesProperty = "build_property.KetPsiInterceptorsNamespaces";
+
+    // Set by the package's targets so the value never starts with ';', which analyzer config reads as a comment.
+    private const string NamespaceListPrefix = "list:";
 
     private const string UseQueryTrackingBehavior = "UseQueryTrackingBehavior";
     private const string QueryTrackingBehaviorProperty = "QueryTrackingBehavior";
@@ -158,14 +162,28 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
             .ToEquatableArray();
     }
 
+    // The package's targets pass the final namespace lists in KetPsiInterceptorsNamespaces; the MSBuild properties
+    // themselves are checked too, for projects that set them without the package.
     internal static bool InterceptorsEnabled(AnalyzerConfigOptions options)
-        => ListsGeneratedNamespace(options, InterceptorsNamespacesProperty)
+        => ListsGeneratedNamespace(options, KetPsiInterceptorsNamespacesProperty)
+            || ListsGeneratedNamespace(options, InterceptorsNamespacesProperty)
             || ListsGeneratedNamespace(options, InterceptorsPreviewNamespacesProperty);
 
     private static bool ListsGeneratedNamespace(AnalyzerConfigOptions options, string property)
-        => options.TryGetValue(property, out var value)
-            && value.Split(NamespaceSeparators, StringSplitOptions.RemoveEmptyEntries)
-                .Any(static n => string.Equals(n.Trim(), GeneratedNamespace, StringComparison.Ordinal));
+    {
+        if (!options.TryGetValue(property, out var value))
+        {
+            return false;
+        }
+
+        if (value.StartsWith(NamespaceListPrefix, StringComparison.Ordinal))
+        {
+            value = value.Substring(NamespaceListPrefix.Length);
+        }
+
+        return value.Split(NamespaceSeparators, StringSplitOptions.RemoveEmptyEntries)
+            .Any(static n => string.Equals(n.Trim(), GeneratedNamespace, StringComparison.Ordinal));
+    }
 
     internal static bool IsTrackingBehaviorReference(SyntaxNode node)
         => node is IdentifierNameSyntax { Identifier.ValueText: UseQueryTrackingBehavior or QueryTrackingBehaviorProperty };
