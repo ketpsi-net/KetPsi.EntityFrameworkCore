@@ -51,6 +51,9 @@ internal static class CallSiteAnalyzer
         WhereIfMethod,
     };
 
+    private static readonly SymbolDisplayFormat SignatureFormat = SymbolDisplayFormat.FullyQualifiedFormat
+        .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
     private enum Family
     {
         None,
@@ -175,7 +178,7 @@ internal static class CallSiteAnalyzer
             case "IgnoreQueryFilters":
                 return site.Supported(OperatorKind.IgnoreQueryFilters);
             case "AsTracking":
-                return site.Reject(DiagnosticDescriptors.TrackingNotSupported, method.Name);
+                return site.Reject(DiagnosticDescriptors.TrackingNotSupported, $"'{method.Name}' is not supported");
             case "Include" or "ThenInclude":
                 return site.Reject(DiagnosticDescriptors.IncludeNotSupported, method.Name);
             case "ToListAsync" or "ToArrayAsync":
@@ -305,6 +308,7 @@ internal static class CallSiteAnalyzer
         public CallSite Supported(OperatorKind kind, int? lambdaOrdinal = null, bool hasPredicate = false, bool isAsync = false)
         {
             PredicateModel? predicate = null;
+            string? orderProperty = null;
             if (lambdaOrdinal is { } ordinal)
             {
                 var (lambda, lambdaDiagnostic) = RequireLambda(ordinal);
@@ -313,7 +317,7 @@ internal static class CallSiteAnalyzer
                     return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, lambdaDiagnostic);
                 }
 
-                if (IsPredicate(kind, hasPredicate) && lambda is not null)
+                if (lambda is not null && IsPredicate(kind, hasPredicate))
                 {
                     var (translated, translationDiagnostic) = PredicateTranslator.Translate(lambda, semanticModel, cancellationToken);
                     if (translationDiagnostic is not null)
@@ -323,6 +327,16 @@ internal static class CallSiteAnalyzer
 
                     predicate = translated;
                 }
+                else if (lambda is not null && IsOrdering(kind))
+                {
+                    var (property, keyDiagnostic) = KeySelectorTranslator.Translate(lambda, semanticModel, cancellationToken);
+                    if (keyDiagnostic is not null)
+                    {
+                        return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, keyDiagnostic);
+                    }
+
+                    orderProperty = property;
+                }
             }
 
             // Only classes can be entities; the shape is kept only if the element type turns out to be one.
@@ -330,12 +344,40 @@ internal static class CallSiteAnalyzer
                 ? EntityShapeBuilder.Build(elementSymbol, semanticModel.Compilation, location)
                 : null;
             var interception = semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax();
+            var runsTrackedQuery = TrackingAnalysis.ReturnsEntities(kind)
+                && TrackingAnalysis.RunsTrackedQuery(invocation, semanticModel, cancellationToken);
 
-            return new CallSite(_elementType, location, kind, isAsync, hasPredicate, Diagnostic: null, entity, interception, predicate);
+            return new CallSite(
+                _elementType,
+                location,
+                kind,
+                isAsync,
+                hasPredicate,
+                Diagnostic: null,
+                entity,
+                interception,
+                predicate,
+                GetSignature(operation.TargetMethod),
+                orderProperty,
+                runsTrackedQuery);
         }
 
         private static bool IsPredicate(OperatorKind kind, bool hasPredicate)
             => hasPredicate || kind is OperatorKind.Where or OperatorKind.WhereIf;
+
+        private static bool IsOrdering(OperatorKind kind)
+            => kind is OperatorKind.OrderBy or OperatorKind.OrderByDescending or OperatorKind.ThenBy or OperatorKind.ThenByDescending;
+
+        // The interceptor matches the method as declared, with the call's type arguments substituted.
+        private static InterceptorSignature GetSignature(IMethodSymbol method)
+        {
+            var declared = method.ReducedFrom is null ? method : method.GetConstructedReducedFrom() ?? method;
+            return new InterceptorSignature(
+                declared.Name,
+                EntityDiscovery.TypeName(declared.ContainingType),
+                declared.ReturnType.ToDisplayString(SignatureFormat),
+                declared.Parameters.Select(static p => new ParameterSignature(p.Type.ToDisplayString(SignatureFormat), p.Name)).ToEquatableArray());
+        }
 
         public CallSite Unsupported() => Reject(DiagnosticDescriptors.UnsupportedOperator, methodName);
 

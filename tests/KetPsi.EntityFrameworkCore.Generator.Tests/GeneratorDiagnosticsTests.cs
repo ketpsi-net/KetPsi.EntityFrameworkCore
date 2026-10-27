@@ -114,9 +114,9 @@ public sealed class GeneratorDiagnosticsTests
         => Assert.Empty(GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.AsNoTracking().Where((b => b.IsActive)).ToList();")).Diagnostics);
 
     [Theory]
-    [InlineData("var r = db.Blogs.Where((b, i) => i > 1).ToList();", "Where", "predicates that take the element index are not supported")]
-    [InlineData("var r = db.Blogs.OrderBy(b => b.Name, StringComparer.Ordinal).ToList();", "OrderBy", "custom comparers are not supported")]
-    [InlineData("var r = db.Blogs.Take(1..3).ToList();", "Take", "only an int count is supported")]
+    [InlineData("var r = db.Blogs.AsNoTracking().Where((b, i) => i > 1).ToList();", "Where", "predicates that take the element index are not supported")]
+    [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Name, StringComparer.Ordinal).ToList();", "OrderBy", "custom comparers are not supported")]
+    [InlineData("var r = db.Blogs.AsNoTracking().Take(1..3).ToList();", "Take", "only an int count is supported")]
     [InlineData("var r = db.Blogs.FirstOrDefault(new Blog());", "FirstOrDefault", "overloads with a default value are not supported")]
     public void UnsupportedOverload_ReportsKP1006(string body, string operatorName, string reason)
     {

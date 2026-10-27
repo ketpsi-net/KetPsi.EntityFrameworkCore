@@ -20,5 +20,6 @@ KP2004 | KetPsi.EntityFrameworkCore | Error | EF.Functions not supported
 KP2005 | KetPsi.EntityFrameworkCore | Error | Collection query not supported
 KP2006 | KetPsi.EntityFrameworkCore | Error | Property comparison not supported
 KP2007 | KetPsi.EntityFrameworkCore | Error | Value not supported
+KP2008 | KetPsi.EntityFrameworkCore | Error | Order key not supported
 KP3001 | KetPsi.EntityFrameworkCore | Error | Property type not supported
 KP3004 | KetPsi.EntityFrameworkCore | Error | Entity cannot be constructed

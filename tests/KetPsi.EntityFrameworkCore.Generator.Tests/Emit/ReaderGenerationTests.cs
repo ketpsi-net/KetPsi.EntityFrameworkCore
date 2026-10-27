@@ -176,7 +176,7 @@ public sealed class ReaderGenerationTests
         Assert.Equal(
             "The property 'App.Device.Code' has the type 'uint', which KetPsi.EntityFrameworkCore cannot read yet. Mark it [NotMapped] if EF Core does not map it.",
             run.Diagnostics.Single(d => run.TextAt(d) == "Code").GetMessage());
-        Assert.Empty(run.Result.GeneratedTrees);
+        Assert.DoesNotContain(run.Result.GeneratedTrees, t => t.FilePath.EndsWith(ReaderEmitter.HintName, StringComparison.Ordinal));
     }
 
     [Theory]
@@ -195,7 +195,7 @@ public sealed class ReaderGenerationTests
         var diagnostic = Assert.Single(run.Diagnostics);
         Assert.Equal("KP3004", diagnostic.Id);
         Assert.Equal("Thing", run.TextAt(diagnostic));
-        Assert.Empty(run.Result.GeneratedTrees);
+        Assert.DoesNotContain(run.Result.GeneratedTrees, t => t.FilePath.EndsWith(ReaderEmitter.HintName, StringComparison.Ordinal));
     }
 
     private static Microsoft.CodeAnalysis.Compilation Compile(string assemblyName)

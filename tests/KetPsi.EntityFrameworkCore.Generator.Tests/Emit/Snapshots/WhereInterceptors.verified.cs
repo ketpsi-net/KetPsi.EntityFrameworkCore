@@ -212,5 +212,16 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var body = predicate.Body;
             return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Where(source, Template13, new object?[] { global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.Read(((global::System.Linq.Expressions.BinaryExpression)body).Right) });
         }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "TfGv/0EGUHQHwHpRYJjUs+wJAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<global::E2E.Blog> ToList14(this global::System.Collections.Generic.IEnumerable<global::E2E.Blog> source)
+        {
+            if (source is global::System.Linq.IQueryable<global::E2E.Blog> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.ToList(query);
+            }
+
+            return global::System.Linq.Enumerable.ToList(source);
+        }
     }
 }

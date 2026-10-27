@@ -5,8 +5,8 @@ using KetPsi.EntityFrameworkCore.Generator.Model;
 namespace KetPsi.EntityFrameworkCore.Generator.Emit;
 
 /// <summary>
-/// Emits the interceptors: one method per intercepted call, which appends the operator to the KetPsi query, or
-/// calls the original LINQ operator when the source is not an entity query.
+/// Emits the interceptors: one method per intercepted call, which appends the operator to the KetPsi query or runs
+/// it, and calls the original method when the source is not an entity query.
 /// </summary>
 internal static class InterceptorEmitter
 {
@@ -15,13 +15,16 @@ internal static class InterceptorEmitter
     private const string SqlQuery = "global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery";
     private const string CapturedValues = "global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues";
     private const string PredicateTemplate = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate";
-    private const string Queryable = "global::System.Linq.Queryable";
-    private const string KetPsiExtensions = "global::KetPsi.EntityFrameworkCore.KetPsiQueryableExtensions";
+    private const string Enumerable = "global::System.Linq.Enumerable";
+    private const string ExpressionType = "global::System.Linq.Expressions.Expression<";
     private const string NoValues = "global::System.Array.Empty<object?>()";
+    private const string AsyncSuffix = "Async";
 
-    /// <summary>Whether this step emits an interceptor for the site.</summary>
+    /// <summary>Whether the site has everything its interceptor needs.</summary>
     public static bool CanIntercept(CallSite site)
-        => site is { Interception: not null, Predicate: not null, Operator: OperatorKind.Where or OperatorKind.WhereIf };
+        => site is { Interception: not null, Signature: not null, Operator: { } kind }
+            && (!TakesPredicate(site) || site.Predicate is not null)
+            && (!IsOrdering(kind) || site.OrderProperty is not null);
 
     public static string Emit(IReadOnlyList<CallSite> sites)
     {
@@ -66,45 +69,82 @@ internal static class InterceptorEmitter
 
     private static void WriteInterceptor(CodeWriter writer, CallSite site, int index)
     {
-        var predicate = site.Predicate!;
-        var template = "Template" + index.ToString(CultureInfo.InvariantCulture);
-        var query = $"global::System.Linq.IQueryable<{site.ElementType}>";
-        var expression = $"global::System.Linq.Expressions.Expression<global::System.Func<{site.ElementType}, bool>>";
-        var isWhereIf = site.Operator == OperatorKind.WhereIf;
-        var name = (isWhereIf ? "WhereIf" : "Where") + index.ToString(CultureInfo.InvariantCulture);
-        var parameters = isWhereIf
-            ? $"this {query} source, bool condition, {expression} predicate"
-            : $"this {query} source, {expression} predicate";
+        var signature = site.Signature!;
+        var number = index.ToString(CultureInfo.InvariantCulture);
+        var template = "Template" + number;
+        var parameters = signature.Parameters;
+        var source = parameters[0].Name;
+        var arguments = string.Join(", ", parameters.Select(static p => p.Name));
+        var declaration = string.Join(", ", parameters.Select(static (p, i) => (i == 0 ? "this " : "") + p.Type + " " + p.Name));
+        var fallback = $"{signature.ContainingType}.{signature.Name}({arguments})";
+
+        if (site.Predicate is not null)
+        {
+            writer.Line($"private static readonly {PredicateTemplate} {template} = {site.Predicate.TemplateCode};").Line();
+        }
 
         writer
-            .Line($"private static readonly {PredicateTemplate} {template} = {predicate.TemplateCode};")
-            .Line()
             .Line(site.Interception!)
-            .Open($"public static {query} {name}({parameters})")
-            .Open($"if (!{SqlQuery}.IsInterceptable(source))")
-            .Line(isWhereIf
-                ? $"return {KetPsiExtensions}.WhereIf(source, condition, predicate);"
-                : $"return {Queryable}.Where(source, predicate);")
+            .Open($"public static {signature.ReturnType} {signature.Name}{number}({declaration})");
+
+        if (signature.ContainingType == Enumerable)
+        {
+            // Enumerable.ToList and ToArray accept any sequence; only KetPsi queries and DbSets run here.
+            var query = $"global::System.Linq.IQueryable<{site.ElementType}>";
+            writer
+                .Open($"if ({source} is {query} query && {SqlQuery}.IsInterceptable(query))")
+                .Line($"return {SqlQuery}.{site.Operator}(query);")
+                .Close()
+                .Line()
+                .Line($"return {fallback};")
+                .Close();
+            return;
+        }
+
+        writer
+            .Open($"if (!{SqlQuery}.IsInterceptable({source}))")
+            .Line($"return {fallback};")
             .Close()
             .Line();
 
-        if (predicate.ValuePaths.Count > 0)
+        if (site.Predicate is { ValuePaths.Count: > 0 })
         {
-            writer.Line($"var {PredicateTranslator.BodyVariable} = predicate.Body;");
+            var predicateParameter = parameters.First(static p => p.Type.StartsWith(ExpressionType, StringComparison.Ordinal)).Name;
+            writer.Line($"var {PredicateTranslator.BodyVariable} = {predicateParameter}.Body;");
         }
 
-        var values = Values(predicate);
-        if (isWhereIf)
-        {
-            // The condition usually guards the values, so they are only read when it holds.
-            writer.Line($"return {SqlQuery}.WhereIf(source, condition, {template}, condition ? {values} : {NoValues});");
-        }
-        else
-        {
-            writer.Line($"return {SqlQuery}.Where(source, {template}, {values});");
-        }
+        writer.Line("return " + Body(site, source, template) + ";").Close();
+    }
 
-        writer.Close();
+    private static string Body(CallSite site, string source, string template)
+    {
+        var parameters = site.Signature!.Parameters;
+        var values = site.Predicate is null ? NoValues : Values(site.Predicate);
+        switch (site.Operator)
+        {
+            case OperatorKind.Where:
+                return $"{SqlQuery}.Where({source}, {template}, {values})";
+            case OperatorKind.WhereIf:
+                // The condition usually guards the values, so they are only read when it holds.
+                var condition = parameters[1].Name;
+                return $"{SqlQuery}.WhereIf({source}, {condition}, {template}, {condition} ? {values} : {NoValues})";
+            case OperatorKind.OrderBy or OperatorKind.OrderByDescending or OperatorKind.ThenBy or OperatorKind.ThenByDescending:
+                return $"{SqlQuery}.{site.Operator}({source}, \"{site.OrderProperty}\")";
+            case OperatorKind.Skip or OperatorKind.Take:
+                return $"{SqlQuery}.{site.Operator}({source}, {parameters[1].Name})";
+            case OperatorKind.AsNoTracking:
+                return $"{SqlQuery}.AsNoTracking({source})";
+            case OperatorKind.IgnoreQueryFilters:
+                return parameters.Count > 1
+                    ? $"{SqlQuery}.IgnoreQueryFilters({source}, {parameters[1].Name})"
+                    : $"{SqlQuery}.IgnoreQueryFilters({source})";
+            default:
+                // Terminals; a predicate becomes a Where before the terminal.
+                var query = site.HasPredicate ? $"{SqlQuery}.Where({source}, {template}, {values})" : source;
+                return site.IsAsync
+                    ? $"{SqlQuery}.{site.Operator}{AsyncSuffix}({query}, {parameters[parameters.Count - 1].Name})"
+                    : $"{SqlQuery}.{site.Operator}({query})";
+        }
     }
 
     private static string Values(PredicateModel predicate)
@@ -117,4 +157,10 @@ internal static class InterceptorEmitter
         var reads = predicate.ValuePaths.Select(static path => $"{CapturedValues}.Read({path})");
         return $"new object?[] {{ {string.Join(", ", reads)} }}";
     }
+
+    private static bool TakesPredicate(CallSite site)
+        => site.HasPredicate || site.Operator is OperatorKind.Where or OperatorKind.WhereIf;
+
+    private static bool IsOrdering(OperatorKind kind)
+        => kind is OperatorKind.OrderBy or OperatorKind.OrderByDescending or OperatorKind.ThenBy or OperatorKind.ThenByDescending;
 }

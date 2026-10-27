@@ -345,7 +345,7 @@ internal sealed class PredicateTranslator
         => $"new {Templates}.NullCheckTemplate(\"{property.Name}\", isNull: {(isNull ? "true" : "false")})";
 
     // Parentheses and the null-forgiving operator have no node in the expression tree.
-    private static ExpressionSyntax StripParentheses(ExpressionSyntax node)
+    internal static ExpressionSyntax StripParentheses(ExpressionSyntax node)
     {
         while (true)
         {

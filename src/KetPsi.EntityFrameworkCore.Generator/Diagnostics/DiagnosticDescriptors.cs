@@ -34,7 +34,8 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor TrackingNotSupported = Error(
         "KP1003",
         "Tracking query not supported",
-        "'{0}' is not supported. KetPsi.EntityFrameworkCore only runs no-tracking queries; use AsNoTracking().");
+        "{0}. KetPsi.EntityFrameworkCore only runs no-tracking queries; add AsNoTracking() or set the context's " +
+        "QueryTrackingBehavior to NoTracking.");
 
     public static readonly DiagnosticDescriptor RawSqlNotSupported = Error(
         "KP1004",
@@ -87,6 +88,11 @@ internal static class DiagnosticDescriptors
         "Value not supported",
         "The value '{0}' must be a constant, a variable, or a field or property of one. Compute it into a local " +
         "variable before the query.");
+
+    public static readonly DiagnosticDescriptor OrderKeyNotSupported = Error(
+        "KP2008",
+        "Order key not supported",
+        "The order key '{0}' must be a property of the entity itself, such as x => x.Name");
 
     public static readonly DiagnosticDescriptor PropertyTypeNotSupported = Error(
         "KP3001",
