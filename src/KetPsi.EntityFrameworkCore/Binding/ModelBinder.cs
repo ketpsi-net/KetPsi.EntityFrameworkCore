@@ -55,7 +55,38 @@ internal static class ModelBinder
             .Select(property => BindProperty(property, storeObject, clrType, table))
             .ToArray();
 
-        return new BoundEntity(clrType, table, schema, properties, GetPrimaryKey(entityType, properties), GetFilterKeys(entityType));
+        return new BoundEntity(
+            clrType,
+            table,
+            schema,
+            properties,
+            GetPrimaryKey(entityType, properties),
+            GetFilterKeys(entityType),
+            [.. entityType.GetNavigations().Select(navigation => BindNavigation(navigation, properties))],
+            [.. entityType.GetSkipNavigations().Select(static n => n.Name)]);
+    }
+
+    private static BoundNavigation BindNavigation(INavigation navigation, BoundProperty[] properties)
+    {
+        var foreignKey = navigation.ForeignKey;
+        var (sourceKey, targetKey) = navigation.IsOnDependent
+            ? (foreignKey.Properties, foreignKey.PrincipalKey.Properties)
+            : (foreignKey.PrincipalKey.Properties, foreignKey.Properties);
+
+        // A reference from the dependent is required when the foreign key is; one from the principal of a one-to-one
+        // is required only when the dependent is configured as required.
+        var isRequired = !navigation.IsCollection && (navigation.IsOnDependent ? foreignKey.IsRequired : foreignKey.IsRequiredDependent);
+
+        return new BoundNavigation(
+            navigation.Name,
+            navigation.ClrType,
+            navigation.TargetEntityType.ClrType,
+            navigation.IsCollection,
+            navigation.IsOnDependent,
+            isRequired,
+            navigation.Inverse?.Name,
+            [.. sourceKey.Select(key => properties.First(p => p.Name == key.Name))],
+            [.. targetKey.Select(static key => key.Name)]);
     }
 
     // In key order, which is the order EF Core's identity map expects key values in. Keyless types have none.

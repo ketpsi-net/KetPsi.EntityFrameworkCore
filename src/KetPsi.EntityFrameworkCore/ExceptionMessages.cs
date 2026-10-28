@@ -41,6 +41,13 @@ internal static class ExceptionMessages
     public const string PropertyNotMapped =
         "The entity type '{0}' has no mapped property '{1}'. The property may be ignored in the EF Core model.";
 
+    public const string NavigationNotFound =
+        "The entity type '{0}' has no navigation '{1}'.";
+
+    public const string ManyToManyNotSupported =
+        "The navigation '{0}.{1}' is many-to-many, which KetPsi.EntityFrameworkCore does not support yet. Map the join " +
+        "entity type and load it with Include(...).ThenInclude(...).";
+
     public const string PropertyNotBoolean =
         "The property '{0}.{1}' is used as a boolean predicate, but its type is '{2}'.";
 

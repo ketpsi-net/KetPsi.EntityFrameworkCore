@@ -9,6 +9,8 @@ namespace KetPsi.EntityFrameworkCore.Binding;
 internal sealed class BoundEntity
 {
     private readonly Dictionary<string, BoundProperty> _propertiesByName;
+    private readonly Dictionary<string, BoundNavigation> _navigationsByName;
+    private readonly IReadOnlyCollection<string> _skipNavigationNames;
     private readonly ConcurrentDictionary<PredicateTemplate, BoundPredicate> _predicates = new();
     private readonly ConcurrentDictionary<IReadOnlyList<string>, int[]> _ordinals = new(ReferenceEqualityComparer.Instance);
 
@@ -18,7 +20,9 @@ internal sealed class BoundEntity
         string? schema,
         IReadOnlyList<BoundProperty> properties,
         IReadOnlyList<BoundProperty>? primaryKey,
-        IReadOnlyList<string?> filterKeys)
+        IReadOnlyList<string?> filterKeys,
+        IReadOnlyList<BoundNavigation>? navigations = null,
+        IReadOnlyCollection<string>? skipNavigationNames = null)
     {
         ClrType = clrType;
         Table = table;
@@ -27,7 +31,10 @@ internal sealed class BoundEntity
         PrimaryKey = primaryKey;
         ShadowProperties = [.. properties.Where(static p => p.IsShadow)];
         FilterKeys = filterKeys;
+        Navigations = navigations ?? [];
         _propertiesByName = properties.ToDictionary(static p => p.Name, StringComparer.Ordinal);
+        _navigationsByName = Navigations.ToDictionary(static n => n.Name, StringComparer.Ordinal);
+        _skipNavigationNames = skipNavigationNames ?? [];
     }
 
     public Type ClrType { get; }
@@ -50,6 +57,25 @@ internal sealed class BoundEntity
 
     /// <summary>The keys of the query filters the model declares for the entity; <see langword="null"/> for an unnamed filter.</summary>
     public IReadOnlyList<string?> FilterKeys { get; }
+
+    /// <summary>The navigations to other entity types, in model order. Many-to-many navigations are not included.</summary>
+    public IReadOnlyList<BoundNavigation> Navigations { get; }
+
+    /// <exception cref="InvalidOperationException">The entity has no navigation named <paramref name="navigationName"/>.</exception>
+    /// <exception cref="NotSupportedException">The navigation is many-to-many.</exception>
+    public BoundNavigation GetNavigation(string navigationName)
+    {
+        if (_navigationsByName.TryGetValue(navigationName, out var navigation))
+        {
+            return navigation;
+        }
+
+        throw _skipNavigationNames.Contains(navigationName)
+            ? new NotSupportedException(
+                string.Format(CultureInfo.InvariantCulture, ExceptionMessages.ManyToManyNotSupported, ClrType, navigationName))
+            : new InvalidOperationException(
+                string.Format(CultureInfo.InvariantCulture, ExceptionMessages.NavigationNotFound, ClrType, navigationName));
+    }
 
     /// <exception cref="InvalidOperationException">The entity has no mapped property named <paramref name="propertyName"/>.</exception>
     public BoundProperty GetProperty(string propertyName)
