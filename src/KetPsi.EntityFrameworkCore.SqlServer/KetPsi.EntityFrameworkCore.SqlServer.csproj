@@ -1,13 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\version.props" />
 
   <PropertyGroup>
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <IsAotCompatible>true</IsAotCompatible>
+    <Description>SQL Server dialect for KetPsi.EntityFrameworkCore: Native AOT friendly EF Core queries translated at build time and run on SQL Server.</Description>
+    <PackageTags>entityframeworkcore;efcore;ef;sqlserver;mssql;nativeaot;aot;source-generator;interceptors;linq;ketpsi</PackageTags>
   </PropertyGroup>
 
+  <!-- Packing turns this into a dependency on the KetPsi.EntityFrameworkCore package of the same version. All of its
+       assets must flow, or apps that install only this package would not get the generator (analyzers) and the
+       props that enable its interceptors (build). -->
   <ItemGroup>
-    <ProjectReference Include="..\KetPsi.EntityFrameworkCore\KetPsi.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\KetPsi.EntityFrameworkCore\KetPsi.EntityFrameworkCore.csproj" PrivateAssets="none" />
+  </ItemGroup>
+
+  <!-- The EF Core provider this dialect serves, so installing this one package also gives the app UseSqlServer. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
   </ItemGroup>
 
   <ItemGroup>

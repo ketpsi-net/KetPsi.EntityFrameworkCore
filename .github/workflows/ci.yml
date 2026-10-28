@@ -27,6 +27,14 @@ jobs:
       - name: Test
         run: dotnet test --no-build --configuration Release
 
+      - name: Pack
+        run: dotnet pack --no-build --configuration Release --output artifacts/packages
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/packages/*.nupkg
+
   # Publishes the sample with Native AOT, checks its trim and AOT warnings against the baseline, and runs it.
   # Windows, because the baselines are for win-x64 and the runner has SQL Server LocalDB to run the sample against.
   aot:

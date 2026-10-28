@@ -1,9 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\version.props" />
 
   <PropertyGroup>
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <IsAotCompatible>true</IsAotCompatible>
+    <Description>Native AOT friendly EF Core queries: a source generator translates LINQ query call sites at build time and runs them through the DbContext's own connection with generated readers. Application code stays plain EF Core LINQ; anything that cannot be translated is a build error.</Description>
+    <PackageTags>entityframeworkcore;efcore;ef;nativeaot;aot;trimming;source-generator;interceptors;linq;sql;ketpsi</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,5 +18,38 @@
     <!-- Generator tests run generated interceptors and inspect the operator chain and SQL they produce. -->
     <InternalsVisibleTo Include="KetPsi.EntityFrameworkCore.Generator.Tests" />
   </ItemGroup>
+
+  <!--
+    The source generator ships inside this package (analyzers/dotnet/cs). The project reference only builds the
+    generator first; it is not referenced as an assembly and does not run on this library.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\KetPsi.EntityFrameworkCore.Generator\KetPsi.EntityFrameworkCore.Generator.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      SetTargetFramework="TargetFramework=netstandard2.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <KetPsiGeneratorDirectory>$(MSBuildThisFileDirectory)..\KetPsi.EntityFrameworkCore.Generator\</KetPsiGeneratorDirectory>
+    <KetPsiGeneratorDll>$(KetPsiGeneratorDirectory)bin\$(Configuration)\netstandard2.0\KetPsi.EntityFrameworkCore.Generator.dll</KetPsiGeneratorDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(KetPsiGeneratorDll)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <!-- Named after the package so NuGet imports them. buildTransitive also reaches apps that only reference
+         KetPsi.EntityFrameworkCore.SqlServer, which depends on this package. -->
+    <None Include="$(KetPsiGeneratorDirectory)build\KetPsi.EntityFrameworkCore.Generator.props" Pack="true" PackagePath="build\$(PackageId).props" Visible="false" />
+    <None Include="$(KetPsiGeneratorDirectory)build\KetPsi.EntityFrameworkCore.Generator.targets" Pack="true" PackagePath="build\$(PackageId).targets" Visible="false" />
+    <None Include="$(KetPsiGeneratorDirectory)build\KetPsi.EntityFrameworkCore.Generator.props" Pack="true" PackagePath="buildTransitive\$(PackageId).props" Visible="false" />
+    <None Include="$(KetPsiGeneratorDirectory)build\KetPsi.EntityFrameworkCore.Generator.targets" Pack="true" PackagePath="buildTransitive\$(PackageId).targets" Visible="false" />
+  </ItemGroup>
+
+  <!-- Never ship a package without the generator. -->
+  <Target Name="KetPsiEnsureGeneratorPacked" BeforeTargets="_GetPackageFiles;GenerateNuspec">
+    <Error Condition="!Exists('$(KetPsiGeneratorDll)')"
+           Text="KetPsi.EntityFrameworkCore.Generator.dll was not found at '$(KetPsiGeneratorDll)'. Build the generator (Configuration=$(Configuration)) before packing." />
+  </Target>
 
 </Project>

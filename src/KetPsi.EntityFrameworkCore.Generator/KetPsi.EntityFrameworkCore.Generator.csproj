@@ -2,12 +2,10 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <IsPackable>true</IsPackable>
+    <!-- Ships inside the KetPsi.EntityFrameworkCore package, together with build\*.props and *.targets. -->
+    <IsPackable>false</IsPackable>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <IncludeBuildOutput>false</IncludeBuildOutput>
-    <DevelopmentDependency>true</DevelopmentDependency>
-    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <!-- GetInterceptableLocation is the only API that produces the InterceptsLocation(version, data) form, and Roslyn still marks it experimental. -->
     <NoWarn>$(NoWarn);RSEXPERIMENTAL002</NoWarn>
   </PropertyGroup>
@@ -15,12 +13,6 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-    <None Include="build\KetPsi.EntityFrameworkCore.Generator.props" Pack="true" PackagePath="build" />
-    <None Include="build\KetPsi.EntityFrameworkCore.Generator.targets" Pack="true" PackagePath="build" />
   </ItemGroup>
 
   <ItemGroup>
