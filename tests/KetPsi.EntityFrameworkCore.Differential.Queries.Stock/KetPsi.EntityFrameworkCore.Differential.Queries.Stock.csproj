@@ -2,6 +2,7 @@
 
   <!-- The shared queries without the generator: they run on EF Core's own query pipeline. -->
   <PropertyGroup>
+    <Description>The differential query catalog compiled without KetPsi, so every query runs through stock EF Core.</Description>
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
   </PropertyGroup>
 

@@ -2,6 +2,7 @@
 
   <!-- Test doubles shared by the test projects; not a test project itself. -->
   <PropertyGroup>
+    <Description>Shared test fakes: an in-memory ADO.NET connection, command and transaction that record commands and return canned results.</Description>
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
   </PropertyGroup>
 

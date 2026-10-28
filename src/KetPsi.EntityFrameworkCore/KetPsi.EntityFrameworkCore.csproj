@@ -5,7 +5,7 @@
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <IsAotCompatible>true</IsAotCompatible>
-    <Description>Native AOT friendly EF Core queries: a source generator translates LINQ query call sites at build time and runs them through the DbContext's own connection with generated readers. Application code stays plain EF Core LINQ; anything that cannot be translated is a build error.</Description>
+    <Description>Plain EF Core LINQ that runs under Native AOT. A source generator translates each query to parameterized SQL at build time and intercepts the call; at runtime it runs on the DbContext's own connection and transaction with generated readers, without runtime query translation or compilation. Supports filtering, ordering, paging, terminals, query filters, tracking and Include/ThenInclude, with EF Core's semantics. Anything it cannot translate is a build error. Ships the runtime, the generator and the MSBuild settings that enable its interceptors.</Description>
     <PackageTags>entityframeworkcore;efcore;ef;nativeaot;aot;trimming;source-generator;interceptors;linq;sql;ketpsi</PackageTags>
   </PropertyGroup>
 

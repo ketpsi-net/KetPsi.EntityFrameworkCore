@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Tests of the source generator: call site analysis, diagnostics, snapshots of the generated code, and generated interceptors compiled and run.</Description>
     <TargetFramework>net10.0</TargetFramework>
     <NoWarn>$(NoWarn);RSEXPERIMENTAL002</NoWarn>
   </PropertyGroup>

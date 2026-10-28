@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Differential tests: every query shape runs through stock EF Core and through KetPsi against SQL Server in Docker, and results, shared instances, the change tracker and saved commands must match.</Description>
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
   </PropertyGroup>
 

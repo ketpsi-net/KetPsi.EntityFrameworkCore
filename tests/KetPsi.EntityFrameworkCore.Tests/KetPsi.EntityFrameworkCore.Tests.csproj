@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>Unit tests of the KetPsi.EntityFrameworkCore runtime: model binding, SQL building, query execution, tracking and include loading, against an in-memory connection.</Description>
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
   </PropertyGroup>
 

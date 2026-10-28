@@ -2,7 +2,7 @@
 	<PropertyGroup>
 		<Title>$(AssemblyName)</Title>
 		<Version>1.0.0-preview.2</Version>
-		<Authors>KetPsi ,MohamadArsalan Imamverdi</Authors>
+		<Authors>KetPsi</Authors>
 		<PackageId>$(AssemblyName)</PackageId>
 		<PackageProjectUrl>https://github.com/ketpsi-net/KetPsi.EntityFrameworkCore</PackageProjectUrl>
 		<PackageReadmeFile>README.MD</PackageReadmeFile>

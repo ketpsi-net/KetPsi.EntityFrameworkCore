@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <Description>The Roslyn source generator of KetPsi.EntityFrameworkCore: finds EF Core query call sites, translates them at build time, and emits interceptors, entity readers, navigation accessors and query filter translations. Ships inside the KetPsi.EntityFrameworkCore package.</Description>
     <TargetFramework>netstandard2.0</TargetFramework>
     <!-- Ships inside the KetPsi.EntityFrameworkCore package, together with build\*.props and *.targets. -->
     <IsPackable>false</IsPackable>

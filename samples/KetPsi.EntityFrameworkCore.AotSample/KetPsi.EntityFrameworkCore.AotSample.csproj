@@ -4,6 +4,7 @@
   <Import Project="..\..\src\KetPsi.EntityFrameworkCore.Generator\build\KetPsi.EntityFrameworkCore.Generator.props" />
 
   <PropertyGroup>
+    <Description>Native AOT sample: published with PublishAot on net8.0, net9.0 and net10.0, its trim and AOT warnings checked against a baseline, then run against SQL Server to check queries, tracking and Include.</Description>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
     <PublishAot>true</PublishAot>

@@ -5,7 +5,7 @@
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <IsAotCompatible>true</IsAotCompatible>
-    <Description>SQL Server dialect for KetPsi.EntityFrameworkCore: Native AOT friendly EF Core queries translated at build time and run on SQL Server.</Description>
+    <Description>SQL Server for KetPsi.EntityFrameworkCore: EF Core LINQ queries translated at build time and run on SQL Server under Native AOT. The one package an application installs; it brings KetPsi.EntityFrameworkCore and the EF Core SQL Server provider. Values are typed SqlParameters, and Contains lists and collection loads use one JSON parameter with OPENJSON.</Description>
     <PackageTags>entityframeworkcore;efcore;ef;sqlserver;mssql;nativeaot;aot;source-generator;interceptors;linq;ketpsi</PackageTags>
   </PropertyGroup>
 

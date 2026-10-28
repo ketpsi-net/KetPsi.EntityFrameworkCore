@@ -5,6 +5,7 @@
   <Import Project="..\..\src\KetPsi.EntityFrameworkCore.Generator\build\KetPsi.EntityFrameworkCore.Generator.props" />
 
   <PropertyGroup>
+    <Description>The model the differential tests query: blogs, authors, posts and comments with query filters, a shadow property and every navigation shape.</Description>
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
   </PropertyGroup>
 

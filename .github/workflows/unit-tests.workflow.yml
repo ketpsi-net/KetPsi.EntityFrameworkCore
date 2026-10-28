@@ -1,13 +1,34 @@
-name: ci
+name: Tests
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches:
+      - dev
+      - main
+      - release/**
 
 jobs:
+  test-prerequisite:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run_test: ${{ steps.check-branches.outputs.should_run_test }}
+    steps:
+      - name: CheckBranches
+        id: check-branches
+        run: |
+          if [[ ($GITHUB_BASE_REF == "main" && ! $GITHUB_HEAD_REF =~ release/*) ||
+               ($GITHUB_BASE_REF == "dev" && $GITHUB_HEAD_REF != "main" && ! $GITHUB_HEAD_REF =~ release/*) ||
+               ($GITHUB_BASE_REF =~ release/* && $GITHUB_HEAD_REF != "main" && $GITHUB_HEAD_REF != "dev") ]]; then
+             echo "should_run_test=true" >> $GITHUB_OUTPUT
+          else
+             echo "should_run_test=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Linux, because the differential tests start SQL Server in Docker through Testcontainers.
   build-and-test:
     runs-on: ubuntu-latest
+    needs: [test-prerequisite]
+    if: needs.test-prerequisite.outputs.should_run_test == 'true'
     steps:
       - uses: actions/checkout@v5
 
@@ -39,6 +60,8 @@ jobs:
   # Windows, because the baselines are for win-x64 and the runner has SQL Server LocalDB to run the sample against.
   aot:
     runs-on: windows-2022
+    needs: [test-prerequisite]
+    if: needs.test-prerequisite.outputs.should_run_test == 'true'
     strategy:
       fail-fast: false
       matrix:

@@ -1,0 +1,97 @@
+name: DeployPackages
+
+on:
+  push:
+    tags:
+      - '*.*.*'
+      - '*.*.*-preview.*'
+
+jobs:
+  deploy-prerequisite:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Fetch all branches
+        run: git fetch --all
+
+      - name: Verify tag format and branch
+        env:
+          CI_COMMIT_TAG: ${{ github.ref_name }}
+        run: |
+          branches=$(git show --no-patch --format=%D $CI_COMMIT_TAG)
+          echo "Branches: $branches"
+          echo "Tag: $CI_COMMIT_TAG"
+          if [[ $branches == *release* && $CI_COMMIT_TAG =~ ^[0-9]+\.[0-9]+\.[0-9]+-preview\.[0-9]+$ ]]; then
+            echo "Matched Release preview tag pattern"
+            exit 0
+          elif [[ $branches == *main* && $CI_COMMIT_TAG =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Matched Main tag pattern"
+            exit 0
+          else
+            echo "Created tag does not meet requirements."
+            exit 1
+          fi
+
+      - name: Check for version match in version.props
+        env:
+          CI_COMMIT_TAG: ${{ github.ref_name }}
+        run: |
+          if ! grep -q "<Version>$CI_COMMIT_TAG</Version>" version.props; then
+            echo "Version mismatch: $CI_COMMIT_TAG not found in version.props"
+            exit 1
+          fi
+
+  # The runtime package ships the source generator (analyzers/dotnet/cs) and its MSBuild props and targets.
+  deploy-entityframeworkcore:
+    needs: [deploy-prerequisite]
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Pack KetPsi.EntityFrameworkCore
+        uses: ./.github/workflows/actions/nuget-pack
+        with:
+          projects_to_build_path: src/KetPsi.EntityFrameworkCore.Generator/KetPsi.EntityFrameworkCore.Generator.csproj
+          project_path: src/KetPsi.EntityFrameworkCore/KetPsi.EntityFrameworkCore.csproj
+      - name: Push KetPsi.EntityFrameworkCore
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_SOURCE: ${{ secrets.NUGET_SOURCE }}
+        uses: ./.github/workflows/actions/nuget-push
+        with:
+          package_path: 'pack/KetPsi.EntityFrameworkCore.${{ github.ref_name }}.nupkg'
+
+  wait-for-entityframeworkcore-package:
+    needs: [deploy-entityframeworkcore]
+    runs-on: self-hosted
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Wait for KetPsi.EntityFrameworkCore
+        uses: ./.github/workflows/actions/nuget-wait
+        with:
+          package_name: KetPsi.EntityFrameworkCore
+          package_version: ${{ github.ref_name }}
+
+  # Depends on KetPsi.EntityFrameworkCore of the same version, so it is pushed once that package is available.
+  deploy-sqlserver:
+    needs: [wait-for-entityframeworkcore-package]
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Pack KetPsi.EntityFrameworkCore.SqlServer
+        uses: ./.github/workflows/actions/nuget-pack
+        with:
+          projects_to_build_path: src/KetPsi.EntityFrameworkCore.Generator/KetPsi.EntityFrameworkCore.Generator.csproj
+          project_path: src/KetPsi.EntityFrameworkCore.SqlServer/KetPsi.EntityFrameworkCore.SqlServer.csproj
+      - name: Push KetPsi.EntityFrameworkCore.SqlServer
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_SOURCE: ${{ secrets.NUGET_SOURCE }}
+        uses: ./.github/workflows/actions/nuget-push
+        with:
+          package_path: 'pack/KetPsi.EntityFrameworkCore.SqlServer.${{ github.ref_name }}.nupkg'
