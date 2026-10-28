@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- As a package reference would: interceptors enabled for the generated namespace. -->
+  <Import Project="..\..\src\KetPsi.EntityFrameworkCore.Generator\build\KetPsi.EntityFrameworkCore.Generator.props" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
+    <PublishAot>true</PublishAot>
+    <IsPackable>false</IsPackable>
+    <!-- Outside the KetPsi namespace, so any trim or AOT warning naming KetPsi comes from the library. -->
+    <AssemblyName>AotSample</AssemblyName>
+    <RootNamespace>AotSample</RootNamespace>
+    <!-- An application, not API; this also covers the EF Core compiled model, which is generated without docs. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- EF Core and SqlClient produce trim and AOT warnings this sample cannot fix; eng/Test-AotWarnings.ps1 checks
+         them against a baseline instead. Any other warning, or one from KetPsi, still fails. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);IL2026;IL2104;IL3000;IL3050;IL3053</WarningsNotAsErrors>
+  </PropertyGroup>
+
+  <!-- `dotnet ef dbcontext optimize` runs with KetPsiDesignTime=true: it needs the Design package, and must not
+       compile the compiled model it is regenerating. See eng/Update-CompiledModels.ps1. -->
+  <PropertyGroup Condition="'$(KetPsiDesignTime)' != 'true'">
+    <DefineConstants>$(DefineConstants);KETPSI_COMPILED_MODEL</DefineConstants>
+  </PropertyGroup>
+
+  <!-- The Design package needs its own Roslyn version, which central pinning to the generator's would break. This
+       only affects regenerating the compiled models, never the sample's build or publish. -->
+  <PropertyGroup Condition="'$(KetPsiDesignTime)' == 'true'">
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <CompiledModelFolder Condition="'$(TargetFramework)' == 'net8.0'">Net8</CompiledModelFolder>
+    <CompiledModelFolder Condition="'$(TargetFramework)' == 'net9.0'">Net9</CompiledModelFolder>
+    <CompiledModelFolder Condition="'$(TargetFramework)' == 'net10.0'">Net10</CompiledModelFolder>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="CompiledModels\**" />
+    <Compile Include="CompiledModels\$(CompiledModelFolder)\*.cs" Condition="'$(KetPsiDesignTime)' != 'true'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" Condition="'$(KetPsiDesignTime)' == 'true'" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore\KetPsi.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore.SqlServer\KetPsi.EntityFrameworkCore.SqlServer.csproj" />
+    <ProjectReference Include="..\..\src\KetPsi.EntityFrameworkCore.Generator\KetPsi.EntityFrameworkCore.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Import Project="..\..\src\KetPsi.EntityFrameworkCore.Generator\build\KetPsi.EntityFrameworkCore.Generator.targets" />
+
+</Project>

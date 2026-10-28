@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/KetPsi.EntityFrameworkCore.AotSample/KetPsi.EntityFrameworkCore.AotSample.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/KetPsi.EntityFrameworkCore.Generator/KetPsi.EntityFrameworkCore.Generator.csproj" />
     <Project Path="src/KetPsi.EntityFrameworkCore.SqlServer/KetPsi.EntityFrameworkCore.SqlServer.csproj" />

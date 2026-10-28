@@ -26,3 +26,41 @@ jobs:
 
       - name: Test
         run: dotnet test --no-build --configuration Release
+
+  # Publishes the sample with Native AOT, checks its trim and AOT warnings against the baseline, and runs it.
+  # Windows, because the baselines are for win-x64 and the runner has SQL Server LocalDB to run the sample against.
+  aot:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        framework: [net8.0, net9.0, net10.0]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+          global-json-file: global.json
+
+      - name: Publish with Native AOT
+        shell: pwsh
+        run: |
+          dotnet publish samples/KetPsi.EntityFrameworkCore.AotSample --configuration Release --framework ${{ matrix.framework }} --runtime win-x64 --output artifacts/aot -nologo > publish.log 2>&1
+          $code = $LASTEXITCODE
+          Get-Content publish.log
+          exit $code
+
+      - name: Check trim and AOT warnings
+        shell: pwsh
+        run: ./eng/Test-AotWarnings.ps1 -LogPath publish.log -BaselinePath eng/aot-warnings/win-x64.${{ matrix.framework }}.txt
+
+      - name: Start SQL Server LocalDB
+        run: sqllocaldb start MSSQLLocalDB
+
+      - name: Run the sample
+        env:
+          KETPSI_SAMPLE_CONNECTION: Server=(localdb)\MSSQLLocalDB;Integrated Security=true;TrustServerCertificate=true
+        run: ./artifacts/aot/AotSample.exe

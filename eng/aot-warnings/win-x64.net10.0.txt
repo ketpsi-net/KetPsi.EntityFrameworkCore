@@ -1,0 +1,17 @@
+﻿# Trim and AOT warnings the AOT sample is allowed to produce, as reported by eng/Test-AotWarnings.ps1.
+# All of them come from EF Core and SqlClient. Regenerate with -Update after an EF Core or SDK upgrade.
+IL2026: AotSample.ShopDb.ShopDb(DbContextOptions`1<ShopDb>): Using member 'Microsoft.EntityFrameworkCore.DbContext.DbContext(DbContextOptions)' which has 'RequiresUnreferencedCodeAttribute' can break functionality when trimming application code. EF Core isn't fully compatible with trimming, and running the application may generate unexpected runtime failures. Some specific coding pattern are usually required to make trimming work properly, see https://aka.ms/efcore-docs-trimming for more details.
+IL2026: Using member 'Microsoft.EntityFrameworkCore.DbContext.DbContext(DbContextOptions)' which has 'RequiresUnreferencedCodeAttribute' can break functionality when trimming application code. EF Core isn't fully compatible with trimming, and running the application may generate unexpected runtime failures. Some specific coding pattern are usually required to make trimming work properly, see https://aka.ms/efcore-docs-trimming for more details.
+IL2104: Assembly 'Microsoft.Data.SqlClient' produced trim warnings. For more information see https://aka.ms/il2104
+IL2104: Assembly 'Microsoft.EntityFrameworkCore' produced trim warnings. For more information see https://aka.ms/il2104
+IL2104: Assembly 'Microsoft.EntityFrameworkCore.Relational' produced trim warnings. For more information see https://aka.ms/il2104
+IL2104: Assembly 'Microsoft.EntityFrameworkCore.SqlServer' produced trim warnings. For more information see https://aka.ms/il2104
+IL2104: Assembly 'System.Configuration.ConfigurationManager' produced trim warnings. For more information see https://aka.ms/il2104
+IL3000: Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal.SqlServerConnection.ModifyConnectionString(String): 'System.Reflection.Assembly.Location.get' always returns an empty string for assemblies embedded in a single-file app. If the path to the app directory is needed, consider calling 'System.AppContext.BaseDirectory'.
+IL3050: AotSample.CompiledModel.ProductEntityType.Create(RuntimeModel,RuntimeEntityType): Using member 'System.Enum.GetValues(Type)' which has 'RequiresDynamicCodeAttribute' can break functionality when AOT compiling. It might not be possible to create an array of the enum type at runtime. Use the GetValues<TEnum> overload or the GetValuesAsUnderlyingType method instead.
+IL3050: AotSample.ShopDb.ShopDb(DbContextOptions`1<ShopDb>): Using member 'Microsoft.EntityFrameworkCore.DbContext.DbContext(DbContextOptions)' which has 'RequiresDynamicCodeAttribute' can break functionality when AOT compiling. EF Core isn't fully compatible with NativeAOT, and running the application may generate unexpected runtime failures.
+IL3050: Using member 'Microsoft.EntityFrameworkCore.DbContext.DbContext(DbContextOptions)' which has 'RequiresDynamicCodeAttribute' can break functionality when AOT compiling. EF Core isn't fully compatible with NativeAOT, and running the application may generate unexpected runtime failures.
+IL3053: Assembly 'Microsoft.Data.SqlClient' produced AOT analysis warnings.
+IL3053: Assembly 'Microsoft.EntityFrameworkCore' produced AOT analysis warnings.
+IL3053: Assembly 'Microsoft.EntityFrameworkCore.Relational' produced AOT analysis warnings.
+IL3053: Assembly 'Microsoft.EntityFrameworkCore.SqlServer' produced AOT analysis warnings.
