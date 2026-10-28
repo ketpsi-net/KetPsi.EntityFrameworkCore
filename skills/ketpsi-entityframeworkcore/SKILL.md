@@ -130,7 +130,7 @@ Same behavior as EF Core:
 2. Compiled models cannot hold query filters; filters only work under JIT.
 3. EF Core 8 cannot track or save changes under Native AOT. KetPsi throws a clear `InvalidOperationException` for
    tracking queries there; use `AsNoTracking()` (or set the context's `QueryTrackingBehavior` to `NoTracking`), or
-   move to EF Core 9+.
+   move to EF Core 9+. No-tracking queries with `Include` work under Native AOT on EF Core 8, 9 and 10.
 4. Keep `InvariantGlobalization` off; SqlClient needs culture data.
 5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor; KetPsi itself adds none.
 

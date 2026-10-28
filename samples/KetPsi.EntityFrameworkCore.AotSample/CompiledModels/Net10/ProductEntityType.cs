@@ -27,6 +27,7 @@ namespace AotSample.CompiledModel
                 typeof(Product),
                 baseEntityType,
                 propertyCount: 8,
+                navigationCount: 1,
                 keyCount: 1);
 
             var id = runtimeEntityType.AddProperty(
@@ -430,6 +431,7 @@ namespace AotSample.CompiledModel
             var key = runtimeEntityType.FindKey(new[] { id });
             key.SetPrincipalKeyValueFactory(KeyValueFactoryFactory.CreateSimpleNonNullableFactory<int>(key));
             key.SetIdentityMapFactory(IdentityMapFactoryFactory.CreateFactory<int>(key));
+            var reviews = runtimeEntityType.FindNavigation("Reviews");
             runtimeEntityType.SetOriginalValuesFactory(
                 ISnapshot (IInternalEntry source) =>
                 {
@@ -448,16 +450,16 @@ namespace AotSample.CompiledModel
                 ISnapshot (IInternalEntry source) =>
                 {
                     var structuralType = ((Product)(source.Entity));
-                    return ((ISnapshot)(new Snapshot<int>(((ValueComparer<int>)(((IProperty)id).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(id)))));
+                    return ((ISnapshot)(new Snapshot<int, object>(((ValueComparer<int>)(((IProperty)id).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(id)), SnapshotFactoryFactory.SnapshotCollection(source.GetCurrentValue<List<Review>>(reviews)))));
                 });
             runtimeEntityType.SetCounts(new PropertyCounts(
                 propertyCount: 8,
-                navigationCount: 0,
+                navigationCount: 1,
                 complexPropertyCount: 0,
                 complexCollectionCount: 0,
                 originalValueCount: 8,
                 shadowCount: 1,
-                relationshipCount: 1,
+                relationshipCount: 2,
                 storeGeneratedCount: 0));
             runtimeEntityType.AddAnnotation("Relational:FunctionName", null);
             runtimeEntityType.AddAnnotation("Relational:Schema", "shop");

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 
 #pragma warning disable 219, 612, 618
@@ -15,15 +16,19 @@ namespace AotSample.CompiledModel
     public partial class ShopDbModel
     {
         private ShopDbModel()
-            : base(skipDetectChanges: false, modelId: new Guid("e7f4acf7-7f2d-4252-8c05-32799a0f6b71"), entityTypeCount: 1)
+            : base(skipDetectChanges: false, modelId: new Guid("916194bc-958a-4a69-9253-1da5dbe04a45"), entityTypeCount: 2)
         {
         }
 
         partial void Initialize()
         {
             var product = ProductEntityType.Create(this);
+            var review = ReviewEntityType.Create(this);
+
+            ReviewEntityType.CreateForeignKey1(review, product);
 
             ProductEntityType.CreateAnnotations(product);
+            ReviewEntityType.CreateAnnotations(review);
 
             AddAnnotation("ProductVersion", "10.0.14");
             AddAnnotation("Relational:MaxIdentifierLength", 128);
@@ -123,6 +128,77 @@ namespace AotSample.CompiledModel
             pK_Products.MappedKeys.Add(pK_ProductsKey);
             RelationalModel.GetOrCreateUniqueConstraints(pK_ProductsKey).Add(pK_Products);
             productsTable.UniqueConstraints.Add("PK_Products", pK_Products);
+
+            var review = FindEntityType("AotSample.Review")!;
+
+            var defaultTableMappings0 = new List<TableMappingBase<ColumnMappingBase>>();
+            review.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings0);
+            var aotSampleReviewTableBase = new TableBase("AotSample.Review", null, relationalModel);
+            var idColumnBase0 = new ColumnBase<ColumnMappingBase>("Id", "int", aotSampleReviewTableBase);
+            aotSampleReviewTableBase.Columns.Add("Id", idColumnBase0);
+            var productIdColumnBase = new ColumnBase<ColumnMappingBase>("ProductId", "int", aotSampleReviewTableBase);
+            aotSampleReviewTableBase.Columns.Add("ProductId", productIdColumnBase);
+            var starsColumnBase = new ColumnBase<ColumnMappingBase>("Stars", "int", aotSampleReviewTableBase);
+            aotSampleReviewTableBase.Columns.Add("Stars", starsColumnBase);
+            relationalModel.DefaultTables.Add("AotSample.Review", aotSampleReviewTableBase);
+            var aotSampleReviewMappingBase = new TableMappingBase<ColumnMappingBase>(review, aotSampleReviewTableBase, null);
+            aotSampleReviewTableBase.AddTypeMapping(aotSampleReviewMappingBase, false);
+            defaultTableMappings0.Add(aotSampleReviewMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase0, review.FindProperty("Id")!, aotSampleReviewMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)productIdColumnBase, review.FindProperty("ProductId")!, aotSampleReviewMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)starsColumnBase, review.FindProperty("Stars")!, aotSampleReviewMappingBase);
+
+            var tableMappings0 = new List<TableMapping>();
+            review.SetRuntimeAnnotation("Relational:TableMappings", tableMappings0);
+            var reviewsTable = new Table("Reviews", "shop", relationalModel);
+            var idColumn0 = new Column("Id", "int", reviewsTable);
+            reviewsTable.Columns.Add("Id", idColumn0);
+            idColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(idColumn0);
+            var productIdColumn = new Column("ProductId", "int", reviewsTable);
+            reviewsTable.Columns.Add("ProductId", productIdColumn);
+            productIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(productIdColumn);
+            var starsColumn = new Column("Stars", "int", reviewsTable);
+            reviewsTable.Columns.Add("Stars", starsColumn);
+            starsColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(starsColumn);
+            relationalModel.Tables.Add(("Reviews", "shop"), reviewsTable);
+            var reviewsTableMapping = new TableMapping(review, reviewsTable, null);
+            reviewsTable.AddTypeMapping(reviewsTableMapping, false);
+            tableMappings0.Add(reviewsTableMapping);
+            RelationalModel.CreateColumnMapping(idColumn0, review.FindProperty("Id")!, reviewsTableMapping);
+            RelationalModel.CreateColumnMapping(productIdColumn, review.FindProperty("ProductId")!, reviewsTableMapping);
+            RelationalModel.CreateColumnMapping(starsColumn, review.FindProperty("Stars")!, reviewsTableMapping);
+            var pK_Reviews = new UniqueConstraint("PK_Reviews", reviewsTable, new[] { idColumn0 });
+            reviewsTable.PrimaryKey = pK_Reviews;
+            pK_Reviews.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<int>(pK_Reviews));
+            var pK_ReviewsKey = RelationalModel.GetKey(this,
+                "AotSample.Review",
+                new[] { "Id" });
+            pK_Reviews.MappedKeys.Add(pK_ReviewsKey);
+            RelationalModel.GetOrCreateUniqueConstraints(pK_ReviewsKey).Add(pK_Reviews);
+            reviewsTable.UniqueConstraints.Add("PK_Reviews", pK_Reviews);
+            var iX_Reviews_ProductId = new TableIndex(
+            "IX_Reviews_ProductId", reviewsTable, new[] { productIdColumn }, false);
+            iX_Reviews_ProductId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_Reviews_ProductId));
+            var iX_Reviews_ProductIdIx = RelationalModel.GetIndex(this,
+                "AotSample.Review",
+                new[] { "ProductId" });
+            iX_Reviews_ProductId.MappedIndexes.Add(iX_Reviews_ProductIdIx);
+            RelationalModel.GetOrCreateTableIndexes(iX_Reviews_ProductIdIx).Add(iX_Reviews_ProductId);
+            reviewsTable.Indexes.Add("IX_Reviews_ProductId", iX_Reviews_ProductId);
+            var fK_Reviews_Products_ProductId = new ForeignKeyConstraint(
+                "FK_Reviews_Products_ProductId", reviewsTable, productsTable,
+                new[] { productIdColumn },
+                productsTable.FindUniqueConstraint("PK_Products")!, ReferentialAction.Cascade);
+            fK_Reviews_Products_ProductId.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_Reviews_Products_ProductId));
+            var fK_Reviews_Products_ProductIdFk = RelationalModel.GetForeignKey(this,
+                "AotSample.Review",
+                new[] { "ProductId" },
+                "AotSample.Product",
+                new[] { "Id" });
+            fK_Reviews_Products_ProductId.MappedForeignKeys.Add(fK_Reviews_Products_ProductIdFk);
+            RelationalModel.GetOrCreateForeignKeyConstraints(fK_Reviews_Products_ProductIdFk).Add(fK_Reviews_Products_ProductId);
+            reviewsTable.ForeignKeyConstraints.Add(fK_Reviews_Products_ProductId);
+            productsTable.ReferencingForeignKeyConstraints.Add(fK_Reviews_Products_ProductId);
             return relationalModel.MakeReadOnly();
         }
     }

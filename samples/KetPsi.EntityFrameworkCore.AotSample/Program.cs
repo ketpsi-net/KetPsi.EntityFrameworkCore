@@ -99,6 +99,23 @@ await CheckAsync(
     db => Task.FromResult($"{db.Products.AsNoTrackingWithIdentityResolution().Where(p => p.IsActive).ToList().Count}|{db.ChangeTracker.Entries().Count()}"),
     "6|0");
 
+await CheckAsync(
+    "Include a collection without tracking",
+    db =>
+    {
+        var products = db.Products.AsNoTracking().Include(p => p.Reviews).Where(p => p.Id <= 3).OrderBy(p => p.Id).ToList();
+        var linked = products.All(p => p.Reviews.All(r => ReferenceEquals(r.Product, p)));
+        return Task.FromResult(string.Join(",", products.Select(p => $"{p.Id}:[{string.Join(" ", p.Reviews.Select(r => r.Id))}]")) + $"|{linked}");
+    },
+    "1:[11 12],2:[21],3:[]|True");
+
+await CheckAsync(
+    "Include a reference without tracking, async",
+    async db => string.Join(",", (await db.Reviews.AsNoTracking().Include(r => r.Product).ToListAsync(cancellationToken))
+        .OrderBy(r => r.Id)
+        .Select(r => r.Product.Name)),
+    "Dune,Dune,Hades,Kind of Blue");
+
 #if NET8_0
 // EF Core 8 cannot track entities under Native AOT: tracking queries fail with a clear error instead of EF Core's
 // "model building is not supported". Add AsNoTracking(), or move to EF Core 9 or later to track.
@@ -154,6 +171,21 @@ await CheckAsync(
         return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{saved}|{reloaded.Price}|{fresh.Entry(reloaded).Property<int>(ShopDb.Revision).CurrentValue}");
     },
     "1|16.50|31");
+
+await CheckAsync(
+    "Tracked Include marks loaded, and an edit saves",
+    async db =>
+    {
+        var product = await db.Products.Include(p => p.Reviews).SingleAsync(p => p.Id == 1, cancellationToken);
+        var loaded = db.Entry(product).Collection(p => p.Reviews).IsLoaded;
+        product.Reviews[0].Stars = 1;
+        var saved = await db.SaveChangesAsync(cancellationToken);
+
+        await using var fresh = new ShopDb(options);
+        var stars = (await fresh.Reviews.AsNoTracking().SingleAsync(r => r.Id == 11, cancellationToken)).Stars;
+        return $"{loaded}|{saved}|{stars}";
+    },
+    "True|1|1");
 
 await CheckAsync(
     "SaveChanges through EF Core, read back through KetPsi",

@@ -25,6 +25,19 @@ public sealed class Product
     public Category Category { get; set; }
 
     public DateTime CreatedAt { get; set; }
+
+    public List<Review> Reviews { get; set; } = [];
+}
+
+public sealed class Review
+{
+    public int Id { get; set; }
+
+    public int ProductId { get; set; }
+
+    public Product Product { get; set; } = null!;
+
+    public int Stars { get; set; }
 }
 
 public sealed class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options)
@@ -33,6 +46,8 @@ public sealed class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options
     public const string Revision = "Revision";
 
     public DbSet<Product> Products => Set<Product>();
+
+    public DbSet<Review> Reviews => Set<Review>();
 
     public static DbContextOptions<ShopDb> Options(string connectionString)
     {
@@ -46,7 +61,8 @@ public sealed class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options
 
     // Compiled models cannot contain query filters, so this model has none.
     protected override void OnModelCreating(ModelBuilder modelBuilder)
-        => modelBuilder.Entity<Product>(b =>
+    {
+        modelBuilder.Entity<Product>(b =>
         {
             b.ToTable("Products", "shop");
             b.Property(p => p.Id).ValueGeneratedNever();
@@ -54,6 +70,14 @@ public sealed class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options
             b.Property(p => p.Price).HasPrecision(10, 2);
             b.Property<int>(Revision);
         });
+
+        modelBuilder.Entity<Review>(b =>
+        {
+            b.ToTable("Reviews", "shop");
+            b.Property(r => r.Id).ValueGeneratedNever();
+            b.HasOne(r => r.Product).WithMany(p => p.Reviews).HasForeignKey(r => r.ProductId);
+        });
+    }
 }
 
 /// <summary>Lets <c>dotnet ef dbcontext optimize</c> create the context; the connection is never opened.</summary>

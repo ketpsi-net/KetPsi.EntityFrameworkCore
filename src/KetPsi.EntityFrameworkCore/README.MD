@@ -90,7 +90,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
   register it with `options.UseModel(...)`.
 - **No query filters under AOT.** EF Core compiled models cannot contain query filters. Query filters work under JIT.
 - **EF Core 8 cannot track or save under Native AOT.** KetPsi rejects tracking queries there with a clear error; use
-  `AsNoTracking()` or move to EF Core 9 or later.
+  `AsNoTracking()` or move to EF Core 9 or later. No-tracking queries, `Include` included, work on every version.
 - **No `InvariantGlobalization`.** SqlClient fails with it enabled.
 - The `DbContext` constructor itself carries EF Core's trim and AOT warnings, which an application cannot remove.
 

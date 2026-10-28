@@ -14,6 +14,7 @@ internal static class SampleDatabase
 
     private const string ResetSchema = """
         IF SCHEMA_ID('shop') IS NULL EXEC('CREATE SCHEMA shop');
+        IF OBJECT_ID('shop.Reviews') IS NOT NULL DROP TABLE shop.Reviews;
         IF OBJECT_ID('shop.Products') IS NOT NULL DROP TABLE shop.Products;
         CREATE TABLE shop.Products (
             Id int NOT NULL PRIMARY KEY,
@@ -33,6 +34,15 @@ internal static class SampleDatabase
             (6, N'Kind of Blue', 12.00, NULL, 1, 2, '2024-01-06T08:00:00', 60),
             (7, N'Outer Wilds', 22.00, 8, 0, 1, '2024-01-07T08:00:00', 70),
             (8, N'Foundation', 8.75, 15, 1, 0, '2024-01-08T08:00:00', 80);
+        CREATE TABLE shop.Reviews (
+            Id int NOT NULL PRIMARY KEY,
+            ProductId int NOT NULL REFERENCES shop.Products (Id),
+            Stars int NOT NULL);
+        INSERT INTO shop.Reviews (Id, ProductId, Stars) VALUES
+            (12, 1, 5),
+            (11, 1, 4),
+            (21, 2, 3),
+            (61, 6, 5);
         """;
 
     /// <summary>Recreates the sample table and returns the connection string of the sample database.</summary>
