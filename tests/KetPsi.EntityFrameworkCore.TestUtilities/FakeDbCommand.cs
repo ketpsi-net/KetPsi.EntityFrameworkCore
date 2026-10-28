@@ -47,7 +47,7 @@ public sealed class FakeDbCommand(FakeDbConnection connection) : DbCommand
 
     protected override DbParameter CreateDbParameter() => new SqlParameter();
 
-    protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => connection.Rows.CreateDataReader();
+    protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => connection.NextRows().CreateDataReader();
 
     protected override void Dispose(bool disposing)
     {

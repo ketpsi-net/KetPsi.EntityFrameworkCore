@@ -30,6 +30,11 @@ internal static class QueryRunner
     public static IEnumerable<T> Enumerate<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
         where T : class
     {
+        if (PrepareIncludes(query, rowLimit: null) is { } included)
+        {
+            return LoadIncluded<T>(included);
+        }
+
         var rows = PrepareRows(query, rowLimit: null);
         return QueryExecutor.Stream(query.Context, rows.Dialect, rows.Statement, rows.Materialize);
     }
@@ -38,6 +43,11 @@ internal static class QueryRunner
         SqlQueryable<T> query, CancellationToken cancellationToken)
         where T : class
     {
+        if (PrepareIncludes(query, rowLimit: null) is { } included)
+        {
+            return LoadIncludedAsync<T>(included, cancellationToken);
+        }
+
         var rows = PrepareRows(query, rowLimit: null);
         return QueryExecutor.StreamAsync(query.Context, rows.Dialect, rows.Statement, rows.Materialize, cancellationToken);
     }
@@ -140,6 +150,11 @@ internal static class QueryRunner
     private static List<T> ReadRows<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, int? rowLimit)
         where T : class
     {
+        if (PrepareIncludes(query, rowLimit) is { } included)
+        {
+            return included.Loader.Load(included.Statement).ConvertAll(static entity => (T)entity);
+        }
+
         var rows = PrepareRows(query, rowLimit);
         return [.. QueryExecutor.Stream(query.Context, rows.Dialect, rows.Statement, rows.Materialize)];
     }
@@ -148,6 +163,12 @@ internal static class QueryRunner
         SqlQueryable<T> query, int? rowLimit, CancellationToken cancellationToken)
         where T : class
     {
+        if (PrepareIncludes(query, rowLimit) is { } included)
+        {
+            var entities = await included.Loader.LoadAsync(included.Statement, cancellationToken).ConfigureAwait(false);
+            return entities.ConvertAll(static entity => (T)entity);
+        }
+
         var rows = PrepareRows(query, rowLimit);
         var result = new List<T>();
         await foreach (var row in QueryExecutor
@@ -173,6 +194,63 @@ internal static class QueryRunner
     {
         var (dialect, statement) = Prepare(query, terminal, rowLimit: null);
         return QueryExecutor.ExecuteScalarAsync(query.Context, dialect, statement, cancellationToken);
+    }
+
+    // Collections load with the keys of every parent, so the parents are read in full before any is returned.
+    private static IEnumerable<T> LoadIncluded<T>(IncludedQuery included)
+    {
+        foreach (var entity in included.Loader.Load(included.Statement))
+        {
+            yield return (T)entity;
+        }
+    }
+
+    private static async IAsyncEnumerable<T> LoadIncludedAsync<T>(
+        IncludedQuery included, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var entity in await included.Loader.LoadAsync(included.Statement, cancellationToken).ConfigureAwait(false))
+        {
+            yield return (T)entity;
+        }
+    }
+
+    /// <summary>The statement and loader for a query with included navigations, or <see langword="null"/> without.</summary>
+    private static IncludedQuery? PrepareIncludes<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, int? rowLimit)
+        where T : class
+    {
+        var context = query.Context;
+        var model = context.Model;
+        BoundEntity Bind(Type type) => ModelBinder.GetEntity(model, type);
+
+        var entity = Bind(query.Root.EntityType);
+        if (IncludeTree.FromChain(entity, query.Tail, Bind) is not { } includes)
+        {
+            return null;
+        }
+
+        var dialect = SqlDialects.Resolve(context.Database.ProviderName);
+
+        // IgnoreQueryFilters applies to every entity of the query, included ones too, as in EF Core.
+        var ignored = IgnoredQueryFilters.FromChain(query.Tail);
+        var filters = new Dictionary<BoundEntity, IReadOnlyList<ResolvedQueryFilter>>(ReferenceEqualityComparer.Instance);
+        IReadOnlyList<ResolvedQueryFilter> FiltersFor(BoundEntity bound)
+        {
+            if (!filters.TryGetValue(bound, out var resolved))
+            {
+                filters.Add(bound, resolved = QueryFilterResolver.Resolve(context, bound, ignored));
+            }
+
+            return resolved;
+        }
+
+        var tracking = ResolveTracking(query.Tail, context.ChangeTracker.QueryTrackingBehavior);
+        if (tracking == QueryTrackingBehavior.TrackAll)
+        {
+            EnsureTrackingSupported(RuntimeFeature.IsDynamicCodeSupported, EfCoreMajorVersion);
+        }
+
+        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, FiltersFor, rowLimit);
+        return new IncludedQuery(statement, new IncludeLoader(context, dialect, tracking, FiltersFor, Bind));
     }
 
     private static PreparedRows<T> PrepareRows<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, int? rowLimit)
@@ -247,4 +325,6 @@ internal static class QueryRunner
         => new(isAsync ? ExceptionMessages.SequenceContainsMoreThanOneElementAsync : ExceptionMessages.SequenceContainsMoreThanOneElement);
 
     private sealed record PreparedRows<T>(ISqlDialect Dialect, SqlStatement Statement, Func<DbDataReader, T> Materialize);
+
+    private sealed record IncludedQuery(IncludeStatement Statement, IncludeLoader Loader);
 }

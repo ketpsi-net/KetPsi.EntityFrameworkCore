@@ -86,7 +86,10 @@ public sealed class Locker
 /// </summary>
 public class LibraryContext : BindingContext
 {
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder modelBuilder) => Configure(modelBuilder);
+
+    /// <summary>The library mapping, shared with contexts over other connections.</summary>
+    public static void Configure(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Writer>().HasOne(w => w.Profile).WithOne(p => p.Writer).HasForeignKey<WriterProfile>(p => p.WriterId);
         modelBuilder.Entity<Book>().HasMany(b => b.Tags).WithMany(t => t.Books);

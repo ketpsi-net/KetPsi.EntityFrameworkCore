@@ -84,6 +84,13 @@ internal static class ExceptionMessages
         "No generated reader is registered for the entity type '{0}'. Make sure the project that declares the query " +
         "references KetPsi.EntityFrameworkCore.Generator.";
 
+    public const string KeyReaderRequiresKey =
+        "The entity type has no primary key to read.";
+
+    public const string NavigationAccessorNotRegistered =
+        "No generated accessor is registered for the navigation '{0}.{1}'. Make sure the project that declares the query " +
+        "references KetPsi.EntityFrameworkCore.Generator.";
+
     public const string TrackingRequiresEfCore9UnderAot =
         "Tracking queries need EF Core 9 or later under Native AOT; EF Core 8 cannot track entities there. Add " +
         "AsNoTracking() to the query, or set the context's QueryTrackingBehavior to NoTracking.";

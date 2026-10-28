@@ -13,8 +13,13 @@ public sealed class FakeDbConnection : DbConnection
 
     public FakeDbCommand LastCommand => Commands[^1];
 
-    /// <summary>The rows every reader command returns.</summary>
+    /// <summary>The rows every reader command returns once <see cref="RowSets"/> is empty.</summary>
     public DataTable Rows { get; set; } = new();
+
+    /// <summary>Rows for the next reader commands, one table per command, in order.</summary>
+    public Queue<DataTable> RowSets { get; } = new();
+
+    internal DataTable NextRows() => RowSets.TryDequeue(out var rows) ? rows : Rows;
 
     /// <summary>The value every scalar command returns.</summary>
     public object? Scalar { get; set; }

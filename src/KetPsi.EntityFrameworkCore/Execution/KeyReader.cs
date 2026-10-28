@@ -4,18 +4,31 @@ using KetPsi.EntityFrameworkCore.Binding;
 
 namespace KetPsi.EntityFrameworkCore.Execution;
 
-/// <summary>Reads an entity's primary key from a result row, as the CLR values EF Core compares keys by.</summary>
+/// <summary>
+/// Reads an entity's primary key, or another list of its properties such as a foreign key, from a result row, as the
+/// CLR values EF Core compares keys by.
+/// </summary>
 internal sealed class KeyReader
 {
     private readonly (int Ordinal, Type ClrType)[] _key;
 
     /// <param name="entity">The bound entity; it must have a primary key.</param>
-    public KeyReader(BoundEntity entity)
+    /// <param name="offset">The ordinal of the entity's first column in the row.</param>
+    public KeyReader(BoundEntity entity, int offset = 0)
+        : this(entity, entity.PrimaryKey ?? throw new ArgumentNullException(nameof(entity), ExceptionMessages.KeyReaderRequiresKey), offset)
     {
-        ArgumentNullException.ThrowIfNull(entity.PrimaryKey);
-
-        _key = [.. entity.PrimaryKey.Select(p => (Ordinal(entity, p), p.ClrType))];
     }
+
+    /// <param name="entity">The bound entity.</param>
+    /// <param name="properties">The properties to read, in order; properties of <paramref name="entity"/>.</param>
+    /// <param name="offset">The ordinal of the entity's first column in the row.</param>
+    public KeyReader(BoundEntity entity, IReadOnlyList<BoundProperty> properties, int offset)
+    {
+        _key = [.. properties.Select(p => (offset + Ordinal(entity, p), p.ClrType))];
+    }
+
+    /// <summary>The ordinal of the first key column, which is null when a left join found no row.</summary>
+    public int FirstOrdinal => _key[0].Ordinal;
 
     /// <summary>Compares keys value by value, and binary keys byte by byte.</summary>
     public static IEqualityComparer<object?[]> Comparer { get; } = new KeyComparer();
