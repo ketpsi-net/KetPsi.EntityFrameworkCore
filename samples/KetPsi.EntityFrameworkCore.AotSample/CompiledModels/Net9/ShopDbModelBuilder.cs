@@ -15,7 +15,7 @@ namespace AotSample.CompiledModel
     public partial class ShopDbModel
     {
         private ShopDbModel()
-            : base(skipDetectChanges: false, modelId: new Guid("613d2689-087e-4a30-86cf-295421f02c6b"), entityTypeCount: 1)
+            : base(skipDetectChanges: false, modelId: new Guid("9fab36dc-99e4-4619-af81-64c269ed13f4"), entityTypeCount: 1)
         {
         }
 
@@ -52,6 +52,8 @@ namespace AotSample.CompiledModel
             aotSampleProductTableBase.Columns.Add("Name", nameColumnBase);
             var priceColumnBase = new ColumnBase<ColumnMappingBase>("Price", "decimal(10,2)", aotSampleProductTableBase);
             aotSampleProductTableBase.Columns.Add("Price", priceColumnBase);
+            var revisionColumnBase = new ColumnBase<ColumnMappingBase>("Revision", "int", aotSampleProductTableBase);
+            aotSampleProductTableBase.Columns.Add("Revision", revisionColumnBase);
             var stockColumnBase = new ColumnBase<ColumnMappingBase>("Stock", "int", aotSampleProductTableBase)
             {
                 IsNullable = true
@@ -67,6 +69,7 @@ namespace AotSample.CompiledModel
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isActiveColumnBase, product.FindProperty("IsActive")!, aotSampleProductMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)nameColumnBase, product.FindProperty("Name")!, aotSampleProductMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)priceColumnBase, product.FindProperty("Price")!, aotSampleProductMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)revisionColumnBase, product.FindProperty("Revision")!, aotSampleProductMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)stockColumnBase, product.FindProperty("Stock")!, aotSampleProductMappingBase);
 
             var tableMappings = new List<TableMapping>();
@@ -90,6 +93,9 @@ namespace AotSample.CompiledModel
             var priceColumn = new Column("Price", "decimal(10,2)", productsTable);
             productsTable.Columns.Add("Price", priceColumn);
             priceColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<decimal>(priceColumn);
+            var revisionColumn = new Column("Revision", "int", productsTable);
+            productsTable.Columns.Add("Revision", revisionColumn);
+            revisionColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(revisionColumn);
             var stockColumn = new Column("Stock", "int", productsTable)
             {
                 IsNullable = true
@@ -106,6 +112,7 @@ namespace AotSample.CompiledModel
             RelationalModel.CreateColumnMapping(isActiveColumn, product.FindProperty("IsActive")!, productsTableMapping);
             RelationalModel.CreateColumnMapping(nameColumn, product.FindProperty("Name")!, productsTableMapping);
             RelationalModel.CreateColumnMapping(priceColumn, product.FindProperty("Price")!, productsTableMapping);
+            RelationalModel.CreateColumnMapping(revisionColumn, product.FindProperty("Revision")!, productsTableMapping);
             RelationalModel.CreateColumnMapping(stockColumn, product.FindProperty("Stock")!, productsTableMapping);
             var pK_Products = new UniqueConstraint("PK_Products", productsTable, new[] { idColumn });
             productsTable.PrimaryKey = pK_Products;

@@ -4,8 +4,9 @@
 
 .DESCRIPTION
     Native AOT cannot build the EF Core model at runtime, so the sample ships compiled models. Run this after changing
-    the sample's model. EF Core 9 and 10 models are generated with --nativeaot, which they need to save changes under
-    Native AOT; EF Core 8 has no such option. Requires the dotnet-ef tool.
+    the sample's model. EF Core 9 and 10 models are generated with --nativeaot, which they need to track entities and
+    save changes under Native AOT. EF Core 8 has no such option, so under Native AOT it can neither track nor save, and
+    KetPsi rejects tracking queries there with a clear error. Requires the dotnet-ef tool.
 #>
 [CmdletBinding()]
 param()

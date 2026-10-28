@@ -26,7 +26,7 @@ namespace AotSample.CompiledModel
                 "AotSample.Product",
                 typeof(Product),
                 baseEntityType,
-                propertyCount: 7,
+                propertyCount: 8,
                 keyCount: 1);
 
             var id = runtimeEntityType.AddProperty(
@@ -301,6 +301,37 @@ namespace AotSample.CompiledModel
                     precision: 10));
             price.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
 
+            var revision = runtimeEntityType.AddProperty(
+                "Revision",
+                typeof(int),
+                sentinel: 0);
+            revision.SetAccessors(
+                int (InternalEntityEntry entry) => entry.ReadShadowValue<int>(0),
+                int (InternalEntityEntry entry) => entry.ReadShadowValue<int>(0),
+                int (InternalEntityEntry entry) => entry.ReadOriginalValue<int>(revision, 6),
+                int (InternalEntityEntry entry) => entry.GetCurrentValue<int>(revision),
+                object (ValueBuffer valueBuffer) => valueBuffer[6]);
+            revision.SetPropertyIndexes(
+                index: 6,
+                originalValueIndex: 6,
+                shadowIndex: 0,
+                relationshipIndex: -1,
+                storeGenerationIndex: -1);
+            revision.TypeMapping = IntTypeMapping.Default.Clone(
+                comparer: new ValueComparer<int>(
+                    bool (int v1, int v2) => v1 == v2,
+                    int (int v) => v,
+                    int (int v) => v),
+                keyComparer: new ValueComparer<int>(
+                    bool (int v1, int v2) => v1 == v2,
+                    int (int v) => v,
+                    int (int v) => v),
+                providerValueComparer: new ValueComparer<int>(
+                    bool (int v1, int v2) => v1 == v2,
+                    int (int v) => v,
+                    int (int v) => v));
+            revision.AddAnnotation("SqlServer:ValueGenerationStrategy", SqlServerValueGenerationStrategy.None);
+
             var stock = runtimeEntityType.AddProperty(
                 "Stock",
                 typeof(int?),
@@ -319,12 +350,12 @@ namespace AotSample.CompiledModel
             stock.SetAccessors(
                 int? (InternalEntityEntry entry) => ProductUnsafeAccessors.Stock(((Product)(entry.Entity))),
                 int? (InternalEntityEntry entry) => ProductUnsafeAccessors.Stock(((Product)(entry.Entity))),
-                int? (InternalEntityEntry entry) => entry.ReadOriginalValue<int?>(stock, 6),
+                int? (InternalEntityEntry entry) => entry.ReadOriginalValue<int?>(stock, 7),
                 int? (InternalEntityEntry entry) => entry.GetCurrentValue<int?>(stock),
-                object (ValueBuffer valueBuffer) => valueBuffer[6]);
+                object (ValueBuffer valueBuffer) => valueBuffer[7]);
             stock.SetPropertyIndexes(
-                index: 6,
-                originalValueIndex: 6,
+                index: 7,
+                originalValueIndex: 7,
                 shadowIndex: -1,
                 relationshipIndex: -1,
                 storeGenerationIndex: -1);
@@ -360,6 +391,7 @@ namespace AotSample.CompiledModel
             var isActive = runtimeEntityType.FindProperty("IsActive");
             var name = runtimeEntityType.FindProperty("Name");
             var price = runtimeEntityType.FindProperty("Price");
+            var revision = runtimeEntityType.FindProperty("Revision");
             var stock = runtimeEntityType.FindProperty("Stock");
             var key = runtimeEntityType.FindKey(new[] { id });
             key.SetPrincipalKeyValueFactory(KeyValueFactoryFactory.CreateSimpleNonNullableFactory<int>(key));
@@ -368,16 +400,16 @@ namespace AotSample.CompiledModel
                 ISnapshot (InternalEntityEntry source) =>
                 {
                     var entity = ((Product)(source.Entity));
-                    return ((ISnapshot)(new Snapshot<int, Category, DateTime, bool, string, decimal, int?>(((ValueComparer<int>)(((IProperty)id).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(id)), ((ValueComparer<Category>)(((IProperty)category).GetValueComparer())).Snapshot(source.GetCurrentValue<Category>(category)), ((ValueComparer<DateTime>)(((IProperty)createdAt).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime>(createdAt)), ((ValueComparer<bool>)(((IProperty)isActive).GetValueComparer())).Snapshot(source.GetCurrentValue<bool>(isActive)), (source.GetCurrentValue<string>(name) == null ? null : ((ValueComparer<string>)(((IProperty)name).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(name))), ((ValueComparer<decimal>)(((IProperty)price).GetValueComparer())).Snapshot(source.GetCurrentValue<decimal>(price)), (source.GetCurrentValue<int?>(stock) == null ? null : ((ValueComparer<int?>)(((IProperty)stock).GetValueComparer())).Snapshot(source.GetCurrentValue<int?>(stock))))));
+                    return ((ISnapshot)(new Snapshot<int, Category, DateTime, bool, string, decimal, int, int?>(((ValueComparer<int>)(((IProperty)id).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(id)), ((ValueComparer<Category>)(((IProperty)category).GetValueComparer())).Snapshot(source.GetCurrentValue<Category>(category)), ((ValueComparer<DateTime>)(((IProperty)createdAt).GetValueComparer())).Snapshot(source.GetCurrentValue<DateTime>(createdAt)), ((ValueComparer<bool>)(((IProperty)isActive).GetValueComparer())).Snapshot(source.GetCurrentValue<bool>(isActive)), (source.GetCurrentValue<string>(name) == null ? null : ((ValueComparer<string>)(((IProperty)name).GetValueComparer())).Snapshot(source.GetCurrentValue<string>(name))), ((ValueComparer<decimal>)(((IProperty)price).GetValueComparer())).Snapshot(source.GetCurrentValue<decimal>(price)), ((ValueComparer<int>)(((IProperty)revision).GetValueComparer())).Snapshot(source.GetCurrentValue<int>(revision)), (source.GetCurrentValue<int?>(stock) == null ? null : ((ValueComparer<int?>)(((IProperty)stock).GetValueComparer())).Snapshot(source.GetCurrentValue<int?>(stock))))));
                 });
             runtimeEntityType.SetStoreGeneratedValuesFactory(
                 ISnapshot () => Snapshot.Empty);
             runtimeEntityType.SetTemporaryValuesFactory(
                 ISnapshot (InternalEntityEntry source) => Snapshot.Empty);
             runtimeEntityType.SetShadowValuesFactory(
-                ISnapshot (IDictionary<string, object> source) => Snapshot.Empty);
+                ISnapshot (IDictionary<string, object> source) => ((ISnapshot)(new Snapshot<int>((source.ContainsKey("Revision") ? ((int)(source["Revision"])) : 0)))));
             runtimeEntityType.SetEmptyShadowValuesFactory(
-                ISnapshot () => Snapshot.Empty);
+                ISnapshot () => ((ISnapshot)(new Snapshot<int>(default(int)))));
             runtimeEntityType.SetRelationshipSnapshotFactory(
                 ISnapshot (InternalEntityEntry source) =>
                 {
@@ -385,11 +417,11 @@ namespace AotSample.CompiledModel
                     return ((ISnapshot)(new Snapshot<int>(((ValueComparer<int>)(((IProperty)id).GetKeyValueComparer())).Snapshot(source.GetCurrentValue<int>(id)))));
                 });
             runtimeEntityType.Counts = new PropertyCounts(
-                propertyCount: 7,
+                propertyCount: 8,
                 navigationCount: 0,
                 complexPropertyCount: 0,
-                originalValueCount: 7,
-                shadowCount: 0,
+                originalValueCount: 8,
+                shadowCount: 1,
                 relationshipCount: 1,
                 storeGeneratedCount: 0);
             runtimeEntityType.AddAnnotation("Relational:FunctionName", null);

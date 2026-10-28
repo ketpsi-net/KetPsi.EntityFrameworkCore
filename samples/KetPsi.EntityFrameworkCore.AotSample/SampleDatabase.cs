@@ -22,16 +22,17 @@ internal static class SampleDatabase
             Stock int NULL,
             IsActive bit NOT NULL,
             Category int NOT NULL,
-            CreatedAt datetime2 NOT NULL);
-        INSERT INTO shop.Products (Id, Name, Price, Stock, IsActive, Category, CreatedAt) VALUES
-            (1, N'Dune', 9.99, 12, 1, 0, '2024-01-01T08:00:00'),
-            (2, N'Hades', 24.50, NULL, 1, 1, '2024-01-02T08:00:00'),
-            (3, N'Abbey Road', 15.00, 3, 0, 2, '2024-01-03T08:00:00'),
-            (4, N'Celeste', 19.99, 0, 1, 1, '2024-01-04T08:00:00'),
-            (5, N'Neuromancer', 7.25, 40, 1, 0, '2024-01-05T08:00:00.1234567'),
-            (6, N'Kind of Blue', 12.00, NULL, 1, 2, '2024-01-06T08:00:00'),
-            (7, N'Outer Wilds', 22.00, 8, 0, 1, '2024-01-07T08:00:00'),
-            (8, N'Foundation', 8.75, 15, 1, 0, '2024-01-08T08:00:00');
+            CreatedAt datetime2 NOT NULL,
+            Revision int NOT NULL);
+        INSERT INTO shop.Products (Id, Name, Price, Stock, IsActive, Category, CreatedAt, Revision) VALUES
+            (1, N'Dune', 9.99, 12, 1, 0, '2024-01-01T08:00:00', 10),
+            (2, N'Hades', 24.50, NULL, 1, 1, '2024-01-02T08:00:00', 20),
+            (3, N'Abbey Road', 15.00, 3, 0, 2, '2024-01-03T08:00:00', 30),
+            (4, N'Celeste', 19.99, 0, 1, 1, '2024-01-04T08:00:00', 40),
+            (5, N'Neuromancer', 7.25, 40, 1, 0, '2024-01-05T08:00:00.1234567', 50),
+            (6, N'Kind of Blue', 12.00, NULL, 1, 2, '2024-01-06T08:00:00', 60),
+            (7, N'Outer Wilds', 22.00, 8, 0, 1, '2024-01-07T08:00:00', 70),
+            (8, N'Foundation', 8.75, 15, 1, 0, '2024-01-08T08:00:00', 80);
         """;
 
     /// <summary>Recreates the sample table and returns the connection string of the sample database.</summary>

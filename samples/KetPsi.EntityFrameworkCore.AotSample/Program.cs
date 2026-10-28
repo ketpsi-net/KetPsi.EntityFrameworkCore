@@ -94,8 +94,67 @@ await CheckAsync(
     db => db.Products.AnyAsync(p => !p.IsActive && p.Stock == 3, cancellationToken),
     true);
 
-#if !NET8_0
-// EF Core 9 and 10 can save changes under Native AOT with a --nativeaot compiled model; EF Core 8 cannot.
+await CheckAsync(
+    "AsNoTrackingWithIdentityResolution tracks nothing",
+    db => Task.FromResult($"{db.Products.AsNoTrackingWithIdentityResolution().Where(p => p.IsActive).ToList().Count}|{db.ChangeTracker.Entries().Count()}"),
+    "6|0");
+
+#if NET8_0
+// EF Core 8 cannot track entities under Native AOT: tracking queries fail with a clear error instead of EF Core's
+// "model building is not supported". Add AsNoTracking(), or move to EF Core 9 or later to track.
+await CheckAsync(
+    "Tracking query under Native AOT needs EF Core 9",
+    db =>
+    {
+        try
+        {
+            _ = db.Products.First(p => p.Id == 1);
+            return Task.FromResult("tracked");
+        }
+        catch (InvalidOperationException exception) when (exception.Message.Contains("EF Core 9", StringComparison.Ordinal))
+        {
+            return Task.FromResult("rejected");
+        }
+    },
+    RuntimeFeature.IsDynamicCodeSupported ? "tracked" : "rejected");
+#else
+// EF Core 9 and 10 can track and save changes under Native AOT with a --nativeaot compiled model; EF Core 8 cannot.
+await CheckAsync(
+    "Tracked query attaches as Unchanged with its shadow value",
+    db =>
+    {
+        var product = db.Products.First(p => p.Id == 1);
+        var entry = db.Entry(product);
+        return Task.FromResult($"{entry.State}|{entry.Property<int>(ShopDb.Revision).CurrentValue}");
+    },
+    "Unchanged|10");
+
+await CheckAsync(
+    "A second query returns the tracked instance unchanged",
+    async db =>
+    {
+        var first = await db.Products.SingleAsync(p => p.Id == 2, cancellationToken);
+        first.Name = "edited";
+        var again = (await db.Products.Where(p => p.Category == Category.Games).ToListAsync(cancellationToken)).Single(p => p.Id == 2);
+        return $"{ReferenceEquals(first, again)}|{again.Name}";
+    },
+    "True|edited");
+
+await CheckAsync(
+    "Load, modify and save through the change tracker",
+    async db =>
+    {
+        var product = db.Products.Single(p => p.Id == 3);
+        product.Price = 16.50m;
+        db.Entry(product).Property<int>(ShopDb.Revision).CurrentValue++;
+        var saved = await db.SaveChangesAsync(cancellationToken);
+
+        await using var fresh = new ShopDb(options);
+        var reloaded = await fresh.Products.FirstAsync(p => p.Id == 3, cancellationToken);
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{saved}|{reloaded.Price}|{fresh.Entry(reloaded).Property<int>(ShopDb.Revision).CurrentValue}");
+    },
+    "1|16.50|31");
+
 await CheckAsync(
     "SaveChanges through EF Core, read back through KetPsi",
     async db =>

@@ -29,6 +29,9 @@ public sealed class Product
 
 public sealed class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options)
 {
+    /// <summary>A shadow property: tracked queries must hand its value to the change tracker.</summary>
+    public const string Revision = "Revision";
+
     public DbSet<Product> Products => Set<Product>();
 
     public static DbContextOptions<ShopDb> Options(string connectionString)
@@ -49,6 +52,7 @@ public sealed class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options
             b.Property(p => p.Id).ValueGeneratedNever();
             b.Property(p => p.Name).HasMaxLength(100);
             b.Property(p => p.Price).HasPrecision(10, 2);
+            b.Property<int>(Revision);
         });
 }
 
