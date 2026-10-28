@@ -123,7 +123,7 @@ internal sealed class SqlBuilder
                 WrapIf(State.Limit is not null);
                 State.Limit = AddParameter(take.Count, property: null);
                 break;
-            case NoTrackingNode or IgnoreQueryFiltersNode:
+            case TrackingNode or IgnoreQueryFiltersNode:
                 // Tracking doesn't change the SQL, and ignored filters were already left out of the resolved filters.
                 break;
             default:

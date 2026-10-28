@@ -136,11 +136,12 @@ public sealed class SqlQueryTests : IDisposable
     }
 
     [Fact]
-    public void AsNoTracking_AppendsNoTrackingNode()
+    public void AsNoTracking_AppendsNoTrackingBehavior()
     {
         var query = AsSql(SqlQuery.AsNoTracking(_db.Blogs));
 
-        var node = Assert.IsType<NoTrackingNode>(query.Tail);
+        var node = Assert.IsType<TrackingNode>(query.Tail);
+        Assert.Equal(QueryTrackingBehavior.NoTracking, node.Behavior);
         Assert.IsType<RootNode>(node.Parent);
     }
 
@@ -250,7 +251,7 @@ public sealed class SqlQueryTests : IDisposable
 
         var take = Assert.IsType<TakeNode>(query.Tail);
         var skip = Assert.IsType<SkipNode>(take.Parent);
-        var noTracking = Assert.IsType<NoTrackingNode>(skip.Parent);
+        var noTracking = Assert.IsType<TrackingNode>(skip.Parent);
         Assert.IsType<RootNode>(noTracking.Parent);
     }
 

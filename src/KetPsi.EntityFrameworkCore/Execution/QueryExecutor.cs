@@ -1,6 +1,5 @@
 using System.Data.Common;
 using System.Runtime.CompilerServices;
-using KetPsi.EntityFrameworkCore.Infrastructure;
 using KetPsi.EntityFrameworkCore.Sql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -14,7 +13,7 @@ namespace KetPsi.EntityFrameworkCore.Execution;
 internal static class QueryExecutor
 {
     public static IEnumerable<T> Stream<T>(
-        DbContext context, ISqlDialect dialect, SqlStatement statement, IEntityReader<T> reader, int[] ordinals)
+        DbContext context, ISqlDialect dialect, SqlStatement statement, Func<DbDataReader, T> materialize)
     {
         var database = context.Database;
         database.OpenConnection();
@@ -24,7 +23,7 @@ internal static class QueryExecutor
             using var dataReader = command.ExecuteReader();
             while (dataReader.Read())
             {
-                yield return reader.Read(dataReader, ordinals);
+                yield return materialize(dataReader);
             }
         }
         finally
@@ -37,8 +36,7 @@ internal static class QueryExecutor
         DbContext context,
         ISqlDialect dialect,
         SqlStatement statement,
-        IEntityReader<T> reader,
-        int[] ordinals,
+        Func<DbDataReader, T> materialize,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var database = context.Database;
@@ -53,7 +51,7 @@ internal static class QueryExecutor
                 {
                     while (await dataReader.ReadAsync(cancellationToken).ConfigureAwait(false))
                     {
-                        yield return reader.Read(dataReader, ordinals);
+                        yield return materialize(dataReader);
                     }
                 }
             }

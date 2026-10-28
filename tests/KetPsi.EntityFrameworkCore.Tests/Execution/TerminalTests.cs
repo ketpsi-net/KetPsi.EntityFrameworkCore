@@ -4,7 +4,6 @@ using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.TestUtilities;
 using KetPsi.EntityFrameworkCore.Tests.Fakes;
 using KetPsi.EntityFrameworkCore.Tests.TestModel;
-using Microsoft.EntityFrameworkCore;
 
 namespace KetPsi.EntityFrameworkCore.Tests.Execution;
 
@@ -273,33 +272,6 @@ public sealed class TerminalTests : IDisposable
     }
 
     [Fact]
-    public void RowTerminals_WithoutNoTracking_Throw()
-    {
-        var exception = Assert.Throws<InvalidOperationException>(() => SqlQuery.ToList(_db.Items));
-
-        Assert.Contains("AsNoTracking", exception.Message, StringComparison.Ordinal);
-        Assert.Empty(_connection.Commands);
-        Assert.Throws<InvalidOperationException>(() => SqlQuery.First(_db.Items));
-        Assert.Throws<InvalidOperationException>(() => SqlQuery.SingleOrDefault(_db.Items));
-    }
-
-    [Fact]
-    public async Task AsyncRowTerminals_WithoutNoTracking_Throw()
-    {
-        await Assert.ThrowsAsync<InvalidOperationException>(() => SqlQuery.ToListAsync(_db.Items, Token));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => SqlQuery.FirstOrDefaultAsync(_db.Items, Token));
-    }
-
-    [Fact]
-    public void RowTerminals_ContextDefaultsToNoTracking_Run()
-    {
-        _connection.Rows = FakeItemContext.Table(Alpha);
-        using var db = new FakeItemContext(_connection, QueryTrackingBehavior.NoTracking);
-
-        Assert.Single(SqlQuery.ToList(db.Items));
-    }
-
-    [Fact]
     public void ScalarTerminals_DoNotNeedNoTracking()
     {
         _connection.Scalar = 1;
@@ -350,10 +322,6 @@ public sealed class TerminalTests : IDisposable
         Assert.Equal(["alpha", "beta"], names);
         Assert.Equal(ConnectionState.Closed, _connection.State);
     }
-
-    [Fact]
-    public void Enumerating_WithoutNoTracking_Throws()
-        => Assert.Throws<InvalidOperationException>(() => SqlQuery.ToSqlQueryable(_db.Items).GetEnumerator());
 
     [Fact]
     public async Task AsyncTerminal_CanceledToken_ThrowsWithoutQuerying()

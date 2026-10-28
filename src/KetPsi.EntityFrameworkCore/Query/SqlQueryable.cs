@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using KetPsi.EntityFrameworkCore.Execution;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,9 @@ namespace KetPsi.EntityFrameworkCore.Query;
 /// expression trees, and its provider rejects any operator that was not intercepted.
 /// Enumerating it, synchronously or asynchronously, executes the query.
 /// </summary>
-internal sealed class SqlQueryable<T>(DbContext context, QueryNode tail) : IOrderedQueryable<T>, IAsyncEnumerable<T>
+internal sealed class SqlQueryable<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(DbContext context, QueryNode tail)
+    : IOrderedQueryable<T>, IAsyncEnumerable<T>
+    where T : class
 {
     public DbContext Context { get; } = context;
 

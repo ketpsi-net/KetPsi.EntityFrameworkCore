@@ -195,13 +195,13 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
-    public void TrackingQueryAcrossStatements_FailsAtRuntime()
+    public void TrackingQueryAcrossStatements_AttachesEntities()
     {
-        var exception = Assert.Throws<TargetInvocationException>(() => Invoke("TrackedAcrossStatements"));
+        var blogs = AsList(Invoke("TrackedAcrossStatements"));
 
-        Assert.IsType<InvalidOperationException>(exception.InnerException);
-        Assert.Contains("AsNoTracking", exception.InnerException!.Message, StringComparison.Ordinal);
-        Assert.Empty(_connection.Commands);
+        Assert.Equal(SelectAll, _connection.LastCommand.CommandText);
+        Assert.All(blogs, blog => Assert.Equal(EntityState.Unchanged, _db.Entry(blog).State));
+        Assert.Equal(2, _db.ChangeTracker.Entries().Count());
     }
 
     [Fact]
