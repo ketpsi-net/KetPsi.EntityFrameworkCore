@@ -93,6 +93,11 @@ public sealed class SqlDialectsTests
 
         public string InList(string column, string listParameter, string storeType) => throw new NotSupportedException();
 
+        public string InTupleList(IReadOnlyList<string> columns, string listParameter, IReadOnlyList<string> storeTypes)
+            => throw new NotSupportedException();
+
+        public object CreateTupleListParameterValue(IEnumerable<IReadOnlyList<object?>> tuples) => throw new NotSupportedException();
+
         public void ConfigureParameter(System.Data.Common.DbParameter parameter, string? storeType) => throw new NotSupportedException();
 
         public object CreateListParameterValue(IEnumerable<object?> values) => throw new NotSupportedException();

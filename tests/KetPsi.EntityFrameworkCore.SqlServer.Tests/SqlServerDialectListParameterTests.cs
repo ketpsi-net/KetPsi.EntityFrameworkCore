@@ -54,6 +54,26 @@ public sealed class SqlServerDialectListParameterTests
     public void CreateListParameterValue_Null_WritesJsonNull()
         => Assert.Equal("[1,null]", Dialect.CreateListParameterValue([1, null]));
 
+    [Fact]
+    public void CreateTupleListParameterValue_WritesArrayOfArrays()
+        => Assert.Equal(
+            "[[1,\"A\"],[2,\"B\"]]",
+            Dialect.CreateTupleListParameterValue([[1, "A"], [2, "B"]]));
+
+    [Fact]
+    public void CreateTupleListParameterValue_UsesListValueFormats()
+        => Assert.Equal(
+            "[[\"2024-01-02T03:04:05.0000000\",null]]",
+            Dialect.CreateTupleListParameterValue([[new DateTime(2024, 1, 2, 3, 4, 5), null]]));
+
+    [Fact]
+    public void CreateTupleListParameterValue_Empty_ReturnsEmptyArray()
+        => Assert.Equal("[]", Dialect.CreateTupleListParameterValue([]));
+
+    [Fact]
+    public void CreateTupleListParameterValue_Null_Throws()
+        => Assert.Throws<ArgumentNullException>(() => Dialect.CreateTupleListParameterValue(null!));
+
     [Theory]
     [InlineData(true, "true")]
     [InlineData(false, "false")]

@@ -33,15 +33,24 @@ internal sealed class SqlBuilder
     private readonly BoundEntity _entity;
     private readonly ISqlDialect _dialect;
     private readonly IReadOnlyList<ResolvedQueryFilter> _filters;
+    private readonly Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> _filtersFor;
     private readonly List<QueryParameter> _parameters = [];
+    private readonly List<EntitySegment> _segments = [];
+    private readonly List<CollectionLoad> _collections = [];
     private int _aliasCount;
+    private int _columnCount;
     private SelectState? _state;
 
-    private SqlBuilder(BoundEntity entity, ISqlDialect dialect, IReadOnlyList<ResolvedQueryFilter> filters)
+    private SqlBuilder(
+        BoundEntity entity,
+        ISqlDialect dialect,
+        IReadOnlyList<ResolvedQueryFilter> filters,
+        Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>>? filtersFor = null)
     {
         _entity = entity;
         _dialect = dialect;
         _filters = filters;
+        _filtersFor = filtersFor ?? NoFilters;
     }
 
     private SelectState State => _state ?? throw new UnreachableException("The chain did not start with a root node.");
@@ -83,6 +92,92 @@ internal sealed class SqlBuilder
         return new SqlStatement(commandText, builder._parameters);
     }
 
+    /// <summary>
+    /// Builds the statement that reads the rows of the chain ending at <paramref name="tail"/> together with the
+    /// included references, and lists the included collections to load next.
+    /// </summary>
+    /// <param name="entity">The queried entity, bound to the model.</param>
+    /// <param name="tail">The last node of the chain.</param>
+    /// <param name="dialect">The database dialect.</param>
+    /// <param name="includes">The navigations to include from the queried entity.</param>
+    /// <param name="filtersFor">The query filters to apply to an entity, already resolved against the context.</param>
+    /// <param name="rowLimit">A limit applied after every operator, such as 1 for <c>First</c>.</param>
+    public static IncludeStatement BuildRows(
+        BoundEntity entity,
+        QueryNode tail,
+        ISqlDialect dialect,
+        IncludeTree includes,
+        Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> filtersFor,
+        int? rowLimit = null)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(tail);
+        ArgumentNullException.ThrowIfNull(dialect);
+        ArgumentNullException.ThrowIfNull(includes);
+        ArgumentNullException.ThrowIfNull(filtersFor);
+        if (rowLimit is { } limit)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(limit, nameof(rowLimit));
+        }
+
+        var builder = new SqlBuilder(entity, dialect, filtersFor(entity), filtersFor);
+        foreach (var node in Chain(tail))
+        {
+            builder.Apply(node);
+        }
+
+        var commandText = builder.FinishRows(rowLimit, includes);
+        return new IncludeStatement(new SqlStatement(commandText, builder._parameters), builder._segments, builder._collections);
+    }
+
+    /// <summary>
+    /// Builds the statement that loads an included collection for the parents whose keys are in
+    /// <paramref name="parentKeys"/>, with the references included from the collection's entity.
+    /// </summary>
+    /// <param name="branch">The included collection navigation.</param>
+    /// <param name="parentKeys">
+    /// The distinct values of the navigation's <see cref="BoundNavigation.SourceKey"/> on the loaded parents, each in
+    /// key order. Must not be empty.
+    /// </param>
+    /// <param name="dialect">The database dialect.</param>
+    /// <param name="filtersFor">The query filters to apply to an entity, already resolved against the context.</param>
+    public static IncludeStatement BuildCollection(
+        IncludeBranch branch,
+        IReadOnlyCollection<IReadOnlyList<object?>> parentKeys,
+        ISqlDialect dialect,
+        Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> filtersFor)
+    {
+        ArgumentNullException.ThrowIfNull(branch);
+        ArgumentNullException.ThrowIfNull(parentKeys);
+        ArgumentNullException.ThrowIfNull(dialect);
+        ArgumentNullException.ThrowIfNull(filtersFor);
+        if (!branch.Navigation.IsCollection)
+        {
+            throw new ArgumentException(ExceptionMessages.CollectionLoadRequiresCollection, nameof(branch));
+        }
+
+        if (parentKeys.Count == 0)
+        {
+            throw new ArgumentException(ExceptionMessages.CollectionLoadRequiresKeys, nameof(parentKeys));
+        }
+
+        var entity = branch.Target.Entity;
+        var builder = new SqlBuilder(entity, dialect, filtersFor(entity), filtersFor);
+        builder.Apply(new RootNode(entity.ClrType));
+        builder.State.Predicates.Add(builder.RenderKeyMatch(branch.Navigation, parentKeys));
+
+        // Children are grouped by parent in memory; within a parent they come in key order, as with EF Core.
+        foreach (var key in entity.PrimaryKey ?? [])
+        {
+            builder.State.Ordering.Add(new Ordering(key, Descending: false));
+        }
+
+        var commandText = builder.FinishRows(rowLimit: null, branch.Target);
+        return new IncludeStatement(new SqlStatement(commandText, builder._parameters), builder._segments, builder._collections);
+    }
+
+    private static IReadOnlyList<ResolvedQueryFilter> NoFilters(BoundEntity entity) => [];
+
     private static List<QueryNode> Chain(QueryNode tail)
     {
         var nodes = new List<QueryNode>();
@@ -105,7 +200,7 @@ internal sealed class SqlBuilder
             case WhereNode where:
                 WrapIf(State.HasPaging);
                 var predicate = _entity.BindPredicate(where.Predicate);
-                State.Predicates.Add(RenderPredicate(predicate, where.Values, negated: false));
+                State.Predicates.Add(RenderPredicate(predicate, where.Values, negated: false, State.Alias));
                 break;
             case OrderNode { IsThenBy: false } order:
                 WrapIf(State.HasPaging);
@@ -123,8 +218,9 @@ internal sealed class SqlBuilder
                 WrapIf(State.Limit is not null);
                 State.Limit = AddParameter(take.Count, property: null);
                 break;
-            case TrackingNode or IgnoreQueryFiltersNode:
-                // Tracking doesn't change the SQL, and ignored filters were already left out of the resolved filters.
+            case TrackingNode or IgnoreQueryFiltersNode or IncludeNode:
+                // Tracking doesn't change the SQL, ignored filters were already left out of the resolved filters, and
+                // includes are applied when the rows are read; scalar terminals ignore them, as in EF Core.
                 break;
             default:
                 throw new UnreachableException(node.GetType().ToString());
@@ -150,7 +246,7 @@ internal sealed class SqlBuilder
         foreach (var filter in _filters)
         {
             var predicate = _entity.BindPredicate(filter.Predicate);
-            _state.Predicates.Add(RenderPredicate(predicate, filter.Values, negated: false));
+            _state.Predicates.Add(RenderPredicate(predicate, filter.Values, negated: false, _state.Alias));
         }
     }
 
@@ -180,6 +276,91 @@ internal sealed class SqlBuilder
         }
     }
 
+    private string FinishRows(int? rowLimit, IncludeTree includes)
+    {
+        // EF Core orders by the key last when it loads collections, so a query's rows come in the same order.
+        if (includes.HasCollections)
+        {
+            foreach (var key in _entity.PrimaryKey ?? [])
+            {
+                if (!State.Ordering.Exists(o => ReferenceEquals(o.Property, key)))
+                {
+                    State.Ordering.Add(new Ordering(key, Descending: false));
+                }
+            }
+        }
+
+        // References join the rows the operators selected, so paging moves into a derived table first.
+        var joinsReferences = includes.Branches.Any(static b => !b.Navigation.IsCollection);
+        WrapIf(joinsReferences && State.HasPaging);
+
+        var projection = new List<string> { EntityColumns(State.Alias) };
+        _segments.Add(new EntitySegment(_entity, Offset: 0, Parent: null, Navigation: null));
+        _columnCount = _entity.Properties.Count;
+        AddIncludes(includes, parentSegment: 0, State.Alias, parentRowsAlwaysExist: true, projection);
+
+        if (rowLimit is { } limit)
+        {
+            WrapIf(State.Limit is not null);
+            State.Limit = limit.ToString(CultureInfo.InvariantCulture);
+        }
+
+        return RenderSelect(State, string.Join(", ", projection), includeOrdering: true);
+    }
+
+    private void AddIncludes(IncludeTree tree, int parentSegment, string parentAlias, bool parentRowsAlwaysExist, List<string> projection)
+    {
+        foreach (var branch in tree.Branches)
+        {
+            var navigation = branch.Navigation;
+            if (navigation.IsCollection)
+            {
+                _collections.Add(new CollectionLoad(parentSegment, branch));
+                continue;
+            }
+
+            // A required reference always has its target, unless a reference before it was missing.
+            var target = branch.Target.Entity;
+            var alias = NextAlias();
+            var inner = navigation.IsRequired && parentRowsAlwaysExist;
+            var conditions = new List<string>();
+            for (var i = 0; i < navigation.SourceKey.Count; i++)
+            {
+                conditions.Add(
+                    Column(navigation.SourceKey[i], parentAlias) + " = " + Column(target.GetProperty(navigation.TargetKey[i]), alias));
+            }
+
+            // Filtering the joined rows in ON is the same as joining a filtered table, as EF Core does.
+            foreach (var filter in _filtersFor(target))
+            {
+                conditions.Add(RenderPredicate(target.BindPredicate(filter.Predicate), filter.Values, negated: false, alias));
+            }
+
+            State.Joins.Add(
+                (inner ? "INNER JOIN " : "LEFT JOIN ") + _dialect.QualifyTable(target.Table, target.Schema) + " AS " + alias +
+                " ON " + string.Join(" AND ", conditions));
+
+            var segment = _segments.Count;
+            _segments.Add(new EntitySegment(target, _columnCount, parentSegment, navigation));
+            _columnCount += target.Properties.Count;
+            projection.Add(string.Join(", ", target.Properties.Select(p => Column(p, alias))));
+            AddIncludes(branch.Target, segment, alias, inner, projection);
+        }
+    }
+
+    private string RenderKeyMatch(BoundNavigation navigation, IReadOnlyCollection<IReadOnlyList<object?>> parentKeys)
+    {
+        var columns = navigation.TargetKey.Select(_entity.GetProperty).ToArray();
+        if (columns.Length == 1)
+        {
+            var list = AddParameter(_dialect.CreateListParameterValue(parentKeys.Select(static k => k[0])), property: null);
+            return _dialect.InList(Column(columns[0], State.Alias), list, columns[0].StoreType);
+        }
+
+        var tuples = AddParameter(_dialect.CreateTupleListParameterValue(parentKeys), property: null);
+        return _dialect.InTupleList([.. columns.Select(c => Column(c, State.Alias))], tuples, [.. columns.Select(static c => c.StoreType)]);
+    }
+
     private void WrapIf(bool condition)
     {
         if (!condition)
@@ -206,6 +387,10 @@ internal sealed class SqlBuilder
         }
 
         sql.Append(projection).Append(" FROM ").Append(state.Source).Append(" AS ").Append(state.Alias);
+        foreach (var join in state.Joins)
+        {
+            sql.Append(' ').Append(join);
+        }
 
         if (state.Predicates.Count > 0)
         {
@@ -232,22 +417,24 @@ internal sealed class SqlBuilder
     private string RenderOrdering(Ordering ordering, string alias)
         => ordering.Descending ? Column(ordering.Property, alias) + " DESC" : Column(ordering.Property, alias);
 
-    private string RenderPredicate(BoundPredicate predicate, IReadOnlyList<object?> values, bool negated) => predicate switch
+    private string RenderPredicate(BoundPredicate predicate, IReadOnlyList<object?> values, bool negated, string alias) => predicate switch
     {
-        BoundAnd and => Combine(negated ? "OR" : "AND", RenderPredicate(and.Left, values, negated), RenderPredicate(and.Right, values, negated)),
-        BoundOr or => Combine(negated ? "AND" : "OR", RenderPredicate(or.Left, values, negated), RenderPredicate(or.Right, values, negated)),
-        BoundNot not => RenderPredicate(not.Operand, values, !negated),
-        BoundComparison comparison => RenderComparison(comparison, values[comparison.ValueIndex], negated),
+        BoundAnd and => Combine(
+            negated ? "OR" : "AND", RenderPredicate(and.Left, values, negated, alias), RenderPredicate(and.Right, values, negated, alias)),
+        BoundOr or => Combine(
+            negated ? "AND" : "OR", RenderPredicate(or.Left, values, negated, alias), RenderPredicate(or.Right, values, negated, alias)),
+        BoundNot not => RenderPredicate(not.Operand, values, !negated, alias),
+        BoundComparison comparison => RenderComparison(comparison, values[comparison.ValueIndex], negated, alias),
         BoundBooleanProperty boolean =>
-            Column(boolean.Property) + " = " + (negated ? _dialect.FalseLiteral : _dialect.TrueLiteral),
-        BoundNullCheck nullCheck => Column(nullCheck.Property) + (nullCheck.IsNull != negated ? " IS NULL" : " IS NOT NULL"),
-        BoundInList inList => RenderInList(inList, values[inList.ValueIndex], negated),
+            Column(boolean.Property, alias) + " = " + (negated ? _dialect.FalseLiteral : _dialect.TrueLiteral),
+        BoundNullCheck nullCheck => Column(nullCheck.Property, alias) + (nullCheck.IsNull != negated ? " IS NULL" : " IS NOT NULL"),
+        BoundInList inList => RenderInList(inList, values[inList.ValueIndex], negated, alias),
         _ => throw new UnreachableException(predicate.GetType().ToString()),
     };
 
-    private string RenderComparison(BoundComparison comparison, object? value, bool negated)
+    private string RenderComparison(BoundComparison comparison, object? value, bool negated, string alias)
     {
-        var column = Column(comparison.Property);
+        var column = Column(comparison.Property, alias);
         var effective = negated ? Negate(comparison.Comparison) : comparison.Comparison;
 
         if (value is null)
@@ -270,7 +457,7 @@ internal sealed class SqlBuilder
             : sql;
     }
 
-    private string RenderInList(BoundInList inList, object? value, bool negated)
+    private string RenderInList(BoundInList inList, object? value, bool negated, string alias)
     {
         if (value is not IEnumerable list)
         {
@@ -293,7 +480,7 @@ internal sealed class SqlBuilder
             }
         }
 
-        var column = Column(inList.Property);
+        var column = Column(inList.Property, alias);
         var parameter = AddParameter(_dialect.CreateListParameterValue(nonNullValues), property: null);
         var inSql = _dialect.InList(column, parameter, inList.Property.StoreType);
         var sql = negated ? "NOT (" + inSql + ")" : inSql;
@@ -331,8 +518,6 @@ internal sealed class SqlBuilder
 
     private string EntityColumns(string alias) => string.Join(", ", _entity.Properties.Select(p => Column(p, alias)));
 
-    private string Column(BoundProperty property) => Column(property, State.Alias);
-
     private string Column(BoundProperty property, string alias) => alias + "." + _dialect.QuoteIdentifier(property.ColumnName);
 
     private string AddParameter(object value, BoundProperty? property)
@@ -352,6 +537,8 @@ internal sealed class SqlBuilder
         public string Source { get; } = source;
 
         public string Alias { get; } = alias;
+
+        public List<string> Joins { get; } = [];
 
         public List<string> Predicates { get; } = [];
 

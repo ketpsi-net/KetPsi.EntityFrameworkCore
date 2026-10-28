@@ -48,6 +48,12 @@ internal static class ExceptionMessages
         "The navigation '{0}.{1}' is many-to-many, which KetPsi.EntityFrameworkCore does not support yet. Map the join " +
         "entity type and load it with Include(...).ThenInclude(...).";
 
+    public const string CollectionLoadRequiresCollection =
+        "Only a collection navigation is loaded with its own statement; references are joined.";
+
+    public const string CollectionLoadRequiresKeys =
+        "A collection is only loaded for at least one parent key.";
+
     public const string PropertyNotBoolean =
         "The property '{0}.{1}' is used as a boolean predicate, but its type is '{2}'.";
 

@@ -47,6 +47,19 @@ public interface ISqlDialect
     /// <param name="storeType">The column's store type, used to type the list elements.</param>
     string InList(string column, string listParameter, string storeType);
 
+    /// <summary>
+    /// Returns a predicate that is true when the <paramref name="columns"/>, taken together, equal one of the tuples
+    /// passed as <paramref name="listParameter"/>. Loads included collections whose foreign key has several columns.
+    /// </summary>
+    /// <param name="columns">The quoted columns, in tuple order.</param>
+    /// <param name="listParameter">The parameter holding the value from <see cref="CreateTupleListParameterValue"/>.</param>
+    /// <param name="storeTypes">The columns' store types, in tuple order.</param>
+    string InTupleList(IReadOnlyList<string> columns, string listParameter, IReadOnlyList<string> storeTypes);
+
+    /// <summary>Converts tuples of values into the single parameter value <see cref="InTupleList"/> expects.</summary>
+    /// <exception cref="NotSupportedException">A value has a type the dialect cannot pass in a list.</exception>
+    object CreateTupleListParameterValue(IEnumerable<IReadOnlyList<object?>> tuples);
+
     /// <summary>Sets the parameter's database type and facets so the value compares like the column it's compared with.</summary>
     /// <param name="parameter">The parameter, with its value already set.</param>
     /// <param name="storeType">

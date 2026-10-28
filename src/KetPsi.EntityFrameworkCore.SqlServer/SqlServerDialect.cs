@@ -123,6 +123,29 @@ public sealed class SqlServerDialect : ISqlDialect
     }
 
     /// <inheritdoc/>
+    /// <remarks>Each tuple is a JSON array; its items are read by position, typed like the matching column.</remarks>
+    public string InTupleList(IReadOnlyList<string> columns, string listParameter, IReadOnlyList<string> storeTypes)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        ArgumentException.ThrowIfNullOrEmpty(listParameter);
+        ArgumentNullException.ThrowIfNull(storeTypes);
+        if (columns.Count == 0 || columns.Count != storeTypes.Count)
+        {
+            throw new ArgumentException(ExceptionMessages.TupleColumnsMismatch, nameof(storeTypes));
+        }
+
+        var items = new string[columns.Count];
+        var matches = new string[columns.Count];
+        for (var i = 0; i < columns.Count; i++)
+        {
+            items[i] = string.Create(CultureInfo.InvariantCulture, $"[v{i}] {storeTypes[i]} '$[{i}]'");
+            matches[i] = string.Create(CultureInfo.InvariantCulture, $"[k].[v{i}] = {columns[i]}");
+        }
+
+        return $"EXISTS (SELECT 1 FROM OPENJSON({listParameter}) WITH ({string.Join(", ", items)}) AS [k] WHERE {string.Join(" AND ", matches)})";
+    }
+
+    /// <inheritdoc/>
     public void ConfigureParameter(DbParameter parameter, string? storeType)
     {
         ArgumentNullException.ThrowIfNull(parameter);
@@ -185,6 +208,32 @@ public sealed class SqlServerDialect : ISqlDialect
             foreach (var value in values)
             {
                 WriteValue(writer, value);
+            }
+
+            writer.WriteEndArray();
+        }
+
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
+    }
+
+    /// <inheritdoc/>
+    public object CreateTupleListParameterValue(IEnumerable<IReadOnlyList<object?>> tuples)
+    {
+        ArgumentNullException.ThrowIfNull(tuples);
+
+        var buffer = new ArrayBufferWriter<byte>();
+        using (var writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartArray();
+            foreach (var tuple in tuples)
+            {
+                writer.WriteStartArray();
+                foreach (var value in tuple)
+                {
+                    WriteValue(writer, value);
+                }
+
+                writer.WriteEndArray();
             }
 
             writer.WriteEndArray();

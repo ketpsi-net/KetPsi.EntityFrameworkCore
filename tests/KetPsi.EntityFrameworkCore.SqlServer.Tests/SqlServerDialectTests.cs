@@ -120,4 +120,33 @@ public sealed class SqlServerDialectTests
     [InlineData("[Id]", "@p0", "")]
     public void InList_MissingArgument_Throws(string? column, string? listParameter, string? storeType)
         => Assert.ThrowsAny<ArgumentException>(() => Dialect.InList(column!, listParameter!, storeType!));
+
+    [Fact]
+    public void InTupleList_MatchesEveryColumnByPosition()
+        => Assert.Equal(
+            "EXISTS (SELECT 1 FROM OPENJSON(@p0) WITH ([v0] int '$[0]', [v1] nvarchar(10) '$[1]') AS [k] " +
+            "WHERE [k].[v0] = [t0].[Floor] AND [k].[v1] = [t0].[Code])",
+            Dialect.InTupleList(["[t0].[Floor]", "[t0].[Code]"], "@p0", ["int", "nvarchar(10)"]));
+
+    [Fact]
+    public void InTupleList_SingleColumn_StillUsesPosition()
+        => Assert.Equal(
+            "EXISTS (SELECT 1 FROM OPENJSON(@p0) WITH ([v0] int '$[0]') AS [k] WHERE [k].[v0] = [Id])",
+            Dialect.InTupleList(["[Id]"], "@p0", ["int"]));
+
+    [Fact]
+    public void InTupleList_NoColumns_Throws()
+        => Assert.Throws<ArgumentException>(() => Dialect.InTupleList([], "@p0", []));
+
+    [Fact]
+    public void InTupleList_StoreTypeCountMismatch_Throws()
+        => Assert.Throws<ArgumentException>(() => Dialect.InTupleList(["[A]", "[B]"], "@p0", ["int"]));
+
+    [Fact]
+    public void InTupleList_MissingArgument_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => Dialect.InTupleList(null!, "@p0", ["int"]));
+        Assert.ThrowsAny<ArgumentException>(() => Dialect.InTupleList(["[A]"], "", ["int"]));
+        Assert.Throws<ArgumentNullException>(() => Dialect.InTupleList(["[A]"], "@p0", null!));
+    }
 }
