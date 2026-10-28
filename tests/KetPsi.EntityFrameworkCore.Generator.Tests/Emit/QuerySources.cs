@@ -20,17 +20,31 @@ internal static class QuerySources
             public bool IsActive { get; set; }
             public int? Views { get; set; }
             public Status Status { get; set; }
+            public List<Post> Posts { get; set; } = [];
+        }
+
+        public sealed class Post
+        {
+            public int Id { get; set; }
+            public int BlogId { get; set; }
+            public string Title { get; set; } = "";
+            public Blog Blog { get; set; } = null!;
         }
 
         public sealed class ShopDb(DbConnection connection) : DbContext
         {
             public DbSet<Blog> Blogs => Set<Blog>();
 
+            public DbSet<Post> Posts => Set<Post>();
+
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                 => optionsBuilder.UseSqlServer(connection);
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
-                => modelBuilder.Entity<Blog>().ToTable("Blogs");
+            {
+                modelBuilder.Entity<Blog>().ToTable("Blogs");
+                modelBuilder.Entity<Post>().ToTable("Posts");
+            }
         }
 
         public sealed class Queries(ShopDb db)
@@ -89,6 +103,10 @@ internal static class QuerySources
             public List<Blog> TrackedWithBehavior(QueryTrackingBehavior behavior) => db.Blogs.AsNoTracking().AsTracking(behavior).ToList();
 
             public List<Blog> IdentityResolved() => db.Blogs.AsNoTrackingWithIdentityResolution().ToList();
+
+            public List<Blog> WithPosts() => db.Blogs.AsNoTracking().Include(b => b.Posts).ToList();
+
+            public List<Post> PostsWithBlogAndSiblings() => db.Posts.Include(p => p.Blog).ThenInclude(b => b.Posts).AsSplitQuery().ToList();
 
             public List<Blog> TrackedAcrossStatements()
             {

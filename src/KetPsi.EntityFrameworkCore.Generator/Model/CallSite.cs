@@ -15,6 +15,7 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// <param name="Predicate">For operators that take a predicate, its translation.</param>
 /// <param name="Signature">For supported operators, the method the interceptor replaces.</param>
 /// <param name="OrderProperty">For ordering operators, the entity property the key selector reads.</param>
+/// <param name="Include">For <c>Include</c> and <c>ThenInclude</c>, the included navigation.</param>
 internal sealed record CallSite(
     string ElementType,
     LocationInfo Location,
@@ -26,4 +27,12 @@ internal sealed record CallSite(
     string? Interception = null,
     PredicateModel? Predicate = null,
     InterceptorSignature? Signature = null,
-    string? OrderProperty = null);
+    string? OrderProperty = null,
+    IncludeModel? Include = null);
+
+/// <summary>An included navigation, as an <c>Include</c> or <c>ThenInclude</c> lambda reads it.</summary>
+/// <param name="Navigation">The navigation name, such as <c>Posts</c>.</param>
+/// <param name="PropertyTypeName">The fully qualified type of the navigation property, the operator's <c>TProperty</c>.</param>
+/// <param name="Source">The entity that declares the navigation.</param>
+/// <param name="Target">The included entity: the navigation's type, or a collection's element type.</param>
+internal sealed record IncludeModel(string Navigation, string PropertyTypeName, EntityShape Source, EntityShape Target);

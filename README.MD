@@ -49,8 +49,9 @@ Targets `net8.0`, `net9.0` and `net10.0`, each with its own EF Core major versio
 
 ## Status
 
-Preview. Done: filtering, ordering, paging, terminals, query filters, tracking and identity resolution.
-Next: projection (`Select`), aggregates and `Distinct`; then `Include` / `ThenInclude`; then `GroupBy`.
+Preview. Done: filtering, ordering, paging, terminals, query filters, tracking, identity resolution, and
+`Include` / `ThenInclude`.
+Next: projection (`Select`), aggregates and `Distinct`; then `GroupBy`.
 
 See the [package README](./src/KetPsi.EntityFrameworkCore/README.MD) for the full support list, diagnostics and
 Native AOT notes, and [skills/ketpsi-entityframeworkcore/SKILL.md](./skills/ketpsi-entityframeworkcore/SKILL.md) for a

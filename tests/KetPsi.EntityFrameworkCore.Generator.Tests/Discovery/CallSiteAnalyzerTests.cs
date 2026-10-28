@@ -19,6 +19,10 @@ public sealed class CallSiteAnalyzerTests
     [InlineData("db.Blogs.Skip(1)", "Skip", nameof(OperatorKind.Skip), false, false)]
     [InlineData("db.Blogs.Take(1)", "Take", nameof(OperatorKind.Take), false, false)]
     [InlineData("db.Blogs.AsNoTracking()", "AsNoTracking", nameof(OperatorKind.AsNoTracking), false, false)]
+    [InlineData("db.Blogs.Include(b => b.Posts)", "Include", nameof(OperatorKind.Include), false, false)]
+    [InlineData("db.Blogs.Include(b => b.Posts).ThenInclude(p => p.Blog)", "ThenInclude", nameof(OperatorKind.ThenInclude), false, false)]
+    [InlineData("db.Blogs.AsSplitQuery()", "AsSplitQuery", nameof(OperatorKind.AsSplitQuery), false, false)]
+    [InlineData("db.Blogs.AsSingleQuery()", "AsSingleQuery", nameof(OperatorKind.AsSingleQuery), false, false)]
     [InlineData("db.Blogs.AsNoTrackingWithIdentityResolution()", "AsNoTrackingWithIdentityResolution", nameof(OperatorKind.AsNoTrackingWithIdentityResolution), false, false)]
     [InlineData("db.Blogs.AsTracking()", "AsTracking", nameof(OperatorKind.AsTracking), false, false)]
     [InlineData("db.Blogs.AsTracking(QueryTrackingBehavior.NoTracking)", "AsTracking", nameof(OperatorKind.AsTracking), false, false)]
@@ -48,6 +52,29 @@ public sealed class CallSiteAnalyzerTests
         Assert.Equal(isAsync, site.IsAsync);
         Assert.Equal(hasPredicate, site.HasPredicate);
         Assert.Null(site.Diagnostic);
+    }
+
+    [Fact]
+    public void Analyze_Include_DescribesNavigationAndBothEntities()
+    {
+        var site = AnalyzeSingle("db.Blogs.Include(b => b.Posts)", "Include");
+
+        var include = site?.Include;
+        Assert.NotNull(include);
+        Assert.Equal("Posts", include.Navigation);
+        Assert.Equal("global::System.Collections.Generic.List<global::App.Post>", include.PropertyTypeName);
+        Assert.Equal("global::App.Blog", include.Source.TypeName);
+        Assert.Equal("global::App.Post", include.Target.TypeName);
+    }
+
+    [Fact]
+    public void Analyze_ThenInclude_DescribesThePreviousEntity()
+    {
+        var site = AnalyzeSingle("db.Blogs.Include(b => b.Posts).ThenInclude(p => p.Blog)", "ThenInclude");
+
+        Assert.Equal("global::App.Blog", site?.ElementType);
+        Assert.Equal("global::App.Post", site?.Include?.Source.TypeName);
+        Assert.Equal("global::App.Blog", site?.Include?.Target.TypeName);
     }
 
     [Fact]

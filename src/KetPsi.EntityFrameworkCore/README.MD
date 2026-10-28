@@ -20,8 +20,8 @@ var page = await db.Blogs
 
 That is the whole API: you keep writing EF Core LINQ. The only addition is `WhereIf`.
 
-> **Preview.** Single-table queries, filtering, ordering, paging, tracking and the common terminals work today.
-> Projection (`Select`), aggregates, `Include` and `GroupBy` are on the roadmap. Anything not supported yet is a
+> **Preview.** Filtering, ordering, paging, tracking, `Include`/`ThenInclude` and the common terminals work today.
+> Projection (`Select`), aggregates and `GroupBy` are on the roadmap. Anything not supported yet is a
 > **build error** with a `KP` diagnostic, never a silent fallback to EF Core's runtime pipeline.
 
 ## Install
@@ -44,6 +44,7 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Paging | `Skip`, `Take`, in any order and combination, as EF Core translates them |
 | Tracking | `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`, and the context's `QueryTrackingBehavior` |
 | Query filters | Model query filters always apply; `IgnoreQueryFilters()` (and, on EF Core 10, `IgnoreQueryFilters(["name"])`) |
+| Related data | `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`; `AsSplitQuery()` and `AsSingleQuery()` are accepted |
 | Terminals | `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`, their `Async` versions, the predicate overloads, and `foreach` / `await foreach` |
 
 ### Predicates
@@ -71,7 +72,15 @@ query and tracks nothing.
 `DateOnly`, `TimeOnly`, `TimeSpan`, `Guid`, `byte[]`, enums, and nullable versions of all of them, on classes with an
 accessible parameterless constructor. Private setters and constructors are fine. Shadow properties are supported.
 
-Not supported yet: value converters, owned and complex types, JSON columns, inheritance, and navigations in queries.
+Not supported yet: value converters, owned and complex types, JSON columns, inheritance, many-to-many navigations
+without a join entity, and navigations inside predicates.
+
+### Include
+
+References are joined into the query (`INNER JOIN` when required, `LEFT JOIN` when optional); each included collection
+is loaded with one more statement that matches the keys of the parents already read, so paging and filters on the
+parent apply exactly. A collection `Include` appends the key to the ordering, as EF Core does. Tracking, no-tracking
+and identity-resolution queries connect the entities the way EF Core does, and included collections are never null.
 
 ## Native AOT
 
@@ -92,7 +101,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP0001 | The generator failed on a call (please report it) |
 | KP0002 | Interceptors are not enabled for `KetPsi.EntityFrameworkCore.Generated` |
 | KP1001 | Query operator not supported |
-| KP1002 | `Include` / `ThenInclude` not supported yet |
+| KP1002 | Include path not supported: filtered include, a chain in one lambda, or a string path |
 | KP1004 | Raw SQL not supported |
 | KP1005 | A lambda must be written at the call site |
 | KP1006 | Operator overload not supported |

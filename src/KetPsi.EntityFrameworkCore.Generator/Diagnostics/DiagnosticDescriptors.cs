@@ -26,10 +26,10 @@ internal static class DiagnosticDescriptors
         "Query operator not supported",
         "The query operator '{0}' is not supported by KetPsi.EntityFrameworkCore");
 
-    public static readonly DiagnosticDescriptor IncludeNotSupported = Error(
+    public static readonly DiagnosticDescriptor IncludePathNotSupported = Error(
         "KP1002",
-        "Include not supported",
-        "'{0}' is not supported yet. Load related entities with separate queries.");
+        "Include path not supported",
+        "The include path '{0}' is not supported: {1}");
 
     public static readonly DiagnosticDescriptor RawSqlNotSupported = Error(
         "KP1004",

@@ -124,9 +124,13 @@ internal static class CallSiteAnalyzer
         {
             Family.Queryable => ClassifyQueryable(site, method),
             Family.EntityFramework => ClassifyEntityFramework(site, method),
-            Family.Relational => method.Name.StartsWith("FromSql", StringComparison.Ordinal)
-                ? site.Reject(DiagnosticDescriptors.RawSqlNotSupported, method.Name)
-                : site.Unsupported(),
+            Family.Relational => method.Name switch
+            {
+                "AsSplitQuery" => site.Supported(OperatorKind.AsSplitQuery),
+                "AsSingleQuery" => site.Supported(OperatorKind.AsSingleQuery),
+                _ when method.Name.StartsWith("FromSql", StringComparison.Ordinal) => site.Reject(DiagnosticDescriptors.RawSqlNotSupported, method.Name),
+                _ => site.Unsupported(),
+            },
             Family.KetPsi => method.Name == WhereIfMethod ? site.Supported(OperatorKind.WhereIf, lambdaOrdinal: 2) : null,
             Family.Enumerable => ClassifyEnumerable(site, method, sourceType),
             Family.SqlServer => site.Unsupported(),
@@ -182,7 +186,10 @@ internal static class CallSiteAnalyzer
             case "IgnoreQueryFilters":
                 return site.Supported(OperatorKind.IgnoreQueryFilters);
             case "Include" or "ThenInclude":
-                return site.Reject(DiagnosticDescriptors.IncludeNotSupported, method.Name);
+                var include = method.Name == "Include" ? OperatorKind.Include : OperatorKind.ThenInclude;
+                return parameters[1].Type.SpecialType == SpecialType.System_String
+                    ? site.RejectArgument(DiagnosticDescriptors.IncludePathNotSupported, ordinal: 1, IncludePathTranslator.ReasonStringPath)
+                    : site.Supported(include, lambdaOrdinal: 1);
             case "ToListAsync" or "ToArrayAsync":
                 return site.Supported(method.Name == "ToListAsync" ? OperatorKind.ToList : OperatorKind.ToArray, isAsync: true);
             case "FirstAsync" or "FirstOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync" or "AnyAsync" or "CountAsync"
@@ -311,6 +318,7 @@ internal static class CallSiteAnalyzer
         {
             PredicateModel? predicate = null;
             string? orderProperty = null;
+            IncludeModel? include = null;
             if (lambdaOrdinal is { } ordinal)
             {
                 var (lambda, lambdaDiagnostic) = RequireLambda(ordinal);
@@ -339,6 +347,22 @@ internal static class CallSiteAnalyzer
 
                     orderProperty = property;
                 }
+                else if (lambda is not null && kind is OperatorKind.Include or OperatorKind.ThenInclude)
+                {
+                    var (path, pathDiagnostic) = IncludePathTranslator.Translate(lambda, semanticModel, cancellationToken);
+                    if (pathDiagnostic is not null)
+                    {
+                        return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, pathDiagnostic);
+                    }
+
+                    // The operator's last type argument is TProperty, the navigation property's type.
+                    var compilation = semanticModel.Compilation;
+                    include = new IncludeModel(
+                        path!.Navigation,
+                        operation.TargetMethod.TypeArguments[operation.TargetMethod.TypeArguments.Length - 1].ToDisplayString(SignatureFormat),
+                        EntityShapeBuilder.Build(path.Source, compilation, location),
+                        EntityShapeBuilder.Build(path.Target, compilation, location));
+                }
             }
 
             // Only classes can be entities; the shape is kept only if the element type turns out to be one.
@@ -358,7 +382,8 @@ internal static class CallSiteAnalyzer
                 interception,
                 predicate,
                 GetSignature(operation.TargetMethod),
-                orderProperty);
+                orderProperty,
+                include);
         }
 
         private static bool IsPredicate(OperatorKind kind, bool hasPredicate)
@@ -379,6 +404,15 @@ internal static class CallSiteAnalyzer
         }
 
         public CallSite Unsupported() => Reject(DiagnosticDescriptors.UnsupportedOperator, methodName);
+
+        /// <summary>Rejects the call at the argument with <paramref name="ordinal"/>, quoting it in the message.</summary>
+        public CallSite RejectArgument(DiagnosticDescriptor descriptor, int ordinal, string reason)
+        {
+            var argument = operation.Arguments.First(a => a.Parameter?.Ordinal == ordinal).Value.Syntax;
+            var argumentLocation = LocationInfo.From(argument.GetLocation());
+            return new(_elementType, argumentLocation, Operator: null, IsAsync: false, HasPredicate: false,
+                DiagnosticInfo.Create(descriptor, argumentLocation, argument.ToString(), reason));
+        }
 
         public CallSite Overload(string reason) => Reject(DiagnosticDescriptors.UnsupportedOverload, methodName, reason);
 

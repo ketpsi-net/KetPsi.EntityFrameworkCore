@@ -146,6 +146,35 @@ public sealed class SqlQueryTests : IDisposable
     }
 
     [Fact]
+    public void Include_AppendsPathAndReturnsIncludableQuery()
+    {
+        var query = SqlQuery.Include<Blog, List<Blog>>(_db.Blogs, "Posts");
+
+        var node = Assert.IsType<IncludeNode>(Assert.IsAssignableFrom<SqlQueryable<Blog>>(query).Tail);
+        Assert.Equal(["Posts"], node.Path);
+        Assert.IsType<RootNode>(node.Parent);
+        Assert.IsAssignableFrom<Microsoft.EntityFrameworkCore.Query.IIncludableQueryable<Blog, List<Blog>>>(query);
+    }
+
+    [Fact]
+    public void ThenInclude_ExtendsThePreviousPath()
+    {
+        var query = SqlQuery.ThenInclude<Blog, Blog>(SqlQuery.Include<Blog, List<Blog>>(_db.Blogs, "Posts"), "Author");
+
+        var node = Assert.IsType<IncludeNode>(Assert.IsAssignableFrom<SqlQueryable<Blog>>(query).Tail);
+        Assert.Equal(["Posts", "Author"], node.Path);
+        Assert.Equal(["Posts"], Assert.IsType<IncludeNode>(node.Parent).Path);
+    }
+
+    [Fact]
+    public void ThenInclude_WithoutInclude_Throws()
+        => Assert.Throws<InvalidOperationException>(() => SqlQuery.ThenInclude<Blog, Blog>(SqlQuery.AsNoTracking(_db.Blogs), "Author"));
+
+    [Fact]
+    public void Include_EmptyNavigation_Throws()
+        => Assert.ThrowsAny<ArgumentException>(() => SqlQuery.Include<Blog, Blog>(_db.Blogs, ""));
+
+    [Fact]
     public void AsTracking_AppendsTrackAllBehavior()
     {
         var query = AsSql(SqlQuery.AsTracking(_db.Blogs));

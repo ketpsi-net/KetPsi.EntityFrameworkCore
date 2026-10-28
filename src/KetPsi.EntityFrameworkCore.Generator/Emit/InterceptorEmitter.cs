@@ -24,7 +24,8 @@ internal static class InterceptorEmitter
     public static bool CanIntercept(CallSite site)
         => site is { Interception: not null, Signature: not null, Operator: { } kind }
             && (!TakesPredicate(site) || site.Predicate is not null)
-            && (!IsOrdering(kind) || site.OrderProperty is not null);
+            && (!IsOrdering(kind) || site.OrderProperty is not null)
+            && (kind is not (OperatorKind.Include or OperatorKind.ThenInclude) || site.Include is not null);
 
     public static string Emit(IReadOnlyList<CallSite> sites)
     {
@@ -134,6 +135,12 @@ internal static class InterceptorEmitter
                 return $"{SqlQuery}.{site.Operator}({source}, {parameters[1].Name})";
             case OperatorKind.AsNoTracking or OperatorKind.AsNoTrackingWithIdentityResolution:
                 return $"{SqlQuery}.{site.Operator}({source})";
+            case OperatorKind.Include or OperatorKind.ThenInclude:
+                var include = site.Include!;
+                return $"{SqlQuery}.{site.Operator}<{site.ElementType}, {include.PropertyTypeName}>({source}, \"{include.Navigation}\")";
+            case OperatorKind.AsSplitQuery or OperatorKind.AsSingleQuery:
+                // KetPsi always loads included collections with their own statements; both give the same results.
+                return source;
             case OperatorKind.AsTracking:
                 return parameters.Count > 1
                     ? $"{SqlQuery}.AsTracking({source}, {parameters[1].Name})"

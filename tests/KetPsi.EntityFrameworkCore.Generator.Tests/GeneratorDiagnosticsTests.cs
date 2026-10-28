@@ -1,3 +1,4 @@
+using KetPsi.EntityFrameworkCore.Generator.Discovery;
 using KetPsi.EntityFrameworkCore.Generator.Tests.Infrastructure;
 using Microsoft.CodeAnalysis;
 
@@ -41,7 +42,6 @@ public sealed class GeneratorDiagnosticsTests
     [InlineData("var r = await db.Blogs.FindAsync(1);", "FindAsync")]
     [InlineData("var r = db.Blogs.AsAsyncEnumerable();", "AsAsyncEnumerable")]
     [InlineData("var r = db.Blogs.AsEnumerable().ToList();", "AsEnumerable")]
-    [InlineData("var r = db.Blogs.AsSplitQuery().ToList();", "AsSplitQuery")]
     [InlineData("var r = await db.Blogs.MaxAsync(b => b.Rating, ct);", "MaxAsync")]
     [InlineData("var r = Queryable.Select(db.Blogs, b => b.Id).ToList();", "Select")]
     public void UnsupportedOperator_ReportsKP1001AtOperatorName(string body, string operatorName)
@@ -56,15 +56,32 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Theory]
-    [InlineData("var r = db.Blogs.Include(b => b.Posts).AsNoTracking().ToList();", "Include")]
-    [InlineData("var r = db.Blogs.Include(b => b.Posts).ThenInclude(p => p.BlogId).AsNoTracking().ToList();", "ThenInclude")]
-    public void Include_ReportsKP1002(string body, string operatorName)
+    [InlineData("var r = db.Blogs.Include(b => b.Posts).ToList();")]
+    [InlineData("var r = db.Blogs.Include(b => b.Author).AsNoTracking().ToList();")]
+    [InlineData("var r = db.Blogs.Include(b => b.Posts).ThenInclude(p => p.Blog).ThenInclude(b => b.Author).ToList();")]
+    [InlineData("var r = db.Posts.Include(p => p.Blog).ThenInclude(b => b.Posts).Include(p => p.Blog).ToList();")]
+    [InlineData("var r = db.Blogs.Include(b => b.Posts).AsSplitQuery().ToList();")]
+    [InlineData("var r = db.Blogs.AsSingleQuery().Include(b => b.Posts).First();")]
+    [InlineData("var r = await db.Blogs.Include(b => b.Posts).ToListAsync(ct);")]
+    public void SupportedIncludes_ReportNothing(string body)
+        => Assert.Empty(GeneratorHost.Run(TestSources.WithBody(body)).Diagnostics);
+
+    [Theory]
+    [InlineData("var r = db.Blogs.Include(\"Posts\").ToList();", "\"Posts\"", IncludePathTranslator.ReasonStringPath)]
+    [InlineData("var r = db.Blogs.Include(b => b.Posts.Where(p => p.Id > 1)).ToList();", "b => b.Posts.Where(p => p.Id > 1)", IncludePathTranslator.ReasonFiltered)]
+    [InlineData("var r = db.Blogs.Include(b => b.Posts.OrderBy(p => p.Id)).ToList();", "b => b.Posts.OrderBy(p => p.Id)", IncludePathTranslator.ReasonFiltered)]
+    [InlineData("var r = db.Blogs.Include(b => b.Name).ToList();", "b => b.Name", IncludePathTranslator.ReasonNotNavigation)]
+    [InlineData("var r = db.Blogs.Include(b => b.Posts).ThenInclude(p => p.BlogId).ToList();", "p => p.BlogId", IncludePathTranslator.ReasonNotNavigation)]
+    [InlineData("var r = db.Blogs.Include(b => b).ToList();", "b => b", IncludePathTranslator.ReasonNotNavigation)]
+    [InlineData("var r = db.Posts.Include(p => p.Blog.Author).ToList();", "p => p.Blog.Author", IncludePathTranslator.ReasonMultiLevel)]
+    public void UnsupportedIncludePath_ReportsKP1002(string body, string path, string reason)
     {
         var run = GeneratorHost.Run(TestSources.WithBody(body));
 
-        var diagnostic = Assert.Single(run.Diagnostics, d => run.TextAt(d) == operatorName);
+        var diagnostic = Assert.Single(run.Diagnostics);
         Assert.Equal("KP1002", diagnostic.Id);
-        Assert.Equal($"'{operatorName}' is not supported yet. Load related entities with separate queries.", diagnostic.GetMessage());
+        Assert.Equal(path, run.TextAt(diagnostic));
+        Assert.Equal($"The include path '{path}' is not supported: {reason}", diagnostic.GetMessage());
     }
 
     [Theory]
@@ -121,7 +138,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void SeveralUnsupportedOperators_ReportEach()
     {
-        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Include(b => b.Posts).Select(b => b.Id).ToList();"));
+        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Include(\"Posts\").Select(b => b.Id).ToList();"));
 
         Assert.Equal(["KP1002", "KP1001"], run.Diagnostics.OrderBy(d => d.Location.SourceSpan.Start).Select(d => d.Id));
     }

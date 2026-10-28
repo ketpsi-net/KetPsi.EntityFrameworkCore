@@ -5,6 +5,7 @@ using KetPsi.EntityFrameworkCore.Execution;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using EfAsyncQueryProvider = Microsoft.EntityFrameworkCore.Query.IAsyncQueryProvider;
 
@@ -101,6 +102,38 @@ public static class SqlQuery
     {
         var query = ToSqlQueryable(source);
         return query.WithTail(new TrackingNode(query.Tail, behavior));
+    }
+
+    /// <summary>Appends <c>Include</c>: the navigation's related entities are loaded with the query's entities.</summary>
+    /// <param name="source">The query.</param>
+    /// <param name="navigationName">The navigation the include lambda reads, such as <c>Posts</c> for <c>b =&gt; b.Posts</c>.</param>
+    public static IIncludableQueryable<T, TProperty> Include<[DynamicallyAccessedMembers(EntityMembers.Required)] T, TProperty>(
+        IQueryable<T> source, string navigationName)
+        where T : class
+    {
+        ArgumentException.ThrowIfNullOrEmpty(navigationName);
+
+        var query = ToSqlQueryable(source);
+        return new IncludableSqlQueryable<T, TProperty>(query.Context, new IncludeNode(query.Tail, [navigationName]));
+    }
+
+    /// <summary>Appends <c>ThenInclude</c>: continues the path of the <c>Include</c> or <c>ThenInclude</c> before it.</summary>
+    /// <param name="source">The query returned by <c>Include</c> or <c>ThenInclude</c>.</param>
+    /// <param name="navigationName">The navigation of the previously included entity that the lambda reads.</param>
+    /// <exception cref="InvalidOperationException"><paramref name="source"/> does not end with an include.</exception>
+    public static IIncludableQueryable<T, TProperty> ThenInclude<[DynamicallyAccessedMembers(EntityMembers.Required)] T, TProperty>(
+        IQueryable<T> source, string navigationName)
+        where T : class
+    {
+        ArgumentException.ThrowIfNullOrEmpty(navigationName);
+
+        var query = ToSqlQueryable(source);
+        if (query.Tail is not IncludeNode include)
+        {
+            throw new InvalidOperationException(ExceptionMessages.ThenIncludeRequiresInclude);
+        }
+
+        return new IncludableSqlQueryable<T, TProperty>(query.Context, new IncludeNode(query.Tail, [.. include.Path, navigationName]));
     }
 
     /// <summary>Appends <c>IgnoreQueryFilters()</c>, which disables every model query filter.</summary>

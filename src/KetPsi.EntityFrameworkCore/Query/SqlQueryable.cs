@@ -13,7 +13,7 @@ namespace KetPsi.EntityFrameworkCore.Query;
 /// expression trees, and its provider rejects any operator that was not intercepted.
 /// Enumerating it, synchronously or asynchronously, executes the query.
 /// </summary>
-internal sealed class SqlQueryable<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(DbContext context, QueryNode tail)
+internal class SqlQueryable<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(DbContext context, QueryNode tail)
     : IOrderedQueryable<T>, IAsyncEnumerable<T>
     where T : class
 {

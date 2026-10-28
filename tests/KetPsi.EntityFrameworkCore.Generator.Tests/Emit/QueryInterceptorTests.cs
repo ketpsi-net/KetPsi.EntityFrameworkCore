@@ -38,6 +38,8 @@ public sealed class QueryInterceptorTests : IDisposable
 
     private static Type BlogType => Compiled.Value.Assembly.GetType("Shop.Blog")!;
 
+    private static Type PostType => Compiled.Value.Assembly.GetType("Shop.Post")!;
+
     public void Dispose() => _db.Dispose();
 
     [Fact]
@@ -237,6 +239,49 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
+    public void Include_Collection_LoadsChildrenWithGeneratedAccessors()
+    {
+        _connection.RowSets.Enqueue(Rows((1, "alpha", 5, true, 10), (2, "beta", 3, false, null)));
+        _connection.RowSets.Enqueue(PostRows((10, 1, "first"), (11, 1, "second")));
+
+        var blogs = AsList(Invoke("WithPosts"));
+
+        Assert.Equal(SelectAll + " ORDER BY [t0].[Id]", _connection.Commands[0].CommandText);
+        Assert.Contains("FROM [Posts] AS [t0] WHERE [t0].[BlogId] IN (SELECT [value] FROM OPENJSON(@p0)", _connection.Commands[1].CommandText, StringComparison.Ordinal);
+        var posts = AsList(Get(blogs[0], "Posts"));
+        Assert.Equal([10, 11], posts.Select(p => PostType.GetProperty("Id")!.GetValue(p)));
+        Assert.All(posts, p => Assert.Same(blogs[0], PostType.GetProperty("Blog")!.GetValue(p)));
+        Assert.Empty(AsList(Get(blogs[1], "Posts")));
+        Assert.Empty(_db.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public void IncludeThenInclude_JoinsReferenceAndLoadsItsCollection()
+    {
+        var main = new DataTable();
+        foreach (var column in new[] { "PostId", "PostBlogId", "PostTitle", "Id", "IsActive", "Name", "Rating", "Status", "Views" })
+        {
+            main.Columns.Add(column, typeof(object));
+        }
+
+        main.Rows.Add(10, 1, "first", 1, true, "alpha", 5, 0, DBNull.Value);
+        _connection.RowSets.Enqueue(main);
+        _connection.RowSets.Enqueue(PostRows((10, 1, "first"), (11, 1, "second")));
+
+        var posts = AsList(Invoke("PostsWithBlogAndSiblings"));
+
+        Assert.StartsWith(
+            "SELECT [t0].[Id], [t0].[BlogId], [t0].[Title], [t1].[Id]",
+            _connection.Commands[0].CommandText,
+            StringComparison.Ordinal);
+        Assert.Contains("INNER JOIN [Blogs] AS [t1] ON [t0].[BlogId] = [t1].[Id]", _connection.Commands[0].CommandText, StringComparison.Ordinal);
+        var blog = PostType.GetProperty("Blog")!.GetValue(Assert.Single(posts))!;
+        Assert.Equal([10, 11], AsList(Get(blog, "Posts")).Select(p => PostType.GetProperty("Id")!.GetValue(p)).Order());
+        Assert.True(_db.Entry(blog).Navigation("Posts").IsLoaded);
+        Assert.Equal(3, _db.ChangeTracker.Entries().Count());
+    }
+
+    [Fact]
     public void InMemoryQuery_FallsBackToLinqToObjects()
     {
         var blogs = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(BlogType))!;
@@ -265,6 +310,20 @@ public sealed class QueryInterceptorTests : IDisposable
         foreach (var row in rows)
         {
             table.Rows.Add(row.Id, row.IsActive, row.Name, row.Rating, 0, row.Views is { } views ? views : DBNull.Value);
+        }
+
+        return table;
+    }
+
+    private static DataTable PostRows(params (int Id, int BlogId, string Title)[] rows)
+    {
+        var table = new DataTable();
+        table.Columns.Add("Id", typeof(int));
+        table.Columns.Add("BlogId", typeof(int));
+        table.Columns.Add("Title", typeof(string));
+        foreach (var row in rows)
+        {
+            table.Rows.Add(row.Id, row.BlogId, row.Title);
         }
 
         return table;

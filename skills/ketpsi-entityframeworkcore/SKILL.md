@@ -40,12 +40,12 @@ var page = await db.Blogs
 - `Where`, `WhereIf`, `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending`, `Skip`, `Take`.
 - `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`,
   `IgnoreQueryFilters()` (EF Core 10 also `IgnoreQueryFilters(["name"])`).
+- `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`, `AsSplitQuery()`, `AsSingleQuery()` (see Include below).
 - Terminals: `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`,
   their `Async` versions and predicate overloads, plus `foreach` / `await foreach` over the query.
 
-**Not supported yet** (build error): `Select`, `Distinct`, `GroupBy`, `Join`, `Include`/`ThenInclude` (KP1002),
-`Sum`/`Min`/`Max`/`Average`, `Last`, `FromSql*` (KP1004), `TagWith`, `AsSplitQuery`, `Find`, `ExecuteUpdate`/`ExecuteDelete`,
-`AsAsyncEnumerable`.
+**Not supported yet** (build error): `Select`, `Distinct`, `GroupBy`, `Join`, `Sum`/`Min`/`Max`/`Average`, `Last`,
+`FromSql*` (KP1004), `TagWith`, `Find`, `ExecuteUpdate`/`ExecuteDelete`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
 on a `DbSet`, but after any KetPsi operator they run the query and finish in memory:
@@ -65,6 +65,37 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
 **Order keys** must be a property of the entity itself: `b => b.Name`, not `b => b.Name.Length` (KP2008).
 
 **Lambdas** must be written at the call site, not passed as variables or method groups (KP1005).
+
+## Include
+
+```csharp
+var blogs = await db.Blogs
+    .Include(b => b.Owner)                          // reference: joined into the same statement
+    .Include(b => b.Posts).ThenInclude(p => p.Tags) // collections: one statement each, by the loaded parents' keys
+    .Where(b => b.IsActive)
+    .ToListAsync(ct);
+```
+
+- Each lambda reads exactly one navigation of its parameter. Continue a path with `ThenInclude`; repeated paths are
+  included once.
+- References are joined: `INNER JOIN` for a required navigation, `LEFT JOIN` for an optional one. A required
+  reference whose target is removed by a query filter drops the row, as in EF Core.
+- Collections load with their own statement, using the keys of the parents already read (one JSON parameter). Paging,
+  filters and `First`/`Single` on the parent therefore apply exactly. Children come back in key order.
+- A collection `Include` appends the entity key to the ordering, as EF Core does, so row order can differ from the
+  same query without it.
+- `AsSplitQuery()` and `AsSingleQuery()` are accepted and change nothing: KetPsi always loads collections with
+  separate statements, which gives the same results.
+- Tracking queries attach every entity and mark included navigations as loaded; no-tracking queries set navigations
+  in both directions, with a separate instance of a shared reference per row; `AsNoTrackingWithIdentityResolution`
+  shares one instance per key.
+- Included collections are never null: a property without an initializer gets a `HashSet<T>` (interfaces that can
+  hold one) or a `List<T>`, like EF Core. A null getter-only collection throws at runtime; initialize it.
+- `Count`, `LongCount` and `Any` ignore includes.
+- Not supported (KP1002): filtered includes (`Include(b => b.Posts.Where(...))`), chains in one lambda
+  (`Include(p => p.Blog.Owner)`, use `ThenInclude`), and string paths (`Include("Posts")`). Many-to-many navigations
+  without a join entity class throw at runtime; map the join entity and include it with `ThenInclude`.
+- Navigations inside `Where` are still not supported (KP2002).
 
 ## Tracking
 
@@ -106,7 +137,7 @@ Same behavior as EF Core:
 |----|-----|
 | KP0002 | Keep `KetPsi.EntityFrameworkCore.Generated` in `InterceptorsNamespaces` |
 | KP1001 | Rewrite without the operator, or load and finish in memory after `ToList()` |
-| KP1002 | Load related entities with a separate query |
+| KP1002 | Include one navigation per lambda, chain with `ThenInclude`, filter collections in a separate query |
 | KP1005 | Write the lambda inline at the call |
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
 | KP2001–KP2005 | Simplify the predicate to property-vs-value comparisons |

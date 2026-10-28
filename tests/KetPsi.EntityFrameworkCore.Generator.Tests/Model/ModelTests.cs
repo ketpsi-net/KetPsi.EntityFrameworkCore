@@ -96,7 +96,7 @@ public sealed class ModelTests
             DiagnosticDescriptors.InternalError,
             DiagnosticDescriptors.InterceptorsNotEnabled,
             DiagnosticDescriptors.UnsupportedOperator,
-            DiagnosticDescriptors.IncludeNotSupported,
+            DiagnosticDescriptors.IncludePathNotSupported,
             DiagnosticDescriptors.RawSqlNotSupported,
             DiagnosticDescriptors.LambdaRequired,
             DiagnosticDescriptors.UnsupportedOverload,

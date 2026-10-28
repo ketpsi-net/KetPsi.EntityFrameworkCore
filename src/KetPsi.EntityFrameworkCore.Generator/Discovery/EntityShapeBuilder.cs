@@ -27,16 +27,25 @@ internal static class EntityShapeBuilder
         }
 
         var properties = new List<PropertyShape>();
+        var navigations = new List<NavigationShape>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var type = entity; type is not null && type.SpecialType != SpecialType.System_Object; type = type.BaseType)
         {
             foreach (var member in type.GetMembers())
             {
                 // A derived declaration hides a base one with the same name.
-                if (member is IPropertySymbol property && seen.Add(property.Name)
-                    && BuildProperty(entity, property, compilation, construction, fallbackLocation, diagnostics) is { } shape)
+                if (member is not IPropertySymbol property || !seen.Add(property.Name))
+                {
+                    continue;
+                }
+
+                if (BuildProperty(entity, property, compilation, construction, fallbackLocation, diagnostics) is { } shape)
                 {
                     properties.Add(shape);
+                }
+                else if (BuildNavigation(property, compilation) is { } navigation)
+                {
+                    navigations.Add(navigation);
                 }
             }
         }
@@ -46,7 +55,84 @@ internal static class EntityShapeBuilder
             ReaderName(typeName),
             construction,
             properties.ToEquatableArray(),
-            diagnostics.ToEquatableArray());
+            diagnostics.ToEquatableArray(),
+            navigations.ToEquatableArray());
+    }
+
+    /// <summary>
+    /// The type an <c>Include</c> lambda's property leads to: a collection's element type, or the property type for a
+    /// reference; <see langword="null"/> when the property cannot be a navigation.
+    /// </summary>
+    internal static INamedTypeSymbol? NavigationTarget(ITypeSymbol type)
+    {
+        if (Classify(type).IsScalar || type is not INamedTypeSymbol named)
+        {
+            return null;
+        }
+
+        if (CollectionElement(named) is { } element)
+        {
+            return element;
+        }
+
+        return named.TypeKind == TypeKind.Class ? named : null;
+    }
+
+    private static NavigationShape? BuildNavigation(IPropertySymbol property, Compilation compilation)
+    {
+        if (property.IsStatic || property.IsIndexer || property.GetMethod is null
+            || property.GetAttributes().Any(static a => a.AttributeClass?.ToDisplayString() == NotMappedAttribute)
+            || NavigationTarget(property.Type) is null)
+        {
+            return null;
+        }
+
+        var type = (INamedTypeSymbol)property.Type;
+        var element = CollectionElement(type);
+        Setter? setter = property.SetMethod is not { IsInitOnly: false } setMethod ? null : GetSetter(setMethod, compilation);
+        return new NavigationShape(
+            property.Name,
+            EntityDiscovery.TypeName(type),
+            EntityDiscovery.TypeName(property.ContainingType),
+            element is null ? null : EntityDiscovery.TypeName(element),
+            element is null ? null : CollectionToCreate(type, element, compilation),
+            compilation.IsSymbolAccessibleWithin(property.GetMethod, compilation.Assembly) ? Setter.Direct : Setter.Accessor,
+            setter);
+    }
+
+    // The element type of a collection of entities: IEnumerable<T> where T is a class.
+    private static INamedTypeSymbol? CollectionElement(INamedTypeSymbol type)
+    {
+        var enumerable = type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T
+            ? type
+            : type.AllInterfaces.FirstOrDefault(static i => i.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T);
+        return enumerable?.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Class } element && !Classify(element).IsScalar
+            ? element
+            : null;
+    }
+
+    // As EF Core does: a concrete collection type is constructed; an interface or abstract type gets a HashSet<T> when it
+    // can hold one, otherwise a List<T>.
+    private static string? CollectionToCreate(INamedTypeSymbol type, INamedTypeSymbol element, Compilation compilation)
+    {
+        if (type.TypeKind == TypeKind.Class && !type.IsAbstract)
+        {
+            var constructor = type.InstanceConstructors.FirstOrDefault(static c => c.Parameters.Length == 0);
+            return constructor is not null && compilation.IsSymbolAccessibleWithin(constructor, compilation.Assembly)
+                ? EntityDiscovery.TypeName(type)
+                : null;
+        }
+
+        foreach (var candidate in new[] { "System.Collections.Generic.HashSet`1", "System.Collections.Generic.List`1" })
+        {
+            if (compilation.GetTypeByMetadataName(candidate)?.Construct(element) is { } constructed
+                && compilation.ClassifyCommonConversion(constructed, type).IsImplicit)
+            {
+                return EntityDiscovery.TypeName(constructed);
+            }
+        }
+
+        return null;
     }
 
     internal static string ReaderName(string typeName)

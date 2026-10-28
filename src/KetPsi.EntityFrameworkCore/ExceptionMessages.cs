@@ -84,6 +84,9 @@ internal static class ExceptionMessages
         "No generated reader is registered for the entity type '{0}'. Make sure the project that declares the query " +
         "references KetPsi.EntityFrameworkCore.Generator.";
 
+    public const string ThenIncludeRequiresInclude =
+        "ThenInclude continues the path of the Include or ThenInclude right before it.";
+
     public const string KeyReaderRequiresKey =
         "The entity type has no primary key to read.";
 

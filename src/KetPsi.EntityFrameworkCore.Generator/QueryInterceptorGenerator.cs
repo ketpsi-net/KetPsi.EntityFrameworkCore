@@ -108,15 +108,30 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
         context.AddSource(InterceptorEmitter.HintName, InterceptorEmitter.Emit(intercepted));
     }
 
-    /// <summary>The entities that get a reader: element types of supported operators, once each.</summary>
+    /// <summary>The entities that get a reader: element types of supported operators and included entities, once each.</summary>
     internal static IReadOnlyList<EntityShape> ReadableEntities(EquatableArray<CallSite> sites)
-        => sites
-            .Where(static s => s.Operator is not null && s.Entity is not null)
-            .Select(static s => s.Entity!)
-            .GroupBy(static e => e.TypeName, StringComparer.Ordinal)
-            .Select(static g => g.First())
-            .OrderBy(static e => e.TypeName, StringComparer.Ordinal)
+        => Distinct(sites
+            .Where(static s => s.Operator is not null)
+            .SelectMany(static s => new[] { s.Entity, s.Include?.Target }))
             .ToList();
+
+    /// <summary>
+    /// The entities whose navigations get accessors: both sides of every include. The model decides at runtime which
+    /// navigation is the inverse of an included one, so every navigation of these entities can be set.
+    /// </summary>
+    internal static IReadOnlyList<EntityShape> NavigationEntities(EquatableArray<CallSite> sites)
+        => Distinct(sites
+            .Where(static s => s.Operator is not null && s.Include is not null)
+            .SelectMany(static s => new[] { s.Include!.Source, s.Include.Target }))
+            .Where(static e => e.Navigations.Count > 0)
+            .ToList();
+
+    private static IEnumerable<EntityShape> Distinct(IEnumerable<EntityShape?> entities)
+        => entities
+            .Where(static e => e is not null)
+            .GroupBy(static e => e!.TypeName, StringComparer.Ordinal)
+            .Select(static g => g.First()!)
+            .OrderBy(static e => e.TypeName, StringComparer.Ordinal);
 
     internal static GenerationReferences GetReferences(Compilation compilation)
         => new(
@@ -137,7 +152,7 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
             return;
         }
 
-        context.AddSource(ReaderEmitter.HintName, ReaderEmitter.Emit(readable, references.HasSqlServer));
+        context.AddSource(ReaderEmitter.HintName, ReaderEmitter.Emit(readable, references.HasSqlServer, NavigationEntities(sites)));
     }
 
     /// <summary>Keeps the calls on entity queries, plus internal errors, which are reported whatever the query is.</summary>
