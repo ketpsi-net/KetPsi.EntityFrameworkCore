@@ -55,8 +55,14 @@ internal static class ModelBinder
             .Select(property => BindProperty(property, storeObject, clrType, table))
             .ToArray();
 
-        return new BoundEntity(clrType, table, schema, properties, GetFilterKeys(entityType));
+        return new BoundEntity(clrType, table, schema, properties, GetPrimaryKey(entityType, properties), GetFilterKeys(entityType));
     }
+
+    // In key order, which is the order EF Core's identity map expects key values in. Keyless types have none.
+    private static BoundProperty[]? GetPrimaryKey(IEntityType entityType, BoundProperty[] properties)
+        => entityType.FindPrimaryKey()?.Properties
+            .Select(key => properties.First(p => p.Name == key.Name))
+            .ToArray();
 
     // EF Core 10 added named filters; earlier versions allow one unnamed filter per entity.
     private static string?[] GetFilterKeys(IEntityType entityType)
@@ -81,7 +87,8 @@ internal static class ModelBinder
                 CultureInfo.InvariantCulture, ExceptionMessages.PropertyColumnMissing, entityClrType, property.Name, table));
         }
 
-        return new BoundProperty(property.Name, column, storeType, property.IsColumnNullable(storeObject), property.ClrType);
+        return new BoundProperty(
+            property.Name, column, storeType, property.IsColumnNullable(storeObject), property.ClrType, property.IsShadowProperty());
     }
 
     private static string Format(string format, Type clrType) => string.Format(CultureInfo.InvariantCulture, format, clrType);

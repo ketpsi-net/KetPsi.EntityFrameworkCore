@@ -32,17 +32,61 @@ public sealed class ModelBinderTests
 
         Assert.Equal(
             [
-                new BoundProperty(ProductContext.CreatedAtShadowProperty, "CreatedAt", "datetime2", IsNullable: false, typeof(DateTime)),
-                new BoundProperty(nameof(Product.Description), "Description", "nvarchar(max)", IsNullable: true, typeof(string)),
-                new BoundProperty(nameof(Product.ExternalId), "ExternalId", "uniqueidentifier", IsNullable: false, typeof(Guid)),
-                new BoundProperty(nameof(Product.Id), "Id", "int", IsNullable: false, typeof(int)),
-                new BoundProperty(nameof(Product.IsActive), "IsActive", "bit", IsNullable: false, typeof(bool)),
-                new BoundProperty(nameof(Product.Name), "ProductName", "nvarchar(100)", IsNullable: false, typeof(string)),
-                new BoundProperty(nameof(Product.Price), "Price", "decimal(18,2)", IsNullable: false, typeof(decimal)),
-                new BoundProperty(nameof(Product.Stock), "Stock", "int", IsNullable: true, typeof(int?)),
+                new BoundProperty(ProductContext.CreatedAtShadowProperty, "CreatedAt", "datetime2", IsNullable: false, typeof(DateTime), IsShadow: true),
+                new BoundProperty(nameof(Product.Description), "Description", "nvarchar(max)", IsNullable: true, typeof(string), IsShadow: false),
+                new BoundProperty(nameof(Product.ExternalId), "ExternalId", "uniqueidentifier", IsNullable: false, typeof(Guid), IsShadow: false),
+                new BoundProperty(nameof(Product.Id), "Id", "int", IsNullable: false, typeof(int), IsShadow: false),
+                new BoundProperty(nameof(Product.IsActive), "IsActive", "bit", IsNullable: false, typeof(bool), IsShadow: false),
+                new BoundProperty(nameof(Product.Name), "ProductName", "nvarchar(100)", IsNullable: false, typeof(string), IsShadow: false),
+                new BoundProperty(nameof(Product.Price), "Price", "decimal(18,2)", IsNullable: false, typeof(decimal), IsShadow: false),
+                new BoundProperty(nameof(Product.Stock), "Stock", "int", IsNullable: true, typeof(int?), IsShadow: false),
             ],
             entity.Properties.OrderBy(p => p.Name, StringComparer.Ordinal));
     }
+
+    [Fact]
+    public void GetEntity_SingleKey_IsTheKeyProperty()
+    {
+        var entity = Bind<ProductContext, Product>();
+
+        var key = Assert.Single(entity.PrimaryKey!);
+        Assert.Same(entity.GetProperty(nameof(Product.Id)), key);
+    }
+
+    // Declared as (StudentId, CourseId), the reverse of alphabetical order, so the order can only come from the key.
+    [Fact]
+    public void GetEntity_CompositeKey_IsInDeclaredKeyOrder()
+    {
+        var entity = Bind<CompositeKeyContext, Enrollment>();
+
+        Assert.Equal([nameof(Enrollment.StudentId), nameof(Enrollment.CourseId)], entity.PrimaryKey!.Select(p => p.Name));
+        Assert.All(entity.PrimaryKey!, key => Assert.Same(entity.GetProperty(key.Name), key));
+    }
+
+    [Fact]
+    public void GetEntity_Keyless_HasNoPrimaryKey()
+    {
+        var entity = Bind<KeylessContext, Report>();
+
+        Assert.Null(entity.PrimaryKey);
+        Assert.Equal("Reports", entity.Table);
+    }
+
+    [Fact]
+    public void GetEntity_ShadowProperties_AreListedAndMarked()
+    {
+        var entity = Bind<ProductContext, Product>();
+
+        var shadow = Assert.Single(entity.ShadowProperties);
+        Assert.Equal(ProductContext.CreatedAtShadowProperty, shadow.Name);
+        Assert.True(shadow.IsShadow);
+        Assert.Same(entity.GetProperty(ProductContext.CreatedAtShadowProperty), shadow);
+        Assert.False(entity.GetProperty(nameof(Product.Name)).IsShadow);
+    }
+
+    [Fact]
+    public void GetEntity_NoShadowProperties_IsEmpty()
+        => Assert.Empty(Bind<PlainProductContext, Product>().ShadowProperties);
 
     [Fact]
     public void GetEntity_SameModelAndType_ReturnsCachedInstance()

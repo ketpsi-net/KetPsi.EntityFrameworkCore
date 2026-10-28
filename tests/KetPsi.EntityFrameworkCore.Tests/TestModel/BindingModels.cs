@@ -106,6 +106,35 @@ public sealed class ComplexContext : BindingContext
         => modelBuilder.Entity<Customer>().ComplexProperty(c => c.Address);
 }
 
+public sealed class Enrollment
+{
+    public int StudentId { get; set; }
+
+    public int CourseId { get; set; }
+
+    public int Grade { get; set; }
+}
+
+public sealed class Report
+{
+    public string Title { get; set; } = "";
+
+    public int Total { get; set; }
+}
+
+/// <summary>A composite key declared in a different order than the properties sort.</summary>
+public sealed class CompositeKeyContext : BindingContext
+{
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+        => modelBuilder.Entity<Enrollment>().HasKey(e => new { e.StudentId, e.CourseId });
+}
+
+public sealed class KeylessContext : BindingContext
+{
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+        => modelBuilder.Entity<Report>().HasNoKey().ToTable("Reports");
+}
+
 public sealed class ViewContext : BindingContext
 {
     protected override void OnModelCreating(ModelBuilder modelBuilder)

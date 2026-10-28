@@ -12,12 +12,20 @@ internal sealed class BoundEntity
     private readonly ConcurrentDictionary<PredicateTemplate, BoundPredicate> _predicates = new();
     private readonly ConcurrentDictionary<IReadOnlyList<string>, int[]> _ordinals = new(ReferenceEqualityComparer.Instance);
 
-    public BoundEntity(Type clrType, string table, string? schema, IReadOnlyList<BoundProperty> properties, IReadOnlyList<string?> filterKeys)
+    public BoundEntity(
+        Type clrType,
+        string table,
+        string? schema,
+        IReadOnlyList<BoundProperty> properties,
+        IReadOnlyList<BoundProperty>? primaryKey,
+        IReadOnlyList<string?> filterKeys)
     {
         ClrType = clrType;
         Table = table;
         Schema = schema;
         Properties = properties;
+        PrimaryKey = primaryKey;
+        ShadowProperties = [.. properties.Where(static p => p.IsShadow)];
         FilterKeys = filterKeys;
         _propertiesByName = properties.ToDictionary(static p => p.Name, StringComparer.Ordinal);
     }
@@ -30,6 +38,15 @@ internal sealed class BoundEntity
 
     /// <summary>Every mapped property, in model order.</summary>
     public IReadOnlyList<BoundProperty> Properties { get; }
+
+    /// <summary>
+    /// The primary key properties in key order, or <see langword="null"/> for a keyless entity type, which EF Core
+    /// never tracks.
+    /// </summary>
+    public IReadOnlyList<BoundProperty>? PrimaryKey { get; }
+
+    /// <summary>The shadow properties, in model order.</summary>
+    public IReadOnlyList<BoundProperty> ShadowProperties { get; }
 
     /// <summary>The keys of the query filters the model declares for the entity; <see langword="null"/> for an unnamed filter.</summary>
     public IReadOnlyList<string?> FilterKeys { get; }
