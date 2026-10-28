@@ -84,6 +84,11 @@ internal static class ExceptionMessages
         "No generated reader is registered for the entity type '{0}'. Make sure the project that declares the query " +
         "references KetPsi.EntityFrameworkCore.Generator.";
 
+    // EF Core's own message, so no-tracking queries with a cycle fail the same way.
+    public const string IncludeWithCycle =
+        "The Include path '{0}->{1}' results in a cycle. Cycles are not allowed in no-tracking queries; either use a " +
+        "tracking query or remove the cycle.";
+
     public const string ThenIncludeRequiresInclude =
         "ThenInclude continues the path of the Include or ThenInclude right before it.";
 

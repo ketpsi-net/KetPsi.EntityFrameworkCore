@@ -34,6 +34,48 @@ public sealed class Blog
     public bool IsDeleted { get; set; }
 
     public int TenantId { get; set; }
+
+    public int? AuthorId { get; set; }
+
+    public Author? Author { get; set; }
+
+    public List<Post> Posts { get; set; } = [];
+}
+
+public sealed class Author
+{
+    public int Id { get; set; }
+
+    public string Name { get; set; } = "";
+
+    public ICollection<Blog>? Blogs { get; set; }
+}
+
+public sealed class Post
+{
+    public int Id { get; set; }
+
+    public int BlogId { get; set; }
+
+    public Blog Blog { get; set; } = null!;
+
+    public string Title { get; set; } = "";
+
+    public bool IsDeleted { get; set; }
+
+    /// <summary>Without an initializer, so whoever loads the comments creates the collection.</summary>
+    public ICollection<Comment>? Comments { get; set; }
+}
+
+public sealed class Comment
+{
+    public int Id { get; set; }
+
+    public int PostId { get; set; }
+
+    public Post Post { get; set; } = null!;
+
+    public string Text { get; set; } = "";
 }
 
 /// <summary>The context both query builds run on: stock EF Core and KetPsi.</summary>
@@ -49,6 +91,12 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
 
     public DbSet<Blog> Blogs => Set<Blog>();
 
+    public DbSet<Author> Authors => Set<Author>();
+
+    public DbSet<Post> Posts => Set<Post>();
+
+    public DbSet<Comment> Comments => Set<Comment>();
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         optionsBuilder.UseSqlServer(connectionString);
@@ -59,7 +107,8 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
-        => modelBuilder.Entity<Blog>(b =>
+    {
+        modelBuilder.Entity<Blog>(b =>
         {
             b.ToTable("Blogs", "diff");
             b.Property(x => x.Id).ValueGeneratedNever();
@@ -72,7 +121,33 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
 #else
             b.HasQueryFilter(x => !x.IsDeleted && x.TenantId == _tenantId);
 #endif
+            b.HasOne(x => x.Author).WithMany(a => a.Blogs).HasForeignKey(x => x.AuthorId);
         });
+
+        modelBuilder.Entity<Author>(a =>
+        {
+            a.ToTable("Authors", "diff");
+            a.Property(x => x.Id).ValueGeneratedNever();
+            a.Property(x => x.Name).HasMaxLength(50);
+        });
+
+        modelBuilder.Entity<Post>(p =>
+        {
+            p.ToTable("Posts", "diff");
+            p.Property(x => x.Id).ValueGeneratedNever();
+            p.Property(x => x.Title).HasMaxLength(50);
+            p.HasOne(x => x.Blog).WithMany(b => b.Posts).HasForeignKey(x => x.BlogId);
+            p.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<Comment>(c =>
+        {
+            c.ToTable("Comments", "diff");
+            c.Property(x => x.Id).ValueGeneratedNever();
+            c.Property(x => x.Text).HasMaxLength(50);
+            c.HasOne(x => x.Post).WithMany(p => p.Comments).HasForeignKey(x => x.PostId);
+        });
+    }
 }
 
 /// <summary>

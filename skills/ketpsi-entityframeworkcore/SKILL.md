@@ -91,6 +91,9 @@ var blogs = await db.Blogs
   shares one instance per key.
 - Included collections are never null: a property without an initializer gets a `HashSet<T>` (interfaces that can
   hold one) or a `List<T>`, like EF Core. A null getter-only collection throws at runtime; initialize it.
+- As in EF Core, a no-tracking query cannot include a navigation and then its inverse
+  (`Include(p => p.Blog).ThenInclude(b => b.Posts)` with `AsNoTracking()`): it throws "results in a cycle". Use
+  tracking or `AsNoTrackingWithIdentityResolution()`.
 - `Count`, `LongCount` and `Any` ignore includes.
 - Not supported (KP1002): filtered includes (`Include(b => b.Posts.Where(...))`), chains in one lambda
   (`Include(p => p.Blog.Owner)`, use `ThenInclude`), and string paths (`Include("Posts")`). Many-to-many navigations

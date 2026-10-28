@@ -144,6 +144,32 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "LoadModifySave", [2] },
             { "LoadModifyShadowSaveAsync", [7] },
             { "LoadDeleteSave", [] },
+            { "IncludePosts", [] },
+            { "IncludePostsNoTracking", [] },
+            { "IncludePostsIdentityResolution", [] },
+            { "IncludeAuthor", [] },
+            { "IncludeAuthorNoTracking", [] },
+            { "IncludeAuthorIdentityResolution", [] },
+            { "IncludeRequiredBlog", [] },
+            { "IncludeRequiredBlogNoTracking", [] },
+            { "IncludePostsThenComments", [] },
+            { "IncludePostsThenCommentsNoTracking", [] },
+            { "IncludeBlogThenPosts", [] },
+            { "IncludeBlogThenPostsNoTracking", [] },
+            { "IncludeBlogThenPostsIdentityResolution", [] },
+            { "IncludeAuthorBlogsThenPosts", [] },
+            { "IncludePostsPaged", [1, 3] },
+            { "IncludePostsPaged", [0, 2] },
+            { "IncludePostsUnordered", [] },
+            { "IncludeFirst", [] },
+            { "IncludeSingleAsync", [1] },
+            { "IncludeSingleAsync", [2] },
+            { "IncludeWhereToListAsync", [4] },
+            { "IncludeIgnoringFilters", [] },
+            { "IncludeCount", [] },
+            { "IncludeEnumerated", [] },
+            { "IncludeAfterTrackingBlog", [] },
+            { "LoadGraphModifySave", [] },
         };
 
 #if NET10_0_OR_GREATER
@@ -178,7 +204,8 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         Assert.Equal(query.StartsWith("Load", StringComparison.Ordinal), !stockTracking.EndsWith("written:\n", StringComparison.Ordinal));
 
         // EF Core ran the stock query; the intercepted one never reached EF Core's query pipeline.
-        Assert.True(stockReads > 0, "Stock EF Core executed no query.");
+        // A query EF Core rejects while compiling it, such as an include cycle without tracking, sends nothing.
+        Assert.True(stockReads > 0 || stock.StartsWith("throws ", StringComparison.Ordinal), "Stock EF Core executed no query.");
         Assert.Equal(0, interceptedReads);
     }
 
@@ -187,7 +214,9 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
     {
         "Tracked(4)", "AsTrackingAfterAsNoTracking()", "AsTrackingWithBehavior(TrackAll)", "TrackedFirst()",
         "TrackedToListAsync()", "TrackedSingleOrDefaultAsync(5)", "RequeryKeepsTrackedValues()", "LoadModifySave(2)",
-        "LoadModifyShadowSaveAsync(7)",
+        "LoadModifyShadowSaveAsync(7)", "IncludePosts()", "IncludeAuthor()", "IncludeRequiredBlog()", "IncludePostsThenComments()",
+        "IncludeBlogThenPosts()", "IncludeFirst()", "IncludeSingleAsync(1)", "IncludeSingleAsync(2)", "IncludeAfterTrackingBlog()",
+        "LoadGraphModifySave()",
     };
 
 #if NET8_0
@@ -206,7 +235,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "Composed", "OrderByName", "OrderByRatingDescending", "OrderByNullableViews", "OrderByStatusThenNameDescending",
         "SecondOrderByReplaces", "Page", "SkipOnly", "TakeOnly", "TakeThenWhere", "TakeThenTake", "SkipThenSkip",
         "TakeThenOrderBy", "TakeThenSkip", "AllAsArray", "ToListAsync", "ToArrayAsync", "IgnoringFilters",
-        "DeletedIgnoringFilters", "IgnoringTenantFilter",
+        "DeletedIgnoringFilters", "IgnoringTenantFilter", "IncludePostsPaged", "IncludePostsUnordered",
     };
 
     private static string Key(string query, object?[] arguments)
@@ -239,9 +268,9 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
                 value = task.GetType().GetProperty("Result")!.GetValue(task);
             }
 
-            if (value is IEnumerable<Blog> rows && !OrderedQueries.Contains(query))
+            if (value is IEnumerable rows and not string && !OrderedQueries.Contains(query))
             {
-                value = rows.OrderBy(b => b.Id).ToList();
+                value = rows.Cast<object>().OrderBy(KeyOf).ToList();
             }
 
             result = Describe(value);
@@ -254,19 +283,22 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         return (result, DescribeTracking(db, counter), counter.Reads);
     }
 
-    // The change tracker after the query, by key, with each entry's state, modified properties, shadow value and
-    // entity values, then the commands SaveChanges sent. Stock EF Core and KetPsi must leave the context alike.
+    // The change tracker after the query: every entry by type and key, with its state, modified properties, loaded
+    // navigations, shadow value and values, then the commands SaveChanges sent. Stock EF Core and KetPsi must leave
+    // the context alike.
     private static string DescribeTracking(DiffDb db, CommandCounter counter)
     {
-        var entries = db.ChangeTracker.Entries<Blog>()
-            .OrderBy(e => e.Entity.Id)
+        var entries = db.ChangeTracker.Entries()
+            .OrderBy(e => e.Metadata.ClrType.Name, StringComparer.Ordinal)
+            .ThenBy(e => KeyOf(e.Entity))
             .Select(e =>
             {
-                var revision = e.Property<int>(DiffDb.Revision);
                 var modified = string.Join(",", e.Properties.Where(p => p.IsModified).Select(p => p.Metadata.Name).Order(StringComparer.Ordinal));
-                return string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"{e.State}|revision {revision.OriginalValue}->{revision.CurrentValue}|modified {modified}|{Describe(e.Entity)}");
+                var loaded = string.Join(",", e.Navigations.Where(n => n.IsLoaded).Select(n => n.Metadata.Name).Order(StringComparer.Ordinal));
+                var revision = e.Entity is Blog
+                    ? string.Create(CultureInfo.InvariantCulture, $"|revision {e.Property(DiffDb.Revision).OriginalValue}->{e.Property(DiffDb.Revision).CurrentValue}")
+                    : "";
+                return $"{e.Metadata.ClrType.Name}|{e.State}{revision}|modified {modified}|loaded {loaded}|{Values(e.Entity)}";
             });
 
         return "tracked:\n" + string.Join("\n", entries) + "\nwritten:\n" + string.Join("\n", counter.Writes);
@@ -275,18 +307,90 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
     private static Exception? Unwrap(Exception exception)
         => exception is TargetInvocationException { InnerException: { } inner } ? inner : exception;
 
-    // A readable form of the result, so a mismatch shows exactly which rows or values differ.
-    private static string Describe(object? value) => value switch
+    private static int KeyOf(object entity) => entity switch
     {
-        null => "null",
-        Blog blog => Describe(blog),
-        IEnumerable rows and not string => string.Join("\n", rows.Cast<Blog>().Select(Describe)),
-        _ => Convert.ToString(value, CultureInfo.InvariantCulture) + " (" + value.GetType().Name + ")",
+        Blog blog => blog.Id,
+        Author author => author.Id,
+        Post post => post.Id,
+        Comment comment => comment.Id,
+        _ => throw new ArgumentException(entity.GetType().Name, nameof(entity)),
     };
 
-    private static string Describe(Blog blog)
-        => new StringBuilder()
+    // A readable form of the result, so a mismatch shows exactly which rows or values differ. Entities are numbered
+    // in the order they are reached, so the description also shows which instances are shared, how navigations
+    // point at each other, which collection types hold them, and in what order.
+    private static string Describe(object? value)
+    {
+        if (value is null or Blog or Author or Post or Comment)
+        {
+            return value is null ? "null" : new Graph().Describe([value]);
+        }
+
+        if (value is IEnumerable rows and not string)
+        {
+            return new Graph().Describe([.. rows.Cast<object>()]);
+        }
+
+        return Convert.ToString(value, CultureInfo.InvariantCulture) + " (" + value.GetType().Name + ")";
+    }
+
+    private static string Values(object entity) => entity switch
+    {
+        Blog blog => new StringBuilder()
             .Append(CultureInfo.InvariantCulture, $"{blog.Id}|{blog.Name}|{blog.Rating}|{blog.IsActive}|{blog.Views?.ToString(CultureInfo.InvariantCulture) ?? "null"}")
             .Append(CultureInfo.InvariantCulture, $"|{blog.Status}|{blog.CreatedAt:O}|{blog.Price:0.00}|{blog.ExternalId}|{blog.IsDeleted}|{blog.TenantId}")
-            .ToString();
+            .Append(CultureInfo.InvariantCulture, $"|{blog.AuthorId?.ToString(CultureInfo.InvariantCulture) ?? "null"}")
+            .ToString(),
+        Author author => string.Create(CultureInfo.InvariantCulture, $"{author.Id}|{author.Name}"),
+        Post post => string.Create(CultureInfo.InvariantCulture, $"{post.Id}|{post.BlogId}|{post.Title}|{post.IsDeleted}"),
+        Comment comment => string.Create(CultureInfo.InvariantCulture, $"{comment.Id}|{comment.PostId}|{comment.Text}"),
+        _ => throw new ArgumentException(entity.GetType().Name, nameof(entity)),
+    };
+
+    /// <summary>Describes the entities reachable from the results, each once, numbered in the order they are reached.</summary>
+    private sealed class Graph
+    {
+        private readonly Dictionary<object, int> _ids = new(ReferenceEqualityComparer.Instance);
+        private readonly Queue<object> _pending = new();
+
+        public string Describe(IReadOnlyList<object> roots)
+        {
+            var lines = new List<string> { "roots " + string.Join(",", roots.Select(Ref)) };
+            while (_pending.TryDequeue(out var entity))
+            {
+                lines.Add($"{Ref(entity)} {entity.GetType().Name} {Values(entity)}{Navigations(entity)}");
+            }
+
+            return string.Join("\n", lines);
+        }
+
+        private string Navigations(object entity) => entity switch
+        {
+            Blog blog => $"|author={Ref(blog.Author)}|posts={Collection(blog.Posts)}",
+            Author author => $"|blogs={Collection(author.Blogs)}",
+            Post post => $"|blog={Ref(post.Blog)}|comments={Collection(post.Comments)}",
+            Comment comment => $"|post={Ref(comment.Post)}",
+            _ => "",
+        };
+
+        private string Ref(object? entity)
+        {
+            if (entity is null)
+            {
+                return "null";
+            }
+
+            if (!_ids.TryGetValue(entity, out var id))
+            {
+                _ids.Add(entity, id = _ids.Count + 1);
+                _pending.Enqueue(entity);
+            }
+
+            return "@" + id.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private string Collection<T>(IEnumerable<T>? items)
+            where T : class
+            => items is null ? "null" : items.GetType().Name + "[" + string.Join(",", items.Select(Ref)) + "]";
+    }
 }

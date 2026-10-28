@@ -248,6 +248,10 @@ internal static class QueryRunner
         {
             EnsureTrackingSupported(RuntimeFeature.IsDynamicCodeSupported, EfCoreMajorVersion);
         }
+        else if (tracking == QueryTrackingBehavior.NoTracking)
+        {
+            includes.EnsureNoCycle();
+        }
 
         var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, FiltersFor, rowLimit);
         return new IncludedQuery(statement, new IncludeLoader(context, dialect, tracking, FiltersFor, Bind));

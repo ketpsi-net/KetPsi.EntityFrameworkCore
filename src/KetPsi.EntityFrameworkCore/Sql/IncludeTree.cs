@@ -59,6 +59,25 @@ internal sealed class IncludeTree(BoundEntity entity)
         return tree;
     }
 
+    /// <summary>
+    /// Throws when a navigation is included and then its inverse right after it, which EF Core rejects in no-tracking
+    /// queries: without identity resolution, the entities could not point back at each other.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The tree includes a navigation and then its inverse.</exception>
+    public void EnsureNoCycle()
+    {
+        foreach (var branch in _branches)
+        {
+            if (branch.Navigation.InverseName is { } inverse && branch.Target._branches.Exists(b => b.Navigation.Name == inverse))
+            {
+                throw new InvalidOperationException(string.Format(
+                    System.Globalization.CultureInfo.InvariantCulture, ExceptionMessages.IncludeWithCycle, branch.Navigation.Name, inverse));
+            }
+
+            branch.Target.EnsureNoCycle();
+        }
+    }
+
     private IncludeTree GetOrAdd(string navigationName, Func<Type, BoundEntity> bindEntity)
     {
         var existing = _branches.Find(b => b.Navigation.Name == navigationName);

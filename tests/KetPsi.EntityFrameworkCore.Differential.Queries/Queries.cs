@@ -287,6 +287,90 @@ public static class Queries
         return blogs;
     }
 
+    // Include: the test compares the whole graph, which instances are shared, and the change tracker.
+    public static List<Blog> IncludePosts(DiffDb db) => db.Blogs.Include(b => b.Posts).ToList();
+
+    public static List<Blog> IncludePostsNoTracking(DiffDb db) => db.Blogs.AsNoTracking().Include(b => b.Posts).ToList();
+
+    public static List<Blog> IncludePostsIdentityResolution(DiffDb db)
+        => db.Blogs.AsNoTrackingWithIdentityResolution().Include(b => b.Posts).ToList();
+
+    public static List<Blog> IncludeAuthor(DiffDb db) => db.Blogs.Include(b => b.Author).ToList();
+
+    public static List<Blog> IncludeAuthorNoTracking(DiffDb db) => db.Blogs.AsNoTracking().Include(b => b.Author).ToList();
+
+    public static List<Blog> IncludeAuthorIdentityResolution(DiffDb db)
+        => db.Blogs.AsNoTrackingWithIdentityResolution().Include(b => b.Author).ToList();
+
+    // Post 901 belongs to a soft-deleted blog: the required reference's join drops it, as in EF Core.
+    public static List<Post> IncludeRequiredBlog(DiffDb db) => db.Posts.Include(p => p.Blog).ToList();
+
+    public static List<Post> IncludeRequiredBlogNoTracking(DiffDb db) => db.Posts.AsNoTracking().Include(p => p.Blog).ToList();
+
+    public static List<Blog> IncludePostsThenComments(DiffDb db)
+        => db.Blogs.Include(b => b.Posts).ThenInclude(p => p.Comments).Include(b => b.Author).ToList();
+
+    public static List<Blog> IncludePostsThenCommentsNoTracking(DiffDb db)
+        => db.Blogs.AsNoTracking().Include(b => b.Posts).ThenInclude(p => p.Comments).Include(b => b.Author).ToList();
+
+    public static List<Post> IncludeBlogThenPosts(DiffDb db)
+        => db.Posts.Include(p => p.Blog).ThenInclude(b => b.Posts).AsSplitQuery().Where(p => p.Id < 500).ToList();
+
+    public static List<Post> IncludeBlogThenPostsNoTracking(DiffDb db)
+        => db.Posts.AsNoTracking().Include(p => p.Blog).ThenInclude(b => b.Posts).AsSingleQuery().Where(p => p.Id < 500).ToList();
+
+    // EF Core rejects the cycle Post -> Blog -> Posts without tracking, but allows it with identity resolution.
+    public static List<Post> IncludeBlogThenPostsIdentityResolution(DiffDb db)
+        => db.Posts.AsNoTrackingWithIdentityResolution().Include(p => p.Blog).ThenInclude(b => b.Posts).Where(p => p.Id < 500).ToList();
+
+    public static List<Author> IncludeAuthorBlogsThenPosts(DiffDb db)
+        => db.Authors.AsNoTracking().Include(a => a.Blogs!).ThenInclude(b => b.Posts).ToList();
+
+    public static List<Blog> IncludePostsPaged(DiffDb db, int skip, int take)
+        => db.Blogs.AsNoTracking().OrderBy(b => b.Name).Skip(skip).Take(take).Include(b => b.Posts).ToList();
+
+    public static List<Blog> IncludePostsUnordered(DiffDb db) => db.Blogs.AsNoTracking().Include(b => b.Posts).Take(4).ToList();
+
+    public static Blog IncludeFirst(DiffDb db) => db.Blogs.Include(b => b.Posts).OrderByDescending(b => b.Rating).First();
+
+    public static Task<Blog> IncludeSingleAsync(DiffDb db, int id) => db.Blogs.Include(b => b.Posts).ThenInclude(p => p.Comments).SingleAsync(b => b.Id == id);
+
+    public static Task<List<Blog>> IncludeWhereToListAsync(DiffDb db, int rating)
+        => db.Blogs.AsNoTracking().Include(b => b.Author).Include(b => b.Posts).Where(b => b.Rating >= rating).ToListAsync();
+
+    public static List<Blog> IncludeIgnoringFilters(DiffDb db)
+        => db.Blogs.AsNoTracking().IgnoreQueryFilters().Include(b => b.Posts).ThenInclude(p => p.Comments).ToList();
+
+    public static int IncludeCount(DiffDb db) => db.Blogs.Include(b => b.Posts).Count();
+
+    public static List<Blog> IncludeEnumerated(DiffDb db)
+    {
+        var blogs = new List<Blog>();
+        foreach (var blog in db.Blogs.AsNoTracking().Include(b => b.Posts).Where(b => b.IsActive))
+        {
+            blogs.Add(blog);
+        }
+
+        return blogs;
+    }
+
+    public static List<Blog> IncludeAfterTrackingBlog(DiffDb db)
+    {
+        var tracked = db.Blogs.Single(b => b.Id == 1);
+        tracked.Name = "changed";
+        return db.Blogs.Include(b => b.Posts).Where(b => b.Id <= 2).ToList();
+    }
+
+    public static Blog LoadGraphModifySave(DiffDb db)
+    {
+        using var transaction = db.Database.BeginTransaction();
+        var blog = db.Blogs.Include(b => b.Posts).ThenInclude(p => p.Comments).Single(b => b.Id == 1);
+        blog.Posts[0].Title = "renamed";
+        blog.Posts.RemoveAt(blog.Posts.Count - 1);
+        db.SaveChanges();
+        return blog;
+    }
+
 #if NET10_0_OR_GREATER
     public static List<Blog> IgnoringTenantFilter(DiffDb db)
         => db.Blogs.AsNoTracking().IgnoreQueryFilters([DiffDb.TenantFilter]).OrderBy(b => b.Id).ToList();

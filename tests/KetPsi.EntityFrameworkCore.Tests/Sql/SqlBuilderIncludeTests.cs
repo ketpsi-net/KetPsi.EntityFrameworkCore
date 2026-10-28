@@ -257,6 +257,27 @@ public sealed class SqlBuilderIncludeTests : IDisposable
         => Assert.Throws<NotSupportedException>(
             () => IncludeTree.FromChain(Bind<Book>(), Tail(Include(Query<Book>(), nameof(Book.Tags))), BindType));
 
+    [Fact]
+    public void IncludeTree_NavigationThenItsInverse_IsACycle()
+    {
+        var tree = IncludeTree.FromChain(Bind<Book>(), Tail(Include(Query<Book>(), nameof(Book.Writer), nameof(Writer.Books))), BindType)!;
+
+        var exception = Assert.Throws<InvalidOperationException>(tree.EnsureNoCycle);
+
+        Assert.Equal(
+            "The Include path 'Writer->Books' results in a cycle. Cycles are not allowed in no-tracking queries; either use a " +
+            "tracking query or remove the cycle.",
+            exception.Message);
+    }
+
+    [Fact]
+    public void IncludeTree_WithoutInverse_HasNoCycle()
+    {
+        var tree = IncludeTree.FromChain(Bind<Writer>(), Tail(Include(Query<Writer>(), nameof(Writer.Books), nameof(Book.Editor))), BindType)!;
+
+        tree.EnsureNoCycle();
+    }
+
     private static IReadOnlyList<ResolvedQueryFilter> NoFilters(BoundEntity entity) => [];
 
     private static Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> Filters(Type entityType, PredicateTemplate predicate, object value)
