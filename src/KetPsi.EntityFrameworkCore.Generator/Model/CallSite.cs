@@ -15,10 +15,6 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// <param name="Predicate">For operators that take a predicate, its translation.</param>
 /// <param name="Signature">For supported operators, the method the interceptor replaces.</param>
 /// <param name="OrderProperty">For ordering operators, the entity property the key selector reads.</param>
-/// <param name="RunsTrackedQuery">
-/// For terminals that return entities, whether the call visibly runs a query that starts at a DbSet without
-/// <c>AsNoTracking</c>.
-/// </param>
 internal sealed record CallSite(
     string ElementType,
     LocationInfo Location,
@@ -30,5 +26,4 @@ internal sealed record CallSite(
     string? Interception = null,
     PredicateModel? Predicate = null,
     InterceptorSignature? Signature = null,
-    string? OrderProperty = null,
-    bool RunsTrackedQuery = false);
+    string? OrderProperty = null);

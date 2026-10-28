@@ -97,7 +97,6 @@ public sealed class ModelTests
             DiagnosticDescriptors.InterceptorsNotEnabled,
             DiagnosticDescriptors.UnsupportedOperator,
             DiagnosticDescriptors.IncludeNotSupported,
-            DiagnosticDescriptors.TrackingNotSupported,
             DiagnosticDescriptors.RawSqlNotSupported,
             DiagnosticDescriptors.LambdaRequired,
             DiagnosticDescriptors.UnsupportedOverload,

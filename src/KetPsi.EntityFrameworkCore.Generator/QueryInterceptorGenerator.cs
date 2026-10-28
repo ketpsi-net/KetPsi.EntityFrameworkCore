@@ -4,7 +4,6 @@ using KetPsi.EntityFrameworkCore.Generator.Discovery;
 using KetPsi.EntityFrameworkCore.Generator.Emit;
 using KetPsi.EntityFrameworkCore.Generator.Model;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
 
 namespace KetPsi.EntityFrameworkCore.Generator;
@@ -26,8 +25,6 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
     // Set by the package's targets so the value never starts with ';', which analyzer config reads as a comment.
     private const string NamespaceListPrefix = "list:";
 
-    private const string UseQueryTrackingBehavior = "UseQueryTrackingBehavior";
-    private const string QueryTrackingBehaviorProperty = "QueryTrackingBehavior";
     private const string RuntimeReaderRegistry = "KetPsi.EntityFrameworkCore.Infrastructure.EntityReaders";
     private const string SqlServerDialectType = "KetPsi.EntityFrameworkCore.SqlServer.SqlServerDialect";
 
@@ -56,12 +53,6 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
         var interceptorsEnabled = context.AnalyzerConfigOptionsProvider
             .Select(static (options, _) => InterceptorsEnabled(options.GlobalOptions));
 
-        // A context may default to no-tracking; then only the runtime can tell whether a query tracks.
-        var trackingBehaviorConfigured = context.SyntaxProvider
-            .CreateSyntaxProvider(static (node, _) => IsTrackingBehaviorReference(node), static (_, _) => true)
-            .Collect()
-            .Select(static (references, _) => !references.IsEmpty);
-
         var references = context.CompilationProvider.Select(static (compilation, _) => GetReferences(compilation));
 
         var configurations = context.SyntaxProvider
@@ -71,9 +62,7 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
             .Select(static (items, _) => items.Select(static c => c!).ToEquatableArray());
         context.RegisterSourceOutput(configurations.Combine(references), static (spc, pair) => EmitQueryFilters(spc, pair.Left, pair.Right));
 
-        context.RegisterSourceOutput(
-            entitySites.Combine(interceptorsEnabled).Combine(trackingBehaviorConfigured),
-            static (spc, pair) => Report(spc, pair.Left.Left, pair.Left.Right, pair.Right));
+        context.RegisterSourceOutput(entitySites.Combine(interceptorsEnabled), static (spc, pair) => Report(spc, pair.Left, pair.Right));
         context.RegisterSourceOutput(entitySites.Combine(references), static (spc, pair) => EmitReaders(spc, pair.Left, pair.Right));
         context.RegisterSourceOutput(
             entitySites.Combine(interceptorsEnabled).Combine(references),
@@ -185,22 +174,13 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
             .Any(static n => string.Equals(n.Trim(), GeneratedNamespace, StringComparison.Ordinal));
     }
 
-    internal static bool IsTrackingBehaviorReference(SyntaxNode node)
-        => node is IdentifierNameSyntax { Identifier.ValueText: UseQueryTrackingBehavior or QueryTrackingBehaviorProperty };
-
-    private static void Report(SourceProductionContext context, EquatableArray<CallSite> sites, bool interceptorsEnabled, bool trackingBehaviorConfigured)
+    private static void Report(SourceProductionContext context, EquatableArray<CallSite> sites, bool interceptorsEnabled)
     {
         foreach (var site in sites)
         {
             if (site.Diagnostic is { } diagnostic)
             {
                 context.ReportDiagnostic(diagnostic.ToDiagnostic());
-            }
-
-            if (site.RunsTrackedQuery && !trackingBehaviorConfigured)
-            {
-                context.ReportDiagnostic(DiagnosticInfo.Create(
-                    DiagnosticDescriptors.TrackingNotSupported, site.Location, $"'{site.Signature?.Name}' runs a tracking query").ToDiagnostic());
             }
         }
 

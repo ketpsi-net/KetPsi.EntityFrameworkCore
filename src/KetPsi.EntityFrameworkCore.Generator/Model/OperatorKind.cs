@@ -12,6 +12,8 @@ internal enum OperatorKind
     Skip,
     Take,
     AsNoTracking,
+    AsNoTrackingWithIdentityResolution,
+    AsTracking,
     IgnoreQueryFilters,
     ToList,
     ToArray,

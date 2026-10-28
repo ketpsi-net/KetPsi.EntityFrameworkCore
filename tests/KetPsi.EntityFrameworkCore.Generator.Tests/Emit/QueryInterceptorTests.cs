@@ -205,6 +205,38 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
+    public void AsTracking_AttachesEntities()
+    {
+        var blogs = AsList(Invoke("Tracked", 3));
+
+        Assert.Equal(SelectAll + " WHERE [t0].[Rating] >= @p0", _connection.LastCommand.CommandText);
+        Assert.All(blogs, blog => Assert.Equal(EntityState.Unchanged, _db.Entry(blog).State));
+    }
+
+    [Theory]
+    [InlineData(QueryTrackingBehavior.TrackAll, 2)]
+    [InlineData(QueryTrackingBehavior.NoTracking, 0)]
+    [InlineData(QueryTrackingBehavior.NoTrackingWithIdentityResolution, 0)]
+    public void AsTrackingWithBehavior_FollowsBehavior(QueryTrackingBehavior behavior, int tracked)
+    {
+        Assert.Equal(2, AsList(Invoke("TrackedWithBehavior", behavior)).Count);
+
+        Assert.Equal(tracked, _db.ChangeTracker.Entries().Count());
+    }
+
+    [Fact]
+    public void AsNoTrackingWithIdentityResolution_ResolvesWithoutTracking()
+    {
+        _connection.Rows = Rows((1, "alpha", 5, true, 10), (1, "again", 3, false, null));
+
+        var blogs = AsList(Invoke("IdentityResolved"));
+
+        Assert.Same(blogs[0], blogs[1]);
+        Assert.Equal("alpha", Get(blogs[1], "Name"));
+        Assert.Empty(_db.ChangeTracker.Entries());
+    }
+
+    [Fact]
     public void InMemoryQuery_FallsBackToLinqToObjects()
     {
         var blogs = (IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(BlogType))!;

@@ -33,7 +33,7 @@ public sealed class GeneratorDiagnosticsTests
     [InlineData("var r = db.Blogs.Join(db.Posts, b => b.Id, p => p.BlogId, (b, p) => b).ToList();", "Join")]
     [InlineData("var r = db.Blogs.Max(b => b.Rating);", "Max")]
     [InlineData("var r = db.Blogs.Last();", "Last")]
-    [InlineData("var r = db.Blogs.AsNoTrackingWithIdentityResolution().ToList();", "AsNoTrackingWithIdentityResolution")]
+    [InlineData("var r = db.Blogs.IgnoreAutoIncludes().ToList();", "IgnoreAutoIncludes")]
     [InlineData("var r = db.Blogs.TagWith(\"x\").ToList();", "TagWith")]
     [InlineData("var r = db.Blogs.Where(b => b.Id == 1).ExecuteDelete();", "ExecuteDelete")]
     [InlineData("var r = db.Blogs.TemporalAll().ToList();", "TemporalAll")]
@@ -65,16 +65,6 @@ public sealed class GeneratorDiagnosticsTests
         var diagnostic = Assert.Single(run.Diagnostics, d => run.TextAt(d) == operatorName);
         Assert.Equal("KP1002", diagnostic.Id);
         Assert.Equal($"'{operatorName}' is not supported yet. Load related entities with separate queries.", diagnostic.GetMessage());
-    }
-
-    [Fact]
-    public void AsTracking_ReportsKP1003()
-    {
-        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.AsTracking().ToList();"));
-
-        var diagnostic = Assert.Single(run.Diagnostics);
-        Assert.Equal("KP1003", diagnostic.Id);
-        Assert.Equal("AsTracking", run.TextAt(diagnostic));
     }
 
     [Theory]

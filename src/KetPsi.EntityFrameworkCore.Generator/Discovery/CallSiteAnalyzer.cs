@@ -175,10 +175,12 @@ internal static class CallSiteAnalyzer
         {
             case "AsNoTracking":
                 return site.Supported(OperatorKind.AsNoTracking);
+            case "AsNoTrackingWithIdentityResolution":
+                return site.Supported(OperatorKind.AsNoTrackingWithIdentityResolution);
+            case "AsTracking":
+                return site.Supported(OperatorKind.AsTracking);
             case "IgnoreQueryFilters":
                 return site.Supported(OperatorKind.IgnoreQueryFilters);
-            case "AsTracking":
-                return site.Reject(DiagnosticDescriptors.TrackingNotSupported, $"'{method.Name}' is not supported");
             case "Include" or "ThenInclude":
                 return site.Reject(DiagnosticDescriptors.IncludeNotSupported, method.Name);
             case "ToListAsync" or "ToArrayAsync":
@@ -344,8 +346,6 @@ internal static class CallSiteAnalyzer
                 ? EntityShapeBuilder.Build(elementSymbol, semanticModel.Compilation, location)
                 : null;
             var interception = semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax();
-            var runsTrackedQuery = TrackingAnalysis.ReturnsEntities(kind)
-                && TrackingAnalysis.RunsTrackedQuery(invocation, semanticModel, cancellationToken);
 
             return new CallSite(
                 _elementType,
@@ -358,8 +358,7 @@ internal static class CallSiteAnalyzer
                 interception,
                 predicate,
                 GetSignature(operation.TargetMethod),
-                orderProperty,
-                runsTrackedQuery);
+                orderProperty);
         }
 
         private static bool IsPredicate(OperatorKind kind, bool hasPredicate)

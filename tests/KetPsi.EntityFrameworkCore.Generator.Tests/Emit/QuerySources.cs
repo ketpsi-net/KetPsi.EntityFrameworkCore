@@ -84,6 +84,12 @@ internal static class QuerySources
                 return query.Take(5).ToList();
             }
 
+            public List<Blog> Tracked(int min) => db.Blogs.AsTracking().Where(b => b.Rating >= min).ToList();
+
+            public List<Blog> TrackedWithBehavior(QueryTrackingBehavior behavior) => db.Blogs.AsNoTracking().AsTracking(behavior).ToList();
+
+            public List<Blog> IdentityResolved() => db.Blogs.AsNoTrackingWithIdentityResolution().ToList();
+
             public List<Blog> TrackedAcrossStatements()
             {
                 IQueryable<Blog> query = db.Blogs;

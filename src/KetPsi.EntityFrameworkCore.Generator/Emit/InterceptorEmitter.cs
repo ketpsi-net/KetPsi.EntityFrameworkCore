@@ -132,8 +132,12 @@ internal static class InterceptorEmitter
                 return $"{SqlQuery}.{site.Operator}({source}, \"{site.OrderProperty}\")";
             case OperatorKind.Skip or OperatorKind.Take:
                 return $"{SqlQuery}.{site.Operator}({source}, {parameters[1].Name})";
-            case OperatorKind.AsNoTracking:
-                return $"{SqlQuery}.AsNoTracking({source})";
+            case OperatorKind.AsNoTracking or OperatorKind.AsNoTrackingWithIdentityResolution:
+                return $"{SqlQuery}.{site.Operator}({source})";
+            case OperatorKind.AsTracking:
+                return parameters.Count > 1
+                    ? $"{SqlQuery}.AsTracking({source}, {parameters[1].Name})"
+                    : $"{SqlQuery}.AsTracking({source})";
             case OperatorKind.IgnoreQueryFilters:
                 return parameters.Count > 1
                     ? $"{SqlQuery}.IgnoreQueryFilters({source}, {parameters[1].Name})"

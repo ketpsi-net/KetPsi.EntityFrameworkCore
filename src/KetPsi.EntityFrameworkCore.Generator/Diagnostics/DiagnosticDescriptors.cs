@@ -31,12 +31,6 @@ internal static class DiagnosticDescriptors
         "Include not supported",
         "'{0}' is not supported yet. Load related entities with separate queries.");
 
-    public static readonly DiagnosticDescriptor TrackingNotSupported = Error(
-        "KP1003",
-        "Tracking query not supported",
-        "{0}. KetPsi.EntityFrameworkCore only runs no-tracking queries; add AsNoTracking() or set the context's " +
-        "QueryTrackingBehavior to NoTracking.");
-
     public static readonly DiagnosticDescriptor RawSqlNotSupported = Error(
         "KP1004",
         "Raw SQL not supported",
