@@ -183,14 +183,20 @@ internal static class QueryRunner
         var ordinals = entity.GetOrdinals(reader.PropertyNames);
         Func<DbDataReader, T> materialize = row => reader.Read(row, ordinals);
 
-        // Keyless entity types are never tracked, as in EF Core.
+        // Keyless entity types are never tracked or identity-resolved, as in EF Core.
         var tracking = ResolveTracking(query.Tail, query.Context.ChangeTracker.QueryTrackingBehavior);
+        var untracked = materialize;
         if (tracking == QueryTrackingBehavior.TrackAll && entity.PrimaryKey is not null)
         {
             EnsureTrackingSupported(RuntimeFeature.IsDynamicCodeSupported, EfCoreMajorVersion);
             var tracker = new EntityTracker<T>(query.Context, entity);
-            var untracked = materialize;
             materialize = row => tracker.Track(row, untracked);
+        }
+        else if (tracking == QueryTrackingBehavior.NoTrackingWithIdentityResolution && entity.PrimaryKey is not null)
+        {
+            // Prepared once per execution, so each execution resolves identities on its own.
+            var identities = new IdentityMap<T>(entity);
+            materialize = row => identities.Resolve(row, untracked);
         }
 
         return new PreparedRows<T>(dialect, statement, materialize);

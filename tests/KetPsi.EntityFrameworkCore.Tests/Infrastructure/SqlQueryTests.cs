@@ -146,6 +146,34 @@ public sealed class SqlQueryTests : IDisposable
     }
 
     [Fact]
+    public void AsTracking_AppendsTrackAllBehavior()
+    {
+        var query = AsSql(SqlQuery.AsTracking(_db.Blogs));
+
+        Assert.Equal(QueryTrackingBehavior.TrackAll, Assert.IsType<TrackingNode>(query.Tail).Behavior);
+    }
+
+    [Theory]
+    [InlineData(QueryTrackingBehavior.TrackAll)]
+    [InlineData(QueryTrackingBehavior.NoTracking)]
+    [InlineData(QueryTrackingBehavior.NoTrackingWithIdentityResolution)]
+    public void AsTrackingWithBehavior_AppendsThatBehavior(QueryTrackingBehavior behavior)
+    {
+        var query = AsSql(SqlQuery.AsTracking(_db.Blogs, behavior));
+
+        Assert.Equal(behavior, Assert.IsType<TrackingNode>(query.Tail).Behavior);
+    }
+
+    [Fact]
+    public void AsNoTrackingWithIdentityResolution_AppendsBehavior()
+    {
+        var query = AsSql(SqlQuery.AsNoTrackingWithIdentityResolution(_db.Blogs));
+
+        var node = Assert.IsType<TrackingNode>(query.Tail);
+        Assert.Equal(QueryTrackingBehavior.NoTrackingWithIdentityResolution, node.Behavior);
+    }
+
+    [Fact]
     public void IgnoreQueryFilters_WithoutKeys_IgnoresAllFilters()
     {
         var query = AsSql(SqlQuery.IgnoreQueryFilters(_db.Blogs));

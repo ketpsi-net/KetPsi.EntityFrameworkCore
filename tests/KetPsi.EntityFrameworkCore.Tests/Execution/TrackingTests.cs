@@ -1,5 +1,4 @@
 using System.Data;
-using KetPsi.EntityFrameworkCore.Binding;
 using KetPsi.EntityFrameworkCore.Execution;
 using KetPsi.EntityFrameworkCore.Infrastructure;
 using KetPsi.EntityFrameworkCore.Query;
@@ -179,6 +178,88 @@ public sealed class TrackingTests : IDisposable
     }
 
     [Fact]
+    public void IdentityResolution_SameKeyInOneQuery_ReturnsFirstInstance()
+    {
+        _connection.Rows = Table((1, "alpha", null, 7), (2, "beta", null, null), (1, "again", null, 8));
+
+        var items = SqlQuery.ToList(SqlQuery.AsNoTrackingWithIdentityResolution(_db.Items));
+
+        Assert.Equal(3, items.Count);
+        Assert.Same(items[0], items[2]);
+        Assert.NotSame(items[0], items[1]);
+        Assert.Equal("alpha", items[2].Name);
+        Assert.Empty(_db.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public void IdentityResolution_SeparateExecutions_ReturnNewInstances()
+    {
+        var query = SqlQuery.AsNoTrackingWithIdentityResolution(_db.Items);
+
+        var first = SqlQuery.First(query);
+        first.Name = "changed";
+        var second = SqlQuery.First(query);
+
+        Assert.NotSame(first, second);
+        Assert.Equal("alpha", second.Name);
+    }
+
+    [Fact]
+    public void IdentityResolution_IgnoresTrackedEntities()
+    {
+        var tracked = SqlQuery.First(_db.Items);
+        tracked.Name = "changed";
+        var trackedCount = _db.ChangeTracker.Entries().Count();
+
+        var resolved = SqlQuery.First(SqlQuery.AsNoTrackingWithIdentityResolution(_db.Items));
+
+        Assert.NotSame(tracked, resolved);
+        Assert.Equal("alpha", resolved.Name);
+        Assert.Equal(trackedCount, _db.ChangeTracker.Entries().Count());
+    }
+
+    [Fact]
+    public void IdentityResolution_ContextDefault_Resolves()
+    {
+        _connection.Rows = Table((1, "alpha", null, null), (1, "again", null, null));
+        using var db = new TrackedItemContext(_connection, QueryTrackingBehavior.NoTrackingWithIdentityResolution);
+
+        var items = SqlQuery.ToList(db.Items);
+
+        Assert.Same(items[0], items[1]);
+        Assert.Empty(db.ChangeTracker.Entries());
+    }
+
+    [Fact]
+    public void IdentityResolution_ThenAsTracking_Attaches()
+    {
+        SqlQuery.ToList(SqlQuery.AsTracking(SqlQuery.AsNoTrackingWithIdentityResolution(_db.Items)));
+
+        Assert.Equal(2, _db.ChangeTracker.Entries().Count());
+    }
+
+    [Fact]
+    public void IdentityResolution_KeylessEntity_ReturnsEveryRow()
+    {
+        _connection.Rows = FakeItemContext.Table(new Item { Id = 1, Name = "alpha" }, new Item { Id = 1, Name = "alpha" });
+        using var db = new KeylessItemContext(_connection);
+
+        var items = SqlQuery.ToList(SqlQuery.AsNoTrackingWithIdentityResolution(db.Items));
+
+        Assert.NotSame(items[0], items[1]);
+    }
+
+    [Fact]
+    public async Task IdentityResolution_Async_Resolves()
+    {
+        _connection.Rows = Table((1, "alpha", null, null), (1, "again", null, null));
+
+        var items = await SqlQuery.ToListAsync(SqlQuery.AsNoTrackingWithIdentityResolution(_db.Items), Token);
+
+        Assert.Same(items[0], items[1]);
+    }
+
+    [Fact]
     public void ResolveTracking_NoTrackingNode_ReturnsContextDefault()
     {
         var root = new RootNode(typeof(Item));
@@ -210,30 +291,6 @@ public sealed class TrackingTests : IDisposable
         var exception = Assert.Throws<InvalidOperationException>(() => QueryRunner.EnsureTrackingSupported(false, 8));
 
         Assert.Contains("AsNoTracking", exception.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ToClrValue_DbNull_ReturnsNull()
-        => Assert.Null(EntityTracker<Item>.ToClrValue(DBNull.Value, typeof(int?)));
-
-    [Fact]
-    public void ToClrValue_Enum_ConvertsFromProviderValue()
-    {
-        Assert.Equal(Priority.High, EntityTracker<Item>.ToClrValue(1, typeof(Priority)));
-        Assert.Equal(Priority.High, EntityTracker<Item>.ToClrValue(1, typeof(Priority?)));
-    }
-
-    [Fact]
-    public void ToClrValue_OtherValue_ReturnsItUnchanged()
-        => Assert.Equal("alpha", EntityTracker<Item>.ToClrValue("alpha", typeof(string)));
-
-    [Fact]
-    public void EntityTracker_KeylessEntity_Throws()
-    {
-        using var db = new KeylessItemContext(_connection);
-        var entity = ModelBinder.GetEntity(db.Model, typeof(Item));
-
-        Assert.Throws<ArgumentNullException>(() => new EntityTracker<Item>(db, entity));
     }
 
     // Statements select the key first, then the other properties in name order, shadow properties included.

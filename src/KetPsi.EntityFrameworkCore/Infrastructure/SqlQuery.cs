@@ -81,6 +81,11 @@ public static class SqlQuery
         where T : class
         => AppendTracking(source, QueryTrackingBehavior.NoTracking);
 
+    /// <summary>Appends <c>AsNoTrackingWithIdentityResolution</c>: rows with the same key return one instance per execution.</summary>
+    public static IQueryable<T> AsNoTrackingWithIdentityResolution<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
+        where T : class
+        => AppendTracking(source, QueryTrackingBehavior.NoTrackingWithIdentityResolution);
+
     /// <summary>Appends <c>AsTracking</c>: the entities are attached to the context's change tracker.</summary>
     public static IQueryable<T> AsTracking<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
         where T : class
