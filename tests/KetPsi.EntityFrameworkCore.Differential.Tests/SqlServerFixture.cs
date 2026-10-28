@@ -22,7 +22,11 @@ public sealed class SqlServerFixture : IAsyncLifetime
 
         await using var db = new DiffDb(ConnectionString, Tenant);
         await db.Database.EnsureCreatedAsync();
-        db.Blogs.AddRange(SeedData.Blogs());
+        foreach (var blog in SeedData.Blogs())
+        {
+            db.Blogs.Add(blog).Property<int>(DiffDb.Revision).CurrentValue = SeedData.Revision(blog.Id);
+        }
+
         await db.SaveChangesAsync();
     }
 

@@ -5,6 +5,7 @@ using System.Collections;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 namespace KetPsi.EntityFrameworkCore.Differential.Tests;
 
@@ -128,6 +129,21 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "IgnoringFilters", [] },
             { "DeletedIgnoringFilters", [] },
             { "CountIgnoringFilters", [] },
+            { "Tracked", [4] },
+            { "AsTrackingAfterAsNoTracking", [] },
+            { "AsTrackingWithBehavior", [QueryTrackingBehavior.TrackAll] },
+            { "AsTrackingWithBehavior", [QueryTrackingBehavior.NoTracking] },
+            { "AsTrackingWithBehavior", [QueryTrackingBehavior.NoTrackingWithIdentityResolution] },
+            { "IdentityResolution", [] },
+            { "ContextDefaultNoTracking", [] },
+            { "TrackedFirst", [] },
+            { "TrackedToListAsync", [] },
+            { "TrackedSingleOrDefaultAsync", [5] },
+            { "TrackedSingleOrDefaultAsync", [10] },
+            { "RequeryKeepsTrackedValues", [] },
+            { "LoadModifySave", [2] },
+            { "LoadModifyShadowSaveAsync", [7] },
+            { "LoadDeleteSave", [] },
         };
 
 #if NET10_0_OR_GREATER
@@ -140,8 +156,8 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
     [MemberData(nameof(Cases))]
     public async Task Query_MatchesEfCore(string query, object?[] arguments)
     {
-        var (stock, stockCommands) = await RunAsync(StockQueries, query, arguments);
-        var (intercepted, interceptedCommands) = await RunAsync(InterceptedQueries, query, arguments);
+        var (stock, stockTracking, stockReads) = await RunAsync(StockQueries, query, arguments);
+        var (intercepted, interceptedTracking, interceptedReads) = await RunAsync(InterceptedQueries, query, arguments);
 
 #if NET8_0
         if (EfCore8NullSemantics.TryGetValue(Key(query, arguments), out var csharpPredicate))
@@ -154,11 +170,25 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
 #endif
 
         Assert.Equal(stock, intercepted);
+        Assert.Equal(stockTracking, interceptedTracking);
 
-        // EF Core ran the stock query; the intercepted one never reached EF Core's command pipeline.
-        Assert.True(stockCommands > 0, "Stock EF Core executed no command.");
-        Assert.Equal(0, interceptedCommands);
+        // Guards against comparing two empty trackers: these cases must track entities, and the saves must write.
+        var key = Key(query, arguments);
+        Assert.Equal(TrackingCases.Contains(key), !stockTracking.StartsWith("tracked:\n\nwritten:", StringComparison.Ordinal));
+        Assert.Equal(query.StartsWith("Load", StringComparison.Ordinal), !stockTracking.EndsWith("written:\n", StringComparison.Ordinal));
+
+        // EF Core ran the stock query; the intercepted one never reached EF Core's query pipeline.
+        Assert.True(stockReads > 0, "Stock EF Core executed no query.");
+        Assert.Equal(0, interceptedReads);
     }
+
+    // The cases that leave entities in the change tracker; every other case must leave it empty.
+    private static readonly HashSet<string> TrackingCases = new(StringComparer.Ordinal)
+    {
+        "Tracked(4)", "AsTrackingAfterAsNoTracking()", "AsTrackingWithBehavior(TrackAll)", "TrackedFirst()",
+        "TrackedToListAsync()", "TrackedSingleOrDefaultAsync(5)", "RequeryKeepsTrackedValues()", "LoadModifySave(2)",
+        "LoadModifyShadowSaveAsync(7)",
+    };
 
 #if NET8_0
     private static readonly Dictionary<string, Func<Blog, bool>> EfCore8NullSemantics = new(StringComparer.Ordinal)
@@ -194,7 +224,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         Assert.True(uncovered.Count == 0, "Queries without a differential case: " + string.Join(", ", uncovered));
     }
 
-    private async Task<(string Result, int Commands)> RunAsync(Type queries, string query, object?[] arguments)
+    private async Task<(string Result, string Tracking, int Reads)> RunAsync(Type queries, string query, object?[] arguments)
     {
         var counter = new CommandCounter();
         await using var db = new DiffDb(fixture.ConnectionString, SqlServerFixture.Tenant, counter);
@@ -221,7 +251,25 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             result = $"throws {inner.GetType().Name}: {inner.Message}";
         }
 
-        return (result, counter.Count);
+        return (result, DescribeTracking(db, counter), counter.Reads);
+    }
+
+    // The change tracker after the query, by key, with each entry's state, modified properties, shadow value and
+    // entity values, then the commands SaveChanges sent. Stock EF Core and KetPsi must leave the context alike.
+    private static string DescribeTracking(DiffDb db, CommandCounter counter)
+    {
+        var entries = db.ChangeTracker.Entries<Blog>()
+            .OrderBy(e => e.Entity.Id)
+            .Select(e =>
+            {
+                var revision = e.Property<int>(DiffDb.Revision);
+                var modified = string.Join(",", e.Properties.Where(p => p.IsModified).Select(p => p.Metadata.Name).Order(StringComparer.Ordinal));
+                return string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"{e.State}|revision {revision.OriginalValue}->{revision.CurrentValue}|modified {modified}|{Describe(e.Entity)}");
+            });
+
+        return "tracked:\n" + string.Join("\n", entries) + "\nwritten:\n" + string.Join("\n", counter.Writes);
     }
 
     private static Exception? Unwrap(Exception exception)

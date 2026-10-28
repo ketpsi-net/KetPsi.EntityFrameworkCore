@@ -25,6 +25,8 @@ internal static class SeedData
 
     public static Guid ExternalId(int id) => new($"00000000-0000-0000-0000-{id:D12}");
 
+    public static int Revision(int id) => id * 10;
+
     private static Blog Blog(
         int id,
         string name,

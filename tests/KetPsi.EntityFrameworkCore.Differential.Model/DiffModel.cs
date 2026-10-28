@@ -42,6 +42,9 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
     public const string SoftDeleteFilter = "SoftDelete";
     public const string TenantFilter = "Tenant";
 
+    /// <summary>A shadow property, so tracked queries must carry values the entity class does not have.</summary>
+    public const string Revision = "Revision";
+
     private readonly int _tenantId = tenantId;
 
     public DbSet<Blog> Blogs => Set<Blog>();
@@ -62,6 +65,7 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
             b.Property(x => x.Id).ValueGeneratedNever();
             b.Property(x => x.Name).HasMaxLength(50);
             b.Property(x => x.Price).HasPrecision(10, 2);
+            b.Property<int>(Revision);
 #if NET10_0_OR_GREATER
             b.HasQueryFilter(SoftDeleteFilter, x => !x.IsDeleted);
             b.HasQueryFilter(TenantFilter, x => x.TenantId == _tenantId);
@@ -71,36 +75,69 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
         });
 }
 
-/// <summary>Counts the commands EF Core itself executes; KetPsi queries never go through EF's command pipeline.</summary>
+/// <summary>
+/// Records the commands EF Core itself executes. KetPsi queries never go through EF's command pipeline, so with
+/// KetPsi the only commands here are the ones SaveChanges sends.
+/// </summary>
 public sealed class CommandCounter : DbCommandInterceptor
 {
-    public int Count { get; private set; }
+    /// <summary>The number of queries EF Core ran.</summary>
+    public int Reads { get; private set; }
+
+    /// <summary>The text of every other command, such as the UPDATE SaveChanges sends, in order.</summary>
+    public List<string> Writes { get; } = [];
 
     public override InterceptionResult<DbDataReader> ReaderExecuting(
         DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
     {
-        Count++;
+        Record(command);
         return result;
     }
 
     public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
         DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
     {
-        Count++;
+        Record(command);
         return ValueTask.FromResult(result);
     }
 
     public override InterceptionResult<object> ScalarExecuting(
         DbCommand command, CommandEventData eventData, InterceptionResult<object> result)
     {
-        Count++;
+        Record(command);
         return result;
     }
 
     public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
         DbCommand command, CommandEventData eventData, InterceptionResult<object> result, CancellationToken cancellationToken = default)
     {
-        Count++;
+        Record(command);
         return ValueTask.FromResult(result);
+    }
+
+    public override InterceptionResult<int> NonQueryExecuting(
+        DbCommand command, CommandEventData eventData, InterceptionResult<int> result)
+    {
+        Record(command);
+        return result;
+    }
+
+    public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+        DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+    {
+        Record(command);
+        return ValueTask.FromResult(result);
+    }
+
+    private void Record(DbCommand command)
+    {
+        if (command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+        {
+            Reads++;
+        }
+        else
+        {
+            Writes.Add(command.CommandText);
+        }
     }
 }

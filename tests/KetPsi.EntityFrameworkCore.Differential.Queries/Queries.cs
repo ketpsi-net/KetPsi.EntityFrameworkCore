@@ -226,6 +226,67 @@ public static class Queries
 
     public static int CountIgnoringFilters(DiffDb db) => db.Blogs.IgnoreQueryFilters().Count();
 
+    // Tracking: the test also compares the change tracker after each query, and the commands SaveChanges sends.
+    // Saves run in a transaction that is rolled back, so the data stays as seeded.
+    public static List<Blog> Tracked(DiffDb db, int rating) => db.Blogs.Where(b => b.Rating >= rating).ToList();
+
+    public static List<Blog> AsTrackingAfterAsNoTracking(DiffDb db) => db.Blogs.AsNoTracking().AsTracking().Where(b => b.IsActive).ToList();
+
+    public static List<Blog> AsTrackingWithBehavior(DiffDb db, QueryTrackingBehavior behavior)
+        => db.Blogs.AsTracking(behavior).Where(b => b.Rating > 3).ToList();
+
+    public static List<Blog> IdentityResolution(DiffDb db) => db.Blogs.AsNoTrackingWithIdentityResolution().Where(b => b.Views != null).ToList();
+
+    public static List<Blog> ContextDefaultNoTracking(DiffDb db)
+    {
+        db.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+        return db.Blogs.Where(b => b.IsActive).ToList();
+    }
+
+    public static Blog TrackedFirst(DiffDb db) => db.Blogs.OrderBy(b => b.Id).First(b => b.Rating == 4);
+
+    public static Task<List<Blog>> TrackedToListAsync(DiffDb db) => db.Blogs.OrderBy(b => b.Id).Take(3).ToListAsync();
+
+    public static Task<Blog?> TrackedSingleOrDefaultAsync(DiffDb db, int id) => db.Blogs.SingleOrDefaultAsync(b => b.Id == id);
+
+    // A second query returns the tracked instance as it is, not the database values.
+    public static List<Blog> RequeryKeepsTrackedValues(DiffDb db)
+    {
+        var first = db.Blogs.First(b => b.Id == 3);
+        first.Name = "changed";
+        first.Rating = 1;
+        return db.Blogs.Where(b => b.Rating == 5).ToList();
+    }
+
+    public static Blog LoadModifySave(DiffDb db, int id)
+    {
+        using var transaction = db.Database.BeginTransaction();
+        var blog = db.Blogs.Single(b => b.Id == id);
+        blog.Name = "renamed";
+        blog.Views = null;
+        db.SaveChanges();
+        return blog;
+    }
+
+    public static async Task<Blog> LoadModifyShadowSaveAsync(DiffDb db, int id)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        var blog = await db.Blogs.FirstAsync(b => b.Id == id);
+        var revision = db.Entry(blog).Property<int>(DiffDb.Revision);
+        revision.CurrentValue++;
+        await db.SaveChangesAsync();
+        return blog;
+    }
+
+    public static List<Blog> LoadDeleteSave(DiffDb db)
+    {
+        using var transaction = db.Database.BeginTransaction();
+        var blogs = db.Blogs.Where(b => b.Status == Status.Archived).ToList();
+        db.Blogs.RemoveRange(blogs);
+        db.SaveChanges();
+        return blogs;
+    }
+
 #if NET10_0_OR_GREATER
     public static List<Blog> IgnoringTenantFilter(DiffDb db)
         => db.Blogs.AsNoTracking().IgnoreQueryFilters([DiffDb.TenantFilter]).OrderBy(b => b.Id).ToList();
