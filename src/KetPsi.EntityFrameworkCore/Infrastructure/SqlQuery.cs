@@ -201,28 +201,39 @@ public static class SqlQuery
 
     /// <summary>Appends <c>Select</c>: the query returns what <paramref name="reader"/> builds from each row.</summary>
     /// <param name="source">The entity query.</param>
-    /// <param name="propertyNames">The entity properties the reader reads, in the order of its ordinals.</param>
-    /// <param name="reader">The generated reader: the <c>Select</c> lambda's body over the row's columns.</param>
-    /// <exception cref="ArgumentException"><paramref name="propertyNames"/> is empty.</exception>
+    /// <param name="propertyNames">
+    /// The property paths the reader reads, in the order of its ordinals: <c>"Name"</c> for <c>x.Name</c>, or
+    /// <c>"Blog.Name"</c> for <c>x.Blog.Name</c> through a reference navigation.
+    /// </param>
+    /// <param name="entityPaths">
+    /// The navigation paths of the entities the reader uses, in the order of its entities: <c>""</c> for <c>x</c>
+    /// itself, or <c>"Blog"</c> for <c>x.Blog</c>.
+    /// </param>
+    /// <param name="reader">The generated reader: the <c>Select</c> lambda's body over the row's columns and entities.</param>
+    /// <exception cref="ArgumentException">Both <paramref name="propertyNames"/> and <paramref name="entityPaths"/> are empty.</exception>
     public static IQueryable<TResult> Select<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TResult>(
-        IQueryable<TSource> source, IReadOnlyList<string> propertyNames, ProjectionReader<TResult> reader)
+        IQueryable<TSource> source, IReadOnlyList<string> propertyNames, IReadOnlyList<string> entityPaths, ProjectionReader<TResult> reader)
         where TSource : class
     {
         ArgumentNullException.ThrowIfNull(propertyNames);
+        ArgumentNullException.ThrowIfNull(entityPaths);
         ArgumentNullException.ThrowIfNull(reader);
-        if (propertyNames.Count == 0)
+        if (propertyNames.Count == 0 && entityPaths.Count == 0)
         {
             throw new ArgumentException(ExceptionMessages.ProjectionRequiresColumns, nameof(propertyNames));
         }
 
         var query = ToSqlQueryable(source);
-        return new ProjectedQueryable<TResult>(query.Context, new ProjectionNode(query.Tail, propertyNames), reader);
+        return new ProjectedQueryable<TResult>(query.Context, new ProjectionNode(query.Tail, propertyNames, entityPaths), reader);
     }
 
     /// <summary>Computes <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c> of an entity property.</summary>
     /// <param name="source">The entity query.</param>
     /// <param name="function">The aggregate.</param>
-    /// <param name="propertyName">The property the selector reads, such as <c>Price</c> for <c>x =&gt; x.Price</c>.</param>
+    /// <param name="propertyName">
+    /// The property path the selector reads, such as <c>"Price"</c> for <c>x =&gt; x.Price</c> or <c>"Blog.Name"</c>
+    /// for <c>x =&gt; x.Blog.Name</c>.
+    /// </param>
     /// <param name="valueType">The numeric type of the <c>Sum</c> or <c>Average</c> overload; <see cref="AggregateValueType.Column"/> for <c>Min</c> and <c>Max</c>.</param>
     /// <exception cref="InvalidOperationException">There are no rows and <typeparamref name="TResult"/> cannot be null.</exception>
     public static TResult Aggregate<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TResult>(

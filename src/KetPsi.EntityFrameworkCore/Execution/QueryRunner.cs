@@ -220,30 +220,15 @@ internal static class QueryRunner
         where T : class
     {
         var context = query.Context;
-        var model = context.Model;
-        BoundEntity Bind(Type type) => ModelBinder.GetEntity(model, type);
-
-        var entity = Bind(query.Root.EntityType);
-        if (IncludeTree.FromChain(entity, query.Tail, Bind) is not { } includes)
+        var bind = Binder(context);
+        var entity = bind(query.Root.EntityType);
+        if (IncludeTree.FromChain(entity, query.Tail, bind) is not { } includes)
         {
             return null;
         }
 
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
-
-        // IgnoreQueryFilters applies to every entity of the query, included ones too, as in EF Core.
-        var ignored = IgnoredQueryFilters.FromChain(query.Tail);
-        var filters = new Dictionary<BoundEntity, IReadOnlyList<ResolvedQueryFilter>>(ReferenceEqualityComparer.Instance);
-        IReadOnlyList<ResolvedQueryFilter> FiltersFor(BoundEntity bound)
-        {
-            if (!filters.TryGetValue(bound, out var resolved))
-            {
-                filters.Add(bound, resolved = QueryFilterResolver.Resolve(context, bound, ignored));
-            }
-
-            return resolved;
-        }
-
+        var filtersFor = FiltersFor(context, query.Tail);
         var tracking = ResolveTracking(query.Tail, context.ChangeTracker.QueryTrackingBehavior);
         if (tracking == QueryTrackingBehavior.TrackAll)
         {
@@ -254,8 +239,34 @@ internal static class QueryRunner
             includes.EnsureNoCycle();
         }
 
-        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, FiltersFor, rowLimit);
-        return new IncludedQuery(statement, new IncludeLoader(context, dialect, tracking, FiltersFor, Bind));
+        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, filtersFor, rowLimit);
+        return new IncludedQuery(statement, new IncludeLoader(context, dialect, tracking, filtersFor, bind));
+    }
+
+    /// <summary>Binds entity types against the context's model.</summary>
+    internal static Func<Type, BoundEntity> Binder(DbContext context)
+    {
+        var model = context.Model;
+        return type => ModelBinder.GetEntity(model, type);
+    }
+
+    /// <summary>
+    /// Resolves the query filters of each entity a query reads, once per entity. <c>IgnoreQueryFilters</c> applies to
+    /// every entity of the query, joined and included ones too, as in EF Core.
+    /// </summary>
+    internal static Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> FiltersFor(DbContext context, QueryNode tail)
+    {
+        var ignored = IgnoredQueryFilters.FromChain(tail);
+        var filters = new Dictionary<BoundEntity, IReadOnlyList<ResolvedQueryFilter>>(ReferenceEqualityComparer.Instance);
+        return bound =>
+        {
+            if (!filters.TryGetValue(bound, out var resolved))
+            {
+                filters.Add(bound, resolved = QueryFilterResolver.Resolve(context, bound, ignored));
+            }
+
+            return resolved;
+        };
     }
 
     private static PreparedRows<T> PrepareRows<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, int? rowLimit)
@@ -301,14 +312,15 @@ internal static class QueryRunner
     internal static (BoundEntity Entity, ISqlDialect Dialect, SqlStatement Statement) PrepareStatement(
         DbContext context, QueryNode tail, QueryTerminal terminal, int? rowLimit, SqlAggregate? aggregate = null)
     {
-        var entity = ModelBinder.GetEntity(context.Model, RootOf(tail).EntityType);
+        var bind = Binder(context);
+        var entity = bind(RootOf(tail).EntityType);
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
-        var filters = QueryFilterResolver.Resolve(context, entity, IgnoredQueryFilters.FromChain(tail));
-        var statement = SqlBuilder.Build(entity, tail, dialect, terminal, rowLimit, filters, aggregate);
+        var filtersFor = FiltersFor(context, tail);
+        var statement = SqlBuilder.Build(entity, tail, dialect, terminal, rowLimit, filtersFor(entity), aggregate, filtersFor, bind);
         return (entity, dialect, statement);
     }
 
-    private static RootNode RootOf(QueryNode tail)
+    internal static RootNode RootOf(QueryNode tail)
     {
         var node = tail;
         while (node.Parent is not null)

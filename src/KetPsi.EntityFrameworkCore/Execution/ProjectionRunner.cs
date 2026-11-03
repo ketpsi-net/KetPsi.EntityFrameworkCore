@@ -1,24 +1,39 @@
 using System.Data.Common;
 using System.Globalization;
+using System.Runtime.CompilerServices;
+using KetPsi.EntityFrameworkCore.Infrastructure;
 using KetPsi.EntityFrameworkCore.Query;
 using KetPsi.EntityFrameworkCore.Sql;
+using Microsoft.EntityFrameworkCore;
 
 namespace KetPsi.EntityFrameworkCore.Execution;
 
 /// <summary>
-/// Executes projected queries: the statement selects the projected columns, and the generated reader builds each
-/// result. Projections of entity properties are never tracked. Results and exceptions match LINQ and EF Core.
+/// Executes projected queries: the statement selects the projected columns and entities, and the generated reader
+/// builds each result. Projected entities are tracked, identity-resolved and given their includes as in EF Core, so
+/// a projection with entities reads every row before it returns any; one with only columns streams them.
+/// Results and exceptions match LINQ and EF Core.
 /// </summary>
 internal static class ProjectionRunner
 {
     public static IEnumerable<T> Enumerate<T>(ProjectedQueryable<T> query)
     {
+        if (PrepareEntities(query, rowLimit: null) is { } entities)
+        {
+            return LoadEntities(entities);
+        }
+
         var rows = Prepare(query, rowLimit: null);
         return QueryExecutor.Stream(query.Context, rows.Dialect, rows.Statement, rows.Materialize);
     }
 
     public static IAsyncEnumerable<T> EnumerateAsync<T>(ProjectedQueryable<T> query, CancellationToken cancellationToken)
     {
+        if (PrepareEntities(query, rowLimit: null) is { } entities)
+        {
+            return LoadEntitiesAsync(entities, cancellationToken);
+        }
+
         var rows = Prepare(query, rowLimit: null);
         return QueryExecutor.StreamAsync(query.Context, rows.Dialect, rows.Statement, rows.Materialize, cancellationToken);
     }
@@ -101,12 +116,22 @@ internal static class ProjectionRunner
 
     private static List<T> ReadRows<T>(ProjectedQueryable<T> query, int? rowLimit)
     {
+        if (PrepareEntities(query, rowLimit) is { } entities)
+        {
+            return entities.Loader.Load(entities.Statement, entities.Read);
+        }
+
         var rows = Prepare(query, rowLimit);
         return [.. QueryExecutor.Stream(query.Context, rows.Dialect, rows.Statement, rows.Materialize)];
     }
 
     private static async Task<List<T>> ReadRowsAsync<T>(ProjectedQueryable<T> query, int? rowLimit, CancellationToken cancellationToken)
     {
+        if (PrepareEntities(query, rowLimit) is { } entities)
+        {
+            return await entities.Loader.LoadAsync(entities.Statement, entities.Read, cancellationToken).ConfigureAwait(false);
+        }
+
         var rows = Prepare(query, rowLimit);
         var result = new List<T>();
         await foreach (var row in QueryExecutor
@@ -136,8 +161,67 @@ internal static class ProjectionRunner
         var (_, dialect, statement) = QueryRunner.PrepareStatement(query.Context, query.Tail, QueryTerminal.Rows, rowLimit);
         var ordinals = Ordinals(query.Projection);
         var reader = query.Reader;
-        return new PreparedRows<T>(dialect, statement, row => reader(row, ordinals));
+        return new PreparedRows<T>(dialect, statement, row => reader(row, ordinals, []));
+    }
+
+    // Included collections load with the keys of every entity read, so every row is read before any is returned.
+    private static IEnumerable<T> LoadEntities<T>(ProjectedEntities<T> entities)
+    {
+        foreach (var result in entities.Loader.Load(entities.Statement, entities.Read))
+        {
+            yield return result;
+        }
+    }
+
+    private static async IAsyncEnumerable<T> LoadEntitiesAsync<T>(
+        ProjectedEntities<T> entities, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var result in await entities.Loader.LoadAsync(entities.Statement, entities.Read, cancellationToken).ConfigureAwait(false))
+        {
+            yield return result;
+        }
+    }
+
+    /// <summary>The statement and loader for a projection that selects entities, or <see langword="null"/> without.</summary>
+    private static ProjectedEntities<T>? PrepareEntities<T>(ProjectedQueryable<T> query, int? rowLimit)
+    {
+        var projection = query.Projection;
+        if (projection.EntityPaths.Count == 0)
+        {
+            return null;
+        }
+
+        var context = query.Context;
+        var bind = QueryRunner.Binder(context);
+        var entity = bind(QueryRunner.RootOf(query.Tail).EntityType);
+        var includes = IncludeTree.FromChain(entity, query.Tail, bind);
+        var dialect = SqlDialects.Resolve(context.Database.ProviderName);
+        var filtersFor = QueryRunner.FiltersFor(context, query.Tail);
+
+        var tracking = QueryRunner.ResolveTracking(query.Tail, context.ChangeTracker.QueryTrackingBehavior);
+        if (tracking == QueryTrackingBehavior.TrackAll)
+        {
+            QueryRunner.EnsureTrackingSupported(RuntimeFeature.IsDynamicCodeSupported, QueryRunner.EfCoreMajorVersion);
+        }
+        else if (tracking == QueryTrackingBehavior.NoTracking)
+        {
+            // Only the includes a projected entity gets are applied, so only they can form a cycle, as in EF Core.
+            foreach (var path in projection.EntityPaths)
+            {
+                includes?.Find(path)?.EnsureNoCycle();
+            }
+        }
+
+        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, filtersFor, rowLimit, bind);
+        var ordinals = Ordinals(projection);
+        var reader = query.Reader;
+        return new ProjectedEntities<T>(
+            statement,
+            new IncludeLoader(context, dialect, tracking, filtersFor, bind),
+            (row, read) => reader(row, ordinals, read));
     }
 
     private sealed record PreparedRows<T>(ISqlDialect Dialect, SqlStatement Statement, Func<DbDataReader, T> Materialize);
+
+    private sealed record ProjectedEntities<T>(IncludeStatement Statement, IncludeLoader Loader, Func<DbDataReader, object?[], T> Read);
 }

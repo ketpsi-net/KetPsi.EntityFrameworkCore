@@ -50,7 +50,7 @@ public sealed class AggregateTests : IDisposable
     public async Task Aggregate_OfProjection_SyncAndAsync()
     {
         _connection.Scalar = "zeta";
-        var names = SqlQuery.Select(_db.Items, [nameof(Item.Name)], static (reader, ordinals) => reader.GetString(ordinals[0]));
+        var names = SqlQuery.Select(_db.Items, [nameof(Item.Name)], [], static (reader, ordinals, _) => reader.GetString(ordinals[0]));
 
         Assert.Equal("zeta", SqlProjection.Aggregate<string, string>(names, AggregateFunction.Max, AggregateValueType.Column));
         Assert.Equal("zeta", await SqlProjection.AggregateAsync<string, string>(names, AggregateFunction.Max, AggregateValueType.Column, Token));

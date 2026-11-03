@@ -88,7 +88,13 @@ internal static class ExceptionMessages
         "An aggregate without a selector works on a query projected to one property, such as Select(x => x.Price).Sum().";
 
     public const string ProjectionRequiresColumns =
-        "A projection reads at least one entity property.";
+        "A projection reads at least one entity property or entity.";
+
+    public const string CollectionNavigationInProjection =
+        "KetPsi.EntityFrameworkCore cannot project the collection navigation '{1}' of '{0}' yet; include it on a projected entity instead.";
+
+    public const string AggregateNeedsColumnOnly =
+        "An aggregate works on one column, but the projection selects an entity.";
 
     public const string NotAProjectedQuery =
         "KetPsi.EntityFrameworkCore can only continue a query projected by an intercepted Select, but the source is of type '{0}'.";

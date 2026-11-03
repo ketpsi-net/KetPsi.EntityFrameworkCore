@@ -88,7 +88,8 @@ var blogs = await db.Blogs
   separate statements, which gives the same results.
 - Tracking queries attach every entity and mark included navigations as loaded; no-tracking queries set navigations
   in both directions, with a separate instance of a shared reference per row; `AsNoTrackingWithIdentityResolution`
-  shares one instance per key.
+  shares one instance per key and, like the change tracker, connects any two entities the query read that are
+  related, even through a navigation that wasn't included.
 - Included collections are never null: a property without an initializer gets a `HashSet<T>` (interfaces that can
   hold one) or a `List<T>`, like EF Core. A null getter-only collection throws at runtime; initialize it.
 - As in EF Core, a no-tracking query cannot include a navigation and then its inverse

@@ -121,7 +121,7 @@ public sealed class SqlBuilderProjectionTests : SqlBuilderTestBase
         => Assert.Throws<InvalidOperationException>(() => Projected(Select(Items, "Missing")));
 
     internal static IQueryable<string> Select(IQueryable<Item> source, params string[] propertyNames)
-        => SqlQuery.Select(source, propertyNames, static (reader, ordinals) => reader.GetString(ordinals[0]));
+        => SqlQuery.Select(source, propertyNames, [], static (reader, ordinals, _) => reader.GetString(ordinals[0]));
 
     private string Projected<T>(IQueryable<T> query, QueryTerminal terminal = QueryTerminal.Rows, int? rowLimit = null)
         => SqlBuilder.Build(Entity, ((ProjectedQueryable<T>)query).Tail, SqlServerDialect.Instance, terminal, rowLimit).CommandText;

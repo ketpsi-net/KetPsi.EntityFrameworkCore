@@ -29,7 +29,7 @@ public sealed class ProjectionTests : IDisposable
         _connection.Rows = Table(("alpha", 1), ("beta", 2));
 
         var items = SqlProjection.ToList(
-            Project(static (reader, ordinals) => new { Name = reader.GetString(ordinals[0]), Id = reader.GetInt32(ordinals[1]) }, nameof(Item.Name), nameof(Item.Id)));
+            Project(static (reader, ordinals, _) => new { Name = reader.GetString(ordinals[0]), Id = reader.GetInt32(ordinals[1]) }, nameof(Item.Name), nameof(Item.Id)));
 
         Assert.Equal([new { Name = "alpha", Id = 1 }, new { Name = "beta", Id = 2 }], items);
         Assert.Equal("SELECT [t0].[Name], [t0].[Id] FROM [shop].[Items] AS [t0]", _connection.LastCommand.CommandText);
@@ -151,7 +151,7 @@ public sealed class ProjectionTests : IDisposable
     {
         _connection.Rows = IdTable(3);
 
-        SqlProjection.ToList(SqlProjection.Take(SqlProjection.Skip(SqlQuery.Select(SqlQuery.OrderBy(_db.Items, nameof(Item.Id)), [nameof(Item.Id)], ReadId), 2), 1));
+        SqlProjection.ToList(SqlProjection.Take(SqlProjection.Skip(SqlQuery.Select(SqlQuery.OrderBy(_db.Items, nameof(Item.Id)), [nameof(Item.Id)], [], ReadId), 2), 1));
 
         Assert.Equal(
             "SELECT [t0].[Id] FROM [shop].[Items] AS [t0] ORDER BY [t0].[Id] OFFSET @p0 ROWS FETCH NEXT @p1 ROWS ONLY",
@@ -189,7 +189,7 @@ public sealed class ProjectionTests : IDisposable
     [Fact]
     public void Ordinals_MapRepeatedNamesToTheSameColumn()
     {
-        var projection = new ProjectionNode(new RootNode(typeof(Item)), [nameof(Item.Name), nameof(Item.Id), nameof(Item.Name)]);
+        var projection = new ProjectionNode(new RootNode(typeof(Item)), [nameof(Item.Name), nameof(Item.Id), nameof(Item.Name)], []);
 
         Assert.Equal([nameof(Item.Name), nameof(Item.Id)], projection.Columns);
         Assert.Equal([0, 1, 0], ProjectionRunner.Ordinals(projection));
@@ -211,22 +211,23 @@ public sealed class ProjectionTests : IDisposable
     }
 
     [Fact]
-    public void Select_WithoutProperties_Throws()
-        => Assert.Throws<ArgumentException>(() => SqlQuery.Select(_db.Items, [], ReadId));
+    public void Select_WithoutPropertiesOrEntities_Throws()
+        => Assert.Throws<ArgumentException>(() => SqlQuery.Select(_db.Items, [], [], ReadId));
 
     [Fact]
     public void Select_ReturnsAProjectedQuery()
         => Assert.IsType<ProjectedQueryable<int>>(Ids());
 
-    private static int ReadId(System.Data.Common.DbDataReader reader, ReadOnlySpan<int> ordinals) => reader.GetInt32(ordinals[0]);
+    private static int ReadId(System.Data.Common.DbDataReader reader, ReadOnlySpan<int> ordinals, ReadOnlySpan<object?> entities)
+        => reader.GetInt32(ordinals[0]);
 
-    private IQueryable<int> Ids() => SqlQuery.Select(_db.Items, [nameof(Item.Id)], ReadId);
+    private IQueryable<int> Ids() => SqlQuery.Select(_db.Items, [nameof(Item.Id)], [], ReadId);
 
     private IQueryable<NameId> NameAndId()
-        => SqlQuery.Select(_db.Items, [nameof(Item.Name), nameof(Item.Id)], static (reader, ordinals) => new NameId(reader.GetString(ordinals[0]), reader.GetInt32(ordinals[1])));
+        => SqlQuery.Select(_db.Items, [nameof(Item.Name), nameof(Item.Id)], [], static (reader, ordinals, _) => new NameId(reader.GetString(ordinals[0]), reader.GetInt32(ordinals[1])));
 
     // The projected type is inferred from the reader, as in generated code, so it can be an anonymous type.
-    private IQueryable<T> Project<T>(ProjectionReader<T> reader, params string[] propertyNames) => SqlQuery.Select(_db.Items, propertyNames, reader);
+    private IQueryable<T> Project<T>(ProjectionReader<T> reader, params string[] propertyNames) => SqlQuery.Select(_db.Items, propertyNames, [], reader);
 
     private static DataTable Table(params (string Name, int Id)[] rows)
     {

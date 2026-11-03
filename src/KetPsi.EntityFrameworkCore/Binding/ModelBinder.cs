@@ -63,8 +63,19 @@ internal static class ModelBinder
             GetPrimaryKey(entityType, properties),
             GetFilterKeys(entityType),
             [.. entityType.GetNavigations().Select(navigation => BindNavigation(navigation, properties))],
-            [.. entityType.GetSkipNavigations().Select(static n => n.Name)]);
+            [.. entityType.GetSkipNavigations().Select(static n => n.Name)],
+            [.. entityType.GetForeignKeys()
+                .Where(static fk => fk.PrincipalKey.IsPrimaryKey() && (fk.DependentToPrincipal ?? fk.PrincipalToDependent) is not null)
+                .Select(fk => BindForeignKey(fk, properties))]);
     }
+
+    private static BoundForeignKey BindForeignKey(IForeignKey foreignKey, BoundProperty[] properties)
+        => new(
+            [.. foreignKey.Properties.Select(key => properties.First(p => p.Name == key.Name))],
+            foreignKey.PrincipalEntityType.ClrType,
+            foreignKey.DependentToPrincipal?.Name,
+            foreignKey.PrincipalToDependent?.Name,
+            foreignKey.IsUnique);
 
     private static BoundNavigation BindNavigation(INavigation navigation, BoundProperty[] properties)
     {

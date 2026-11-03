@@ -16,6 +16,33 @@ internal sealed class IncludeTree(BoundEntity entity)
     public bool HasCollections => _branches.Exists(static b => b.Navigation.IsCollection);
 
     /// <summary>
+    /// The tree included below a navigation path, such as <c>"Blog"</c> for the includes after <c>Include(p =&gt; p.Blog)</c>;
+    /// <c>""</c> is this tree. Returns <see langword="null"/> when nothing is included along the path.
+    /// </summary>
+    public IncludeTree? Find(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+
+        var tree = this;
+        if (path.Length == 0)
+        {
+            return tree;
+        }
+
+        foreach (var name in path.Split('.'))
+        {
+            if (tree._branches.Find(b => b.Navigation.Name == name) is not { } branch)
+            {
+                return null;
+            }
+
+            tree = branch.Target;
+        }
+
+        return tree;
+    }
+
+    /// <summary>
     /// Merges the include paths of a chain into one tree, as EF Core does: repeating a path, or a prefix of one,
     /// includes it once.
     /// </summary>
