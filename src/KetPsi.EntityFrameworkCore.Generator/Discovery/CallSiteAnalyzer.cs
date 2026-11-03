@@ -319,6 +319,7 @@ internal static class CallSiteAnalyzer
             PredicateModel? predicate = null;
             string? orderProperty = null;
             IncludeModel? include = null;
+            var usesDecimalOperators = false;
             if (lambdaOrdinal is { } ordinal)
             {
                 var (lambda, lambdaDiagnostic) = RequireLambda(ordinal);
@@ -326,6 +327,8 @@ internal static class CallSiteAnalyzer
                 {
                     return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, lambdaDiagnostic);
                 }
+
+                usesDecimalOperators = lambda is not null && DecimalOperators.AreUsedIn(lambda, semanticModel, cancellationToken);
 
                 if (lambda is not null && IsPredicate(kind, hasPredicate))
                 {
@@ -383,7 +386,8 @@ internal static class CallSiteAnalyzer
                 predicate,
                 GetSignature(operation.TargetMethod),
                 orderProperty,
-                include);
+                include,
+                usesDecimalOperators);
         }
 
         private static bool IsPredicate(OperatorKind kind, bool hasPredicate)

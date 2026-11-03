@@ -16,6 +16,10 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// <param name="Signature">For supported operators, the method the interceptor replaces.</param>
 /// <param name="OrderProperty">For ordering operators, the entity property the key selector reads.</param>
 /// <param name="Include">For <c>Include</c> and <c>ThenInclude</c>, the included navigation.</param>
+/// <param name="UsesDecimalOperators">
+/// Whether the call's lambda uses a decimal operator, whose expression tree needs decimal's methods kept for
+/// reflection under Native AOT.
+/// </param>
 internal sealed record CallSite(
     string ElementType,
     LocationInfo Location,
@@ -28,7 +32,8 @@ internal sealed record CallSite(
     PredicateModel? Predicate = null,
     InterceptorSignature? Signature = null,
     string? OrderProperty = null,
-    IncludeModel? Include = null);
+    IncludeModel? Include = null,
+    bool UsesDecimalOperators = false);
 
 /// <summary>An included navigation, as an <c>Include</c> or <c>ThenInclude</c> lambda reads it.</summary>
 /// <param name="Navigation">The navigation name, such as <c>Posts</c>.</param>

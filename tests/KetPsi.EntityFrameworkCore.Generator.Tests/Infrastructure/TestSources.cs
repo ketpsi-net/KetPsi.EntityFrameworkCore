@@ -25,6 +25,8 @@ internal static class TestSources
             public bool IsActive { get; set; }
             public int? Views { get; set; }
             public Status Status { get; set; }
+            public decimal Price { get; set; }
+            public decimal? Discount { get; set; }
             public Author? Author { get; set; }
             public List<Post> Posts { get; set; } = [];
         }

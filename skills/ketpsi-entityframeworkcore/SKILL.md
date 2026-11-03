@@ -133,6 +133,8 @@ Same behavior as EF Core:
    move to EF Core 9+. No-tracking queries with `Include` work under Native AOT on EF Core 8, 9 and 10.
 4. Keep `InvariantGlobalization` off; SqlClient needs culture data.
 5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor; KetPsi itself adds none.
+6. Decimal comparisons in predicates (`p.Price < 20m`) are safe: the compiler builds them by reflection, and the
+   generated interceptor keeps decimal's operator methods for it. Nothing to configure.
 
 ## Fixing KP diagnostics
 

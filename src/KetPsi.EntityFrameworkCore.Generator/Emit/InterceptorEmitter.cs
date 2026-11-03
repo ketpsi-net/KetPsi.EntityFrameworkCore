@@ -19,6 +19,8 @@ internal static class InterceptorEmitter
     private const string ExpressionType = "global::System.Linq.Expressions.Expression<";
     private const string NoValues = "global::System.Array.Empty<object?>()";
     private const string AsyncSuffix = "Async";
+    private const string DynamicDependency = "global::System.Diagnostics.CodeAnalysis.DynamicDependency";
+    private const string DynamicallyAccessedMemberTypes = "global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes";
 
     /// <summary>Whether the site has everything its interceptor needs.</summary>
     public static bool CanIntercept(CallSite site)
@@ -84,9 +86,14 @@ internal static class InterceptorEmitter
             writer.Line($"private static readonly {PredicateTemplate} {template} = {site.Predicate.TemplateCode};").Line();
         }
 
-        writer
-            .Line(site.Interception!)
-            .Open($"public static {signature.ReturnType} {signature.Name}{number}({declaration})");
+        writer.Line(site.Interception!);
+        if (site.UsesDecimalOperators)
+        {
+            // The caller builds this lambda's decimal operators by reflection; keep decimal's methods for it under Native AOT.
+            writer.Line($"[{DynamicDependency}({DynamicallyAccessedMemberTypes}.PublicMethods, typeof(decimal))]");
+        }
+
+        writer.Open($"public static {signature.ReturnType} {signature.Name}{number}({declaration})");
 
         if (signature.ContainingType == Enumerable)
         {
