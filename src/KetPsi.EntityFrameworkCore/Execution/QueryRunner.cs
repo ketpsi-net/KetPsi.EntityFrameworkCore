@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -17,10 +18,10 @@ namespace KetPsi.EntityFrameworkCore.Execution;
 /// </summary>
 internal static class QueryRunner
 {
-    private const int FirstRowLimit = 1;
+    internal const int FirstRowLimit = 1;
 
     // Two rows are enough to tell "exactly one" from "more than one".
-    private const int SingleRowLimit = 2;
+    internal const int SingleRowLimit = 2;
 
     // EF Core 9 is the first version that can track entities under Native AOT, with a --nativeaot compiled model.
     private const int MinimumEfCoreMajorForAotTracking = 9;
@@ -294,28 +295,43 @@ internal static class QueryRunner
     private static (BoundEntity Entity, ISqlDialect Dialect, SqlStatement Statement) PrepareWithEntity<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
         SqlQueryable<T> query, QueryTerminal terminal, int? rowLimit)
         where T : class
+        => PrepareStatement(query.Context, query.Tail, terminal, rowLimit);
+
+    /// <summary>Binds the chain's root entity, resolves the dialect and query filters, and builds the statement.</summary>
+    internal static (BoundEntity Entity, ISqlDialect Dialect, SqlStatement Statement) PrepareStatement(
+        DbContext context, QueryNode tail, QueryTerminal terminal, int? rowLimit)
     {
-        var context = query.Context;
-        var entity = ModelBinder.GetEntity(context.Model, query.Root.EntityType);
+        var entity = ModelBinder.GetEntity(context.Model, RootOf(tail).EntityType);
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
-        var filters = QueryFilterResolver.Resolve(context, entity, IgnoredQueryFilters.FromChain(query.Tail));
-        var statement = SqlBuilder.Build(entity, query.Tail, dialect, terminal, rowLimit, filters);
+        var filters = QueryFilterResolver.Resolve(context, entity, IgnoredQueryFilters.FromChain(tail));
+        var statement = SqlBuilder.Build(entity, tail, dialect, terminal, rowLimit, filters);
         return (entity, dialect, statement);
     }
 
+    private static RootNode RootOf(QueryNode tail)
+    {
+        var node = tail;
+        while (node.Parent is not null)
+        {
+            node = node.Parent;
+        }
+
+        return node as RootNode ?? throw new UnreachableException("A chain always starts with a root node.");
+    }
+
     // LINQ's messages for sync terminals and EF Core's for async ones, so callers see the exceptions EF Core throws.
-    private static T FirstOf<T>(List<T> rows, bool isAsync) => rows.Count > 0 ? rows[0] : throw NoElements(isAsync);
+    internal static T FirstOf<T>(List<T> rows, bool isAsync) => rows.Count > 0 ? rows[0] : throw NoElements(isAsync);
 
-    private static T? FirstOrDefaultOf<T>(List<T> rows) => rows.Count > 0 ? rows[0] : default;
+    internal static T? FirstOrDefaultOf<T>(List<T> rows) => rows.Count > 0 ? rows[0] : default;
 
-    private static T SingleOf<T>(List<T> rows, bool isAsync) => rows.Count switch
+    internal static T SingleOf<T>(List<T> rows, bool isAsync) => rows.Count switch
     {
         0 => throw NoElements(isAsync),
         1 => rows[0],
         _ => throw MoreThanOneElement(isAsync),
     };
 
-    private static T? SingleOrDefaultOf<T>(List<T> rows, bool isAsync) => rows.Count switch
+    internal static T? SingleOrDefaultOf<T>(List<T> rows, bool isAsync) => rows.Count switch
     {
         0 => default,
         1 => rows[0],

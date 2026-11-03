@@ -198,7 +198,7 @@ internal sealed class SqlBuilder
                 ApplyRoot(root);
                 break;
             case WhereNode where:
-                WrapIf(State.HasPaging);
+                WrapIf(State.HasPaging || State.Distinct);
                 var predicate = _entity.BindPredicate(where.Predicate);
                 State.Predicates.Add(RenderPredicate(predicate, where.Values, negated: false, State.Alias));
                 break;
@@ -211,12 +211,22 @@ internal sealed class SqlBuilder
                 State.Ordering.Add(new Ordering(_entity.GetProperty(order.PropertyName), order.Descending));
                 break;
             case SkipNode skip:
-                WrapIf(State.HasPaging);
+                WrapIf(State.HasPaging || State.Distinct);
                 State.Offset = AddParameter(skip.Count, property: null);
                 break;
             case TakeNode take:
-                WrapIf(State.Limit is not null);
+                WrapIf(State.Limit is not null || State.Distinct);
                 State.Limit = AddParameter(take.Count, property: null);
+                break;
+            case ProjectionNode projection:
+                // The projected rows are the query's rows from here on; only the columns read change.
+                State.Projection = [.. projection.Columns.Select(_entity.GetProperty)];
+                break;
+            case DistinctNode:
+                // Distinct applies to the rows the operators selected, and distinct rows have no order, as in EF Core.
+                WrapIf(State.HasPaging);
+                State.Ordering.Clear();
+                State.Distinct = true;
                 break;
             case TrackingNode or IgnoreQueryFiltersNode or IncludeNode:
                 // Tracking doesn't change the SQL, ignored filters were already left out of the resolved filters, and
@@ -257,14 +267,14 @@ internal sealed class SqlBuilder
             case QueryTerminal.Rows:
                 if (rowLimit is { } limit)
                 {
-                    WrapIf(State.Limit is not null);
+                    WrapIf(State.Limit is not null || State.Distinct);
                     State.Limit = limit.ToString(CultureInfo.InvariantCulture);
                 }
 
-                return RenderSelect(State, EntityColumns(State.Alias), includeOrdering: true);
+                return RenderSelect(State, SelectList(State, State.Projection), includeOrdering: true);
 
             case QueryTerminal.Count or QueryTerminal.LongCount:
-                WrapIf(State.HasPaging);
+                WrapIf(State.HasPaging || State.Distinct);
                 return RenderSelect(State, _dialect.Count(terminal == QueryTerminal.LongCount), includeOrdering: false);
 
             case QueryTerminal.Any:
@@ -369,8 +379,13 @@ internal sealed class SqlBuilder
         }
 
         var inner = State;
-        var source = "(" + RenderSelect(inner, EntityColumns(inner.Alias), includeOrdering: true) + ")";
-        var outer = new SelectState(source, NextAlias());
+
+        // A projected derived table also selects the ordering columns, which the outer query orders by.
+        var columns = inner.Projection is null
+            ? null
+            : inner.Projection.Concat(inner.Ordering.Select(static o => o.Property)).Distinct().ToList();
+        var source = "(" + RenderSelect(inner, SelectList(inner, columns), includeOrdering: true) + ")";
+        var outer = new SelectState(source, NextAlias()) { Projection = inner.Projection };
         outer.Ordering.AddRange(inner.Ordering);
         _state = outer;
     }
@@ -381,6 +396,11 @@ internal sealed class SqlBuilder
         var paging = _dialect.Paging(state.Offset, state.Limit, hasOrderBy);
 
         var sql = new StringBuilder("SELECT ");
+        if (state.Distinct)
+        {
+            sql.Append("DISTINCT ");
+        }
+
         if (paging.SelectPrefix is not null)
         {
             sql.Append(paging.SelectPrefix).Append(' ');
@@ -516,6 +536,10 @@ internal sealed class SqlBuilder
         _ => throw new UnreachableException(comparison.ToString()),
     };
 
+    // The projected columns, or every entity column for an entity query.
+    private string SelectList(SelectState state, IReadOnlyList<BoundProperty>? columns)
+        => columns is null ? EntityColumns(state.Alias) : string.Join(", ", columns.Select(c => Column(c, state.Alias)));
+
     private string EntityColumns(string alias) => string.Join(", ", _entity.Properties.Select(p => Column(p, alias)));
 
     private string Column(BoundProperty property, string alias) => alias + "." + _dialect.QuoteIdentifier(property.ColumnName);
@@ -549,5 +573,11 @@ internal sealed class SqlBuilder
         public string? Limit { get; set; }
 
         public bool HasPaging => Offset is not null || Limit is not null;
+
+        /// <summary>The columns a projection reads, or <see langword="null"/> for every entity column.</summary>
+        public IReadOnlyList<BoundProperty>? Projection { get; set; }
+
+        /// <summary>Whether the rows are distinct, which a later operator must not change.</summary>
+        public bool Distinct { get; set; }
     }
 }

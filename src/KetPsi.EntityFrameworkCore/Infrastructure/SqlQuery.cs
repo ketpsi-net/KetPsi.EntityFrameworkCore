@@ -190,6 +190,34 @@ public static class SqlQuery
         return query.WithTail(new TakeNode(query.Tail, count));
     }
 
+    /// <summary>Appends <c>Distinct</c>: duplicate entity rows are removed, and an ordering before it is dropped.</summary>
+    public static IQueryable<T> Distinct<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
+        where T : class
+    {
+        var query = ToSqlQueryable(source);
+        return query.WithTail(new DistinctNode(query.Tail));
+    }
+
+    /// <summary>Appends <c>Select</c>: the query returns what <paramref name="reader"/> builds from each row.</summary>
+    /// <param name="source">The entity query.</param>
+    /// <param name="propertyNames">The entity properties the reader reads, in the order of its ordinals.</param>
+    /// <param name="reader">The generated reader: the <c>Select</c> lambda's body over the row's columns.</param>
+    /// <exception cref="ArgumentException"><paramref name="propertyNames"/> is empty.</exception>
+    public static IQueryable<TResult> Select<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TResult>(
+        IQueryable<TSource> source, IReadOnlyList<string> propertyNames, ProjectionReader<TResult> reader)
+        where TSource : class
+    {
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        ArgumentNullException.ThrowIfNull(reader);
+        if (propertyNames.Count == 0)
+        {
+            throw new ArgumentException(ExceptionMessages.ProjectionRequiresColumns, nameof(propertyNames));
+        }
+
+        var query = ToSqlQueryable(source);
+        return new ProjectedQueryable<TResult>(query.Context, new ProjectionNode(query.Tail, propertyNames), reader);
+    }
+
     /// <summary>Executes the query and returns the entities: <c>ToList</c>.</summary>
     public static List<T> ToList<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
         where T : class
