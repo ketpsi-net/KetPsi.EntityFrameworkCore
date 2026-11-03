@@ -121,6 +121,37 @@ public sealed class SqlServerDialectTests
     public void InList_MissingArgument_Throws(string? column, string? listParameter, string? storeType)
         => Assert.ThrowsAny<ArgumentException>(() => Dialect.InList(column!, listParameter!, storeType!));
 
+    // The SQL EF Core's SQL Server provider generates, as the aggregate probe recorded on EF Core 8, 9 and 10.
+    [Theory]
+    [InlineData(AggregateFunction.Sum, AggregateValueType.Int32, "COALESCE(SUM([c]), 0)")]
+    [InlineData(AggregateFunction.Sum, AggregateValueType.Int64, "COALESCE(SUM([c]), CAST(0 AS bigint))")]
+    [InlineData(AggregateFunction.Sum, AggregateValueType.Decimal, "COALESCE(SUM([c]), 0.0)")]
+    [InlineData(AggregateFunction.Sum, AggregateValueType.Double, "COALESCE(SUM([c]), 0.0E0)")]
+    [InlineData(AggregateFunction.Sum, AggregateValueType.Single, "CAST(COALESCE(SUM([c]), 0.0E0) AS real)")]
+    [InlineData(AggregateFunction.Average, AggregateValueType.Int32, "AVG(CAST([c] AS float))")]
+    [InlineData(AggregateFunction.Average, AggregateValueType.Int64, "AVG(CAST([c] AS float))")]
+    [InlineData(AggregateFunction.Average, AggregateValueType.Decimal, "AVG([c])")]
+    [InlineData(AggregateFunction.Average, AggregateValueType.Double, "AVG([c])")]
+    [InlineData(AggregateFunction.Average, AggregateValueType.Single, "CAST(AVG([c]) AS real)")]
+    [InlineData(AggregateFunction.Min, AggregateValueType.Column, "MIN([c])")]
+    [InlineData(AggregateFunction.Max, AggregateValueType.Column, "MAX([c])")]
+    [InlineData(AggregateFunction.Max, AggregateValueType.Int32, "MAX([c])")]
+    public void Aggregate_MatchesEfCore(AggregateFunction function, AggregateValueType valueType, string expected)
+        => Assert.Equal(expected, Dialect.Aggregate(function, "[c]", valueType));
+
+    [Theory]
+    [InlineData(AggregateFunction.Sum)]
+    [InlineData(AggregateFunction.Average)]
+    public void SumAndAverage_WithoutNumericType_Throw(AggregateFunction function)
+        => Assert.Throws<ArgumentOutOfRangeException>(() => Dialect.Aggregate(function, "[c]", AggregateValueType.Column));
+
+    [Fact]
+    public void Aggregate_UnknownFunctionOrMissingColumn_Throws()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Dialect.Aggregate((AggregateFunction)99, "[c]", AggregateValueType.Column));
+        Assert.ThrowsAny<ArgumentException>(() => Dialect.Aggregate(AggregateFunction.Max, "", AggregateValueType.Column));
+    }
+
     [Fact]
     public void InTupleList_MatchesEveryColumnByPosition()
         => Assert.Equal(

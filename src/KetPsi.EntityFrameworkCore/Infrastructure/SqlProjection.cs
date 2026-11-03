@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using KetPsi.EntityFrameworkCore.Execution;
 using KetPsi.EntityFrameworkCore.Query;
+using KetPsi.EntityFrameworkCore.Sql;
 
 namespace KetPsi.EntityFrameworkCore.Infrastructure;
 
@@ -40,6 +41,25 @@ public static class SqlProjection
     {
         var query = ToProjected(source);
         return query.WithTail(new DistinctNode(query.Tail));
+    }
+
+    /// <summary>
+    /// Computes <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c> of a query projected to one property, such as
+    /// <c>Select(x =&gt; x.Price).Sum()</c>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">There are no rows and <typeparamref name="TResult"/> cannot be null.</exception>
+    public static TResult Aggregate<T, TResult>(IQueryable<T> source, AggregateFunction function, AggregateValueType valueType)
+    {
+        var query = ToProjected(source);
+        return AggregateExecutor.Execute<TResult>(query.Context, query.Tail, new SqlAggregate(function, PropertyName: null, valueType));
+    }
+
+    /// <summary>Computes the async form of <see cref="Aggregate"/>.</summary>
+    public static Task<TResult> AggregateAsync<T, TResult>(
+        IQueryable<T> source, AggregateFunction function, AggregateValueType valueType, CancellationToken cancellationToken = default)
+    {
+        var query = ToProjected(source);
+        return AggregateExecutor.ExecuteAsync<TResult>(query.Context, query.Tail, new SqlAggregate(function, PropertyName: null, valueType), cancellationToken);
     }
 
     /// <summary>Executes the query: <c>ToList</c>.</summary>

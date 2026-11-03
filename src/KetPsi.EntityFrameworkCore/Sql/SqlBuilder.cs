@@ -62,13 +62,15 @@ internal sealed class SqlBuilder
     /// <param name="terminal">What the statement returns.</param>
     /// <param name="rowLimit">For <see cref="QueryTerminal.Rows"/>, a limit applied after every operator, such as 1 for <c>First</c>.</param>
     /// <param name="filters">The model query filters to apply to the root table, already resolved against the context.</param>
+    /// <param name="aggregate">For <see cref="QueryTerminal.Aggregate"/>, what to compute.</param>
     public static SqlStatement Build(
         BoundEntity entity,
         QueryNode tail,
         ISqlDialect dialect,
         QueryTerminal terminal,
         int? rowLimit = null,
-        IReadOnlyList<ResolvedQueryFilter>? filters = null)
+        IReadOnlyList<ResolvedQueryFilter>? filters = null,
+        SqlAggregate? aggregate = null)
     {
         ArgumentNullException.ThrowIfNull(entity);
         ArgumentNullException.ThrowIfNull(tail);
@@ -88,7 +90,12 @@ internal sealed class SqlBuilder
             builder.Apply(node);
         }
 
-        var commandText = builder.Finish(terminal, rowLimit);
+        if (terminal == QueryTerminal.Aggregate && aggregate is null)
+        {
+            throw new ArgumentNullException(nameof(aggregate));
+        }
+
+        var commandText = builder.Finish(terminal, rowLimit, aggregate);
         return new SqlStatement(commandText, builder._parameters);
     }
 
@@ -260,7 +267,7 @@ internal sealed class SqlBuilder
         }
     }
 
-    private string Finish(QueryTerminal terminal, int? rowLimit)
+    private string Finish(QueryTerminal terminal, int? rowLimit, SqlAggregate? aggregate)
     {
         switch (terminal)
         {
@@ -276,6 +283,13 @@ internal sealed class SqlBuilder
             case QueryTerminal.Count or QueryTerminal.LongCount:
                 WrapIf(State.HasPaging || State.Distinct);
                 return RenderSelect(State, _dialect.Count(terminal == QueryTerminal.LongCount), includeOrdering: false);
+
+            case QueryTerminal.Aggregate:
+                // Like Count, an aggregate works on the rows the operators selected.
+                WrapIf(State.HasPaging || State.Distinct);
+                var column = AggregatedColumn(aggregate!);
+                return RenderSelect(
+                    State, _dialect.Aggregate(aggregate!.Function, Column(column, State.Alias), aggregate.ValueType), includeOrdering: false);
 
             case QueryTerminal.Any:
                 // ORDER BY is only valid in a subquery that pages, and only matters there.
@@ -535,6 +549,19 @@ internal sealed class SqlBuilder
         ComparisonOperator.GreaterThanOrEqual => ">=",
         _ => throw new UnreachableException(comparison.ToString()),
     };
+
+    // The selector's property, or the one column a projection selects.
+    private BoundProperty AggregatedColumn(SqlAggregate aggregate)
+    {
+        if (aggregate.PropertyName is { } name)
+        {
+            return _entity.GetProperty(name);
+        }
+
+        return State.Projection is [var single]
+            ? single
+            : throw new InvalidOperationException(ExceptionMessages.AggregateNeedsOneColumn);
+    }
 
     // The projected columns, or every entity column for an entity query.
     private string SelectList(SelectState state, IReadOnlyList<BoundProperty>? columns)

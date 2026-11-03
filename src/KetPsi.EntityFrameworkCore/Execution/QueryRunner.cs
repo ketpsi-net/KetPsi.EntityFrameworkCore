@@ -26,7 +26,7 @@ internal static class QueryRunner
     // EF Core 9 is the first version that can track entities under Native AOT, with a --nativeaot compiled model.
     private const int MinimumEfCoreMajorForAotTracking = 9;
 
-    private static readonly int EfCoreMajorVersion = typeof(DbContext).Assembly.GetName().Version?.Major ?? 0;
+    internal static readonly int EfCoreMajorVersion = typeof(DbContext).Assembly.GetName().Version?.Major ?? 0;
 
     public static IEnumerable<T> Enumerate<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
         where T : class
@@ -299,12 +299,12 @@ internal static class QueryRunner
 
     /// <summary>Binds the chain's root entity, resolves the dialect and query filters, and builds the statement.</summary>
     internal static (BoundEntity Entity, ISqlDialect Dialect, SqlStatement Statement) PrepareStatement(
-        DbContext context, QueryNode tail, QueryTerminal terminal, int? rowLimit)
+        DbContext context, QueryNode tail, QueryTerminal terminal, int? rowLimit, SqlAggregate? aggregate = null)
     {
         var entity = ModelBinder.GetEntity(context.Model, RootOf(tail).EntityType);
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
         var filters = QueryFilterResolver.Resolve(context, entity, IgnoredQueryFilters.FromChain(tail));
-        var statement = SqlBuilder.Build(entity, tail, dialect, terminal, rowLimit, filters);
+        var statement = SqlBuilder.Build(entity, tail, dialect, terminal, rowLimit, filters, aggregate);
         return (entity, dialect, statement);
     }
 

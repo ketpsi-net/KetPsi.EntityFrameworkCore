@@ -84,6 +84,9 @@ internal static class ExceptionMessages
         "No generated reader is registered for the entity type '{0}'. Make sure the project that declares the query " +
         "references KetPsi.EntityFrameworkCore.Generator.";
 
+    public const string AggregateNeedsOneColumn =
+        "An aggregate without a selector works on a query projected to one property, such as Select(x => x.Price).Sum().";
+
     public const string ProjectionRequiresColumns =
         "A projection reads at least one entity property.";
 
@@ -118,6 +121,9 @@ internal static class ExceptionMessages
     public const string SequenceContainsNoElementsAsync = "Sequence contains no elements.";
 
     public const string SequenceContainsMoreThanOneElementAsync = "Sequence contains more than one element.";
+
+    // What EF Core 10 throws for Min, Max or Average of no rows into a non-nullable type.
+    public const string NullableObjectMustHaveAValue = "Nullable object must have a value.";
 
     public const string CapturedValueNotSupported =
         "The predicate value '{1}' ({0}) cannot be read. The generated interceptor does not match the expression tree " +

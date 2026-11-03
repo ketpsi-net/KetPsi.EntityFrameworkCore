@@ -4,6 +4,7 @@ using System.Globalization;
 using KetPsi.EntityFrameworkCore.Execution;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.Query;
+using KetPsi.EntityFrameworkCore.Sql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -216,6 +217,33 @@ public static class SqlQuery
 
         var query = ToSqlQueryable(source);
         return new ProjectedQueryable<TResult>(query.Context, new ProjectionNode(query.Tail, propertyNames), reader);
+    }
+
+    /// <summary>Computes <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c> of an entity property.</summary>
+    /// <param name="source">The entity query.</param>
+    /// <param name="function">The aggregate.</param>
+    /// <param name="propertyName">The property the selector reads, such as <c>Price</c> for <c>x =&gt; x.Price</c>.</param>
+    /// <param name="valueType">The numeric type of the <c>Sum</c> or <c>Average</c> overload; <see cref="AggregateValueType.Column"/> for <c>Min</c> and <c>Max</c>.</param>
+    /// <exception cref="InvalidOperationException">There are no rows and <typeparamref name="TResult"/> cannot be null.</exception>
+    public static TResult Aggregate<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TResult>(
+        IQueryable<TSource> source, AggregateFunction function, string propertyName, AggregateValueType valueType)
+        where TSource : class
+    {
+        ArgumentException.ThrowIfNullOrEmpty(propertyName);
+
+        var query = ToSqlQueryable(source);
+        return AggregateExecutor.Execute<TResult>(query.Context, query.Tail, new SqlAggregate(function, propertyName, valueType));
+    }
+
+    /// <summary>Computes <c>SumAsync</c>, <c>AverageAsync</c>, <c>MinAsync</c> or <c>MaxAsync</c> of an entity property.</summary>
+    public static Task<TResult> AggregateAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TResult>(
+        IQueryable<TSource> source, AggregateFunction function, string propertyName, AggregateValueType valueType, CancellationToken cancellationToken = default)
+        where TSource : class
+    {
+        ArgumentException.ThrowIfNullOrEmpty(propertyName);
+
+        var query = ToSqlQueryable(source);
+        return AggregateExecutor.ExecuteAsync<TResult>(query.Context, query.Tail, new SqlAggregate(function, propertyName, valueType), cancellationToken);
     }
 
     /// <summary>Executes the query and returns the entities: <c>ToList</c>.</summary>
