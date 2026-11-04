@@ -20,8 +20,8 @@ var page = await db.Blogs
 
 That is the whole API: you keep writing EF Core LINQ. The only addition is `WhereIf`.
 
-> **Preview.** Filtering, ordering, paging, tracking, `Include`/`ThenInclude` and the common terminals work today.
-> Projection (`Select`), aggregates and `GroupBy` are on the roadmap. Anything not supported yet is a
+> **Preview.** Filtering, ordering, paging, tracking, `Include`/`ThenInclude`, projection (`Select`), `Distinct`,
+> aggregates and the common terminals work today. `GroupBy` is next on the roadmap. Anything not supported yet is a
 > **build error** with a `KP` diagnostic, never a silent fallback to EF Core's runtime pipeline.
 
 ## Install
