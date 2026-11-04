@@ -20,6 +20,11 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// Whether the call's lambda uses a decimal operator, whose expression tree needs decimal's methods kept for
 /// reflection under Native AOT.
 /// </param>
+/// <param name="Projection">For <c>Select</c>, the translated selector.</param>
+/// <param name="ProjectedFrom">
+/// For an operator on a projected query, the fully qualified type of the entity query the <c>Select</c> was called on;
+/// the site is kept when that type is an entity.
+/// </param>
 internal sealed record CallSite(
     string ElementType,
     LocationInfo Location,
@@ -33,7 +38,9 @@ internal sealed record CallSite(
     InterceptorSignature? Signature = null,
     string? OrderProperty = null,
     IncludeModel? Include = null,
-    bool UsesDecimalOperators = false);
+    bool UsesDecimalOperators = false,
+    ProjectionModel? Projection = null,
+    string? ProjectedFrom = null);
 
 /// <summary>An included navigation, as an <c>Include</c> or <c>ThenInclude</c> lambda reads it.</summary>
 /// <param name="Navigation">The navigation name, such as <c>Posts</c>.</param>

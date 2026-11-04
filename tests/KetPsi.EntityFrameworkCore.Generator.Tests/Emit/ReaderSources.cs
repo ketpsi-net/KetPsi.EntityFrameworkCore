@@ -71,7 +71,7 @@ internal static class ReaderSources
 
             public static Hidden? FirstHidden(ArticleDb db) => db.Hidden.AsNoTracking().FirstOrDefault();
 
-            public static List<int> AuthorIds(ArticleDb db) => db.Authors.Select(a => a.Id).ToList();
+            public static List<int> AuthorIds(ArticleDb db) => db.Authors.Select((a, i) => a.Id).ToList();
         }
 
         public static class Probe

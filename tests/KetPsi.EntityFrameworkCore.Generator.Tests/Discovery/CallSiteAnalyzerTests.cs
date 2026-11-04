@@ -107,7 +107,7 @@ public sealed class CallSiteAnalyzerTests
     [Fact]
     public void Analyze_UnsupportedOperator_HasDiagnosticAndNoOperator()
     {
-        var site = AnalyzeSingle("db.Blogs.Select(b => b.Id)", "Select");
+        var site = AnalyzeSingle("db.Blogs.Reverse()", "Reverse");
 
         Assert.NotNull(site);
         Assert.Null(site.Operator);

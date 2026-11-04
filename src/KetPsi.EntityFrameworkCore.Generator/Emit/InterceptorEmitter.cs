@@ -13,6 +13,10 @@ internal static class InterceptorEmitter
     public const string HintName = "KetPsi.Interceptors.g.cs";
 
     private const string SqlQuery = "global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery";
+    private const string SqlProjection = "global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection";
+    private const string ProjectionReader = "global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader";
+    private const string Queryable = "global::System.Linq.IQueryable";
+    private const string ReaderHelper = "Reader";
     private const string CapturedValues = "global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues";
     private const string PredicateTemplate = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate";
     private const string Enumerable = "global::System.Linq.Enumerable";
@@ -27,7 +31,8 @@ internal static class InterceptorEmitter
         => site is { Interception: not null, Signature: not null, Operator: { } kind }
             && (!TakesPredicate(site) || site.Predicate is not null)
             && (!IsOrdering(kind) || site.OrderProperty is not null)
-            && (kind is not (OperatorKind.Include or OperatorKind.ThenInclude) || site.Include is not null);
+            && (kind is not (OperatorKind.Include or OperatorKind.ThenInclude) || site.Include is not null)
+            && (kind != OperatorKind.Select || site.Projection is not null);
 
     public static string Emit(IReadOnlyList<CallSite> sites)
     {
@@ -52,6 +57,14 @@ internal static class InterceptorEmitter
             }
 
             WriteInterceptor(writer, sites[i], i);
+        }
+
+        if (sites.Any(static s => s.Operator == OperatorKind.Select))
+        {
+            // Converts a reader lambda to its delegate type, inferring the projected type, which can be anonymous.
+            writer
+                .Line()
+                .Line($"private static {ProjectionReader}<T> {ReaderHelper}<T>({ProjectionReader}<T> reader) => reader;");
         }
 
         return writer.Close().Close().ToString();
@@ -93,7 +106,20 @@ internal static class InterceptorEmitter
             writer.Line($"[{DynamicDependency}({DynamicallyAccessedMemberTypes}.PublicMethods, typeof(decimal))]");
         }
 
-        writer.Open($"public static {signature.ReturnType} {signature.Name}{number}({declaration})");
+        var typeParameters = signature.TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", signature.TypeParameters) + ">";
+        writer.Open($"public static {signature.ReturnType} {signature.Name}{number}{typeParameters}({declaration})");
+
+        if (site.ProjectedFrom is not null)
+        {
+            WriteProjected(writer, site, source, fallback);
+            return;
+        }
+
+        if (site.Operator == OperatorKind.Select)
+        {
+            WriteSelect(writer, site, source, fallback);
+            return;
+        }
 
         if (signature.ContainingType == Enumerable)
         {
@@ -123,6 +149,54 @@ internal static class InterceptorEmitter
 
         writer.Line("return " + Body(site, source, template) + ";").Close();
     }
+
+    // The query is cast to the entity query it is, so its type argument can be named.
+    private static void WriteSelect(CodeWriter writer, CallSite site, string source, string fallback)
+    {
+        var projection = site.Projection!;
+        var result = site.Signature!.TypeParameters[site.Signature.TypeParameters.Count - 1];
+        writer
+            .Line($"var query = ({Queryable}<{site.ElementType}>)(object){source};")
+            .Open($"if (!{SqlQuery}.IsInterceptable(query))")
+            .Line($"return {fallback};")
+            .Close()
+            .Line()
+            .Line($"return ({Queryable}<{result}>)(object){SqlQuery}.Select(")
+            .Line($"    query,")
+            .Line($"    {Strings(projection.PropertyPaths)},")
+            .Line($"    {Strings(projection.EntityPaths)},")
+            .Line($"    {ReaderHelper}({projection.ReaderCode}));")
+            .Close();
+    }
+
+    private static void WriteProjected(CodeWriter writer, CallSite site, string source, string fallback)
+    {
+        var parameters = site.Signature!.Parameters;
+        var element = site.Signature.TypeParameters[0];
+        var call = site.Operator switch
+        {
+            OperatorKind.Skip or OperatorKind.Take => $"{SqlProjection}.{site.Operator}(query, {parameters[1].Name})",
+            _ when site.IsAsync => $"{SqlProjection}.{site.Operator}{AsyncSuffix}(query, {parameters[parameters.Count - 1].Name})",
+            _ => $"{SqlProjection}.{site.Operator}(query)",
+        };
+
+        // Enumerable.ToList and ToArray accept any sequence; every other operator is on a query already.
+        var test = site.Signature.ContainingType == Enumerable
+            ? $"{source} is {Queryable}<{element}> query && {SqlProjection}.IsInterceptable(query)"
+            : $"{source} is var query && {SqlProjection}.IsInterceptable(query)";
+        writer
+            .Open($"if ({test})")
+            .Line($"return {call};")
+            .Close()
+            .Line()
+            .Line($"return {fallback};")
+            .Close();
+    }
+
+    private static string Strings(EquatableArray<string> values)
+        => values.Count == 0
+            ? "global::System.Array.Empty<string>()"
+            : "new string[] { " + string.Join(", ", values.Select(static v => "\"" + v + "\"")) + " }";
 
     private static string Body(CallSite site, string source, string template)
     {

@@ -12,6 +12,7 @@ KP1002 | KetPsi.EntityFrameworkCore | Error | Include path not supported
 KP1004 | KetPsi.EntityFrameworkCore | Error | Raw SQL not supported
 KP1005 | KetPsi.EntityFrameworkCore | Error | Lambda expression required
 KP1006 | KetPsi.EntityFrameworkCore | Error | Operator overload not supported
+KP1007 | KetPsi.EntityFrameworkCore | Error | Operator not supported after Select
 KP2001 | KetPsi.EntityFrameworkCore | Error | Expression not supported
 KP2002 | KetPsi.EntityFrameworkCore | Error | Navigation not supported
 KP2003 | KetPsi.EntityFrameworkCore | Error | Method or member not supported
@@ -20,6 +21,7 @@ KP2005 | KetPsi.EntityFrameworkCore | Error | Collection query not supported
 KP2006 | KetPsi.EntityFrameworkCore | Error | Property comparison not supported
 KP2007 | KetPsi.EntityFrameworkCore | Error | Value not supported
 KP2008 | KetPsi.EntityFrameworkCore | Error | Order key not supported
+KP2009 | KetPsi.EntityFrameworkCore | Error | Projection not supported
 KP3001 | KetPsi.EntityFrameworkCore | Error | Property type not supported
 KP3002 | KetPsi.EntityFrameworkCore | Error | Value converter not supported
 KP3003 | KetPsi.EntityFrameworkCore | Error | Owned, complex or JSON mapping not supported

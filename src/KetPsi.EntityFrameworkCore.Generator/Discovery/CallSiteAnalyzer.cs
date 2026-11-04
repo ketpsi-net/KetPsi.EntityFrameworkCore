@@ -18,9 +18,12 @@ internal static class CallSiteAnalyzer
 
     private const string WhereIfMethod = "WhereIf";
     private const string ReasonIndexedPredicate = "predicates that take the element index are not supported";
+    private const string ReasonIndexedSelector = "selectors that take the element index are not supported";
     private const string ReasonComparer = "custom comparers are not supported";
     private const string ReasonRangeCount = "only an int count is supported";
     private const string ReasonDefaultValue = "overloads with a default value are not supported";
+    private const string ReasonAfterSelect =
+        "only Skip, Take and terminals without a predicate can follow Select; filter and order the entities before it";
 
     // Names of every method the classification below handles; anything else is not looked at.
     private static readonly HashSet<string> OperatorNames = new(StringComparer.Ordinal)
@@ -117,8 +120,14 @@ internal static class CallSiteAnalyzer
         }
 
         var nameSyntax = ((MemberAccessExpressionSyntax)invocation.Expression).Name;
+        var projectedFrom = ProjectedFrom(GetSource(operation), semanticModel, queryableInterface, cancellationToken);
         var site = new SiteBuilder(
-            elementType, LocationInfo.From(nameSyntax.Identifier.GetLocation()), method.Name, operation, invocation, semanticModel, cancellationToken);
+            elementType, LocationInfo.From(nameSyntax.Identifier.GetLocation()), method.Name, operation, invocation, semanticModel, projectedFrom, cancellationToken);
+
+        if (projectedFrom is not null)
+        {
+            return ClassifyProjected(site, method, family);
+        }
 
         return family switch
         {
@@ -158,6 +167,10 @@ internal static class CallSiteAnalyzer
                 return parameters[1].Type.SpecialType == SpecialType.System_Int32
                     ? site.Supported(method.Name == "Skip" ? OperatorKind.Skip : OperatorKind.Take)
                     : site.Overload(ReasonRangeCount);
+            case "Select":
+                return IsSelector(parameters[1].Type)
+                    ? site.Supported(OperatorKind.Select, lambdaOrdinal: 1)
+                    : site.Overload(ReasonIndexedSelector);
             case "First" or "FirstOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count" or "LongCount":
                 if (parameters.Length == 1)
                 {
@@ -203,6 +216,79 @@ internal static class CallSiteAnalyzer
         }
     }
 
+    // After Select the query is a projection: paging and terminals run it, anything else is reported.
+    private static CallSite? ClassifyProjected(SiteBuilder site, IMethodSymbol method, Family family)
+    {
+        var parameters = method.Parameters;
+        switch (family)
+        {
+            case Family.Queryable when method.Name is "Skip" or "Take" && parameters[1].Type.SpecialType == SpecialType.System_Int32:
+                return site.SupportedAfterSelect(method.Name == "Skip" ? OperatorKind.Skip : OperatorKind.Take);
+            case Family.Queryable when parameters.Length == 1
+                && method.Name is "First" or "FirstOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count" or "LongCount":
+                return site.SupportedAfterSelect(TerminalKind(method.Name));
+            case Family.EntityFramework when method.Name is "ToListAsync" or "ToArrayAsync":
+                return site.SupportedAfterSelect(method.Name == "ToListAsync" ? OperatorKind.ToList : OperatorKind.ToArray, isAsync: true);
+            case Family.EntityFramework when parameters.Length == 2
+                && method.Name is "FirstAsync" or "FirstOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync" or "AnyAsync"
+                    or "CountAsync" or "LongCountAsync":
+                return site.SupportedAfterSelect(TerminalKind(method.Name.Substring(0, method.Name.Length - "Async".Length)), isAsync: true);
+            case Family.Enumerable:
+                // Enumerating a projected query runs it, so only the terminals that would otherwise copy it are intercepted.
+                return parameters.Length == 1 && method.Name is "ToList" or "ToArray"
+                    ? site.SupportedAfterSelect(method.Name == "ToList" ? OperatorKind.ToList : OperatorKind.ToArray)
+                    : null;
+            case Family.DbSet:
+                return null;
+            default:
+                return site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonAfterSelect);
+        }
+    }
+
+    /// <summary>
+    /// The entity query a projection was made from: the source of the <c>Select</c> that <paramref name="source"/>
+    /// comes from, through other operators and local variables. <see langword="null"/> when it isn't a projection.
+    /// </summary>
+    private static string? ProjectedFrom(IOperation? source, SemanticModel semanticModel, INamedTypeSymbol queryableInterface, CancellationToken cancellationToken)
+    {
+        // A bound guards against a local initialized from itself through other locals.
+        for (var steps = 0; source is not null && steps < 64; steps++)
+        {
+            switch (source)
+            {
+                case IConversionOperation conversion:
+                    source = conversion.Operand;
+                    break;
+                case IParenthesizedOperation parenthesized:
+                    source = parenthesized.Operand;
+                    break;
+                case IInvocationOperation invocation when GetFamily(invocation.TargetMethod.ContainingType) is var family
+                    && family is Family.Queryable or Family.EntityFramework or Family.Relational or Family.KetPsi:
+                    if (family == Family.Queryable && invocation.TargetMethod.Name == "Select")
+                    {
+                        return GetSource(invocation)?.Type is { } selected && GetElementType(selected, queryableInterface) is { } element
+                            ? EntityDiscovery.TypeName(element)
+                            : null;
+                    }
+
+                    source = GetSource(invocation);
+                    break;
+                case ILocalReferenceOperation local:
+                    source = local.Local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax(cancellationToken) is VariableDeclaratorSyntax
+                        {
+                            Initializer.Value: { } value,
+                        } && value.SyntaxTree == semanticModel.SyntaxTree
+                        ? semanticModel.GetOperation(value, cancellationToken)
+                        : null;
+                    break;
+                default:
+                    return null;
+            }
+        }
+
+        return null;
+    }
+
     // Enumerable.ToList and ToArray execute the query, so they are intercepted like terminals. Other Enumerable
     // methods enumerate a KetPsi query, which executes it; called on a DbSet itself they would run EF Core's pipeline.
     private static CallSite? ClassifyEnumerable(SiteBuilder site, IMethodSymbol method, ITypeSymbol sourceType)
@@ -228,7 +314,9 @@ internal static class CallSiteAnalyzer
     };
 
     // The query the operator is applied to: the receiver of an instance method, otherwise the first argument.
-    private static ITypeSymbol? GetSourceType(IInvocationOperation operation)
+    private static ITypeSymbol? GetSourceType(IInvocationOperation operation) => GetSource(operation)?.Type;
+
+    private static IOperation? GetSource(IInvocationOperation operation)
     {
         var source = operation.TargetMethod.IsStatic
             ? operation.Arguments.FirstOrDefault(static a => a.Parameter?.Ordinal == 0)?.Value
@@ -239,7 +327,7 @@ internal static class CallSiteAnalyzer
             source = conversion.Operand;
         }
 
-        return source?.Type;
+        return source;
     }
 
     // The T of IQueryable<T>; null for other types and for type parameters, which generic helpers use.
@@ -280,6 +368,11 @@ internal static class CallSiteAnalyzer
             && expression.TypeArguments[0] is INamedTypeSymbol { TypeArguments.Length: 2 } func
             && func.TypeArguments[1].SpecialType == SpecialType.System_Boolean;
 
+    // Expression<Func<T, TResult>>, as opposed to the index-taking Expression<Func<T, int, TResult>>.
+    private static bool IsSelector(ITypeSymbol type)
+        => type is INamedTypeSymbol { TypeArguments.Length: 1 } expression
+            && expression.TypeArguments[0] is INamedTypeSymbol { TypeArguments.Length: 2 };
+
     private static OperatorKind OrderKind(string name) => name switch
     {
         "OrderBy" => OperatorKind.OrderBy,
@@ -306,9 +399,26 @@ internal static class CallSiteAnalyzer
         IInvocationOperation operation,
         InvocationExpressionSyntax invocation,
         SemanticModel semanticModel,
+        string? projectedFrom,
         CancellationToken cancellationToken)
     {
         private readonly string _elementType = EntityDiscovery.TypeName(elementSymbol);
+
+        /// <summary>
+        /// An operator on a projected query. Its interceptor is generic, since the element type can be anonymous, and
+        /// reads no entity.
+        /// </summary>
+        public CallSite SupportedAfterSelect(OperatorKind kind, bool isAsync = false)
+            => new(
+                _elementType,
+                location,
+                kind,
+                isAsync,
+                HasPredicate: false,
+                Diagnostic: null,
+                Interception: semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax(),
+                Signature: GetGenericSignature(operation.TargetMethod),
+                ProjectedFrom: projectedFrom);
 
         /// <param name="kind">The operator.</param>
         /// <param name="lambdaOrdinal">The parameter that must be a lambda written at the call site.</param>
@@ -319,6 +429,7 @@ internal static class CallSiteAnalyzer
             PredicateModel? predicate = null;
             string? orderProperty = null;
             IncludeModel? include = null;
+            ProjectionModel? projection = null;
             var usesDecimalOperators = false;
             if (lambdaOrdinal is { } ordinal)
             {
@@ -349,6 +460,17 @@ internal static class CallSiteAnalyzer
                     }
 
                     orderProperty = property;
+                }
+                else if (lambda is not null && kind == OperatorKind.Select)
+                {
+                    var (translated, projectionDiagnostic) = ProjectionTranslator.Translate(
+                        lambda, elementSymbol, semanticModel, location, cancellationToken);
+                    if (projectionDiagnostic is not null)
+                    {
+                        return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, projectionDiagnostic);
+                    }
+
+                    projection = translated;
                 }
                 else if (lambda is not null && kind is OperatorKind.Include or OperatorKind.ThenInclude)
                 {
@@ -384,10 +506,11 @@ internal static class CallSiteAnalyzer
                 entity,
                 interception,
                 predicate,
-                GetSignature(operation.TargetMethod),
+                kind == OperatorKind.Select ? GetGenericSignature(operation.TargetMethod) : GetSignature(operation.TargetMethod),
                 orderProperty,
                 include,
-                usesDecimalOperators);
+                usesDecimalOperators,
+                projection);
         }
 
         private static bool IsPredicate(OperatorKind kind, bool hasPredicate)
@@ -407,6 +530,18 @@ internal static class CallSiteAnalyzer
                 declared.Parameters.Select(static p => new ParameterSignature(p.Type.ToDisplayString(SignatureFormat), p.Name)).ToEquatableArray());
         }
 
+        // The method as declared, before its type arguments are substituted, for a generic interceptor.
+        private static InterceptorSignature GetGenericSignature(IMethodSymbol method)
+        {
+            var declared = (method.ReducedFrom ?? method).OriginalDefinition;
+            return new InterceptorSignature(
+                declared.Name,
+                EntityDiscovery.TypeName(declared.ContainingType),
+                declared.ReturnType.ToDisplayString(SignatureFormat),
+                declared.Parameters.Select(static p => new ParameterSignature(p.Type.ToDisplayString(SignatureFormat), p.Name)).ToEquatableArray(),
+                declared.TypeParameters.Select(static t => t.Name).ToEquatableArray());
+        }
+
         public CallSite Unsupported() => Reject(DiagnosticDescriptors.UnsupportedOperator, methodName);
 
         /// <summary>Rejects the call at the argument with <paramref name="ordinal"/>, quoting it in the message.</summary>
@@ -420,8 +555,16 @@ internal static class CallSiteAnalyzer
 
         public CallSite Overload(string reason) => Reject(DiagnosticDescriptors.UnsupportedOverload, methodName, reason);
 
+        // A rejected operator on a projection is reported when the projection is of an entity query.
         public CallSite Reject(DiagnosticDescriptor descriptor, params string[] messageArgs)
-            => new(_elementType, location, Operator: null, IsAsync: false, HasPredicate: false, DiagnosticInfo.Create(descriptor, location, messageArgs));
+            => new(
+                _elementType,
+                location,
+                Operator: null,
+                IsAsync: false,
+                HasPredicate: false,
+                DiagnosticInfo.Create(descriptor, location, messageArgs),
+                ProjectedFrom: projectedFrom);
 
         // Lambdas are translated at build time, so the argument must be the lambda itself.
         private (LambdaExpressionSyntax? Lambda, DiagnosticInfo? Diagnostic) RequireLambda(int ordinal)

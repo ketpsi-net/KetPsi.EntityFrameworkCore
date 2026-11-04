@@ -19,6 +19,7 @@ internal enum OperatorKind
     ThenInclude,
     AsSplitQuery,
     AsSingleQuery,
+    Select,
     ToList,
     ToArray,
     First,

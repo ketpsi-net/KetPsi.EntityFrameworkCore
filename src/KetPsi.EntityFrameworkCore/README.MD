@@ -45,6 +45,7 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Tracking | `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`, and the context's `QueryTrackingBehavior` |
 | Query filters | Model query filters always apply; `IgnoreQueryFilters()` (and, on EF Core 10, `IgnoreQueryFilters(["name"])`) |
 | Related data | `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`; `AsSplitQuery()` and `AsSingleQuery()` are accepted |
+| Projection | `Select` to anonymous types, records and constructors, object initializers, `ValueTuple.Create` or one member, reading properties, reference navigations and entities; then `Skip`, `Take` and terminals |
 | Terminals | `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`, their `Async` versions, the predicate overloads, and `foreach` / `await foreach` |
 
 ### Predicates
@@ -82,6 +83,15 @@ is loaded with one more statement that matches the keys of the parents already r
 parent apply exactly. A collection `Include` appends the key to the ordering, as EF Core does. Tracking, no-tracking
 and identity-resolution queries connect the entities the way EF Core does, and included collections are never null.
 
+### Projection
+
+`Select` reads only the columns the lambda uses. Its members can be entity properties, values through reference
+navigations (`p.Blog.Owner.Name`, joined like an included reference) and entities (`p`, `p.Blog`). Projected entities
+are tracked, identity-resolved and given the includes below them, as in EF Core. A value through a missing optional
+navigation is null, and a non-nullable value type there throws as it does in EF Core unless it is cast to nullable.
+After `Select`, only `Skip`, `Take` and terminals without a predicate are allowed; filter and order before it.
+Computed values, collection navigations, `Distinct` and aggregates in projections are not supported yet.
+
 ## Native AOT
 
 KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things under Native AOT:
@@ -95,6 +105,9 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 - **Decimal operators are handled.** The compiler builds decimal comparisons such as `p.Price < 20m` by reflection,
   which trimming would break; queries that use them keep decimal's operator methods, so they work without relying on
   what else the app references.
+- **Anonymous types and object initializers in `Select` warn IL2026** in the calling code, because the compiler builds
+  their expression tree with reflection over the result type's properties. KetPsi never reads that tree, so the
+  warning is harmless. Records, other constructors, single members and `ValueTuple.Create` don't warn.
 - The `DbContext` constructor itself carries EF Core's trim and AOT warnings, which an application cannot remove.
 
 ## Diagnostics
@@ -108,7 +121,9 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP1004 | Raw SQL not supported |
 | KP1005 | A lambda must be written at the call site |
 | KP1006 | Operator overload not supported |
+| KP1007 | Operator not supported after `Select` |
 | KP2001–KP2008 | Expression, navigation, method, `EF.Functions`, collection, property comparison, value or order key not translatable |
+| KP2009 | Projection not supported: a computed value, a collection navigation, or a type the generated code cannot reach |
 | KP3001–KP3005 | Property type, value converter, owned/complex/JSON mapping, entity construction or query filter not supported |
 
 ## How it works

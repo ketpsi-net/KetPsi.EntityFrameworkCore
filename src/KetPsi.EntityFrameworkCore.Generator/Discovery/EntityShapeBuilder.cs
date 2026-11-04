@@ -78,6 +78,10 @@ internal static class EntityShapeBuilder
         return named.TypeKind == TypeKind.Class ? named : null;
     }
 
+    /// <summary>Whether a property of this type is a collection navigation.</summary>
+    internal static bool IsCollectionNavigation(ITypeSymbol type)
+        => !Classify(type).IsScalar && type is INamedTypeSymbol named && CollectionElement(named) is not null;
+
     private static NavigationShape? BuildNavigation(IPropertySymbol property, Compilation compilation)
     {
         if (property.IsStatic || property.IsIndexer || property.GetMethod is null

@@ -41,10 +41,11 @@ var page = await db.Blogs
 - `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`,
   `IgnoreQueryFilters()` (EF Core 10 also `IgnoreQueryFilters(["name"])`).
 - `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`, `AsSplitQuery()`, `AsSingleQuery()` (see Include below).
+- `Select(x => ...)`, then `Skip`, `Take` and the terminals below without a predicate (see Projections below).
 - Terminals: `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`,
   their `Async` versions and predicate overloads, plus `foreach` / `await foreach` over the query.
 
-**Not supported yet** (build error): `Select`, `Distinct`, `GroupBy`, `Join`, `Sum`/`Min`/`Max`/`Average`, `Last`,
+**Not supported yet** (build error): `Distinct`, `GroupBy`, `Join`, `Sum`/`Min`/`Max`/`Average`, `Last`,
 `FromSql*` (KP1004), `TagWith`, `Find`, `ExecuteUpdate`/`ExecuteDelete`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
@@ -101,6 +102,39 @@ var blogs = await db.Blogs
   without a join entity class throw at runtime; map the join entity and include it with `ThenInclude`.
 - Navigations inside `Where` are still not supported (KP2002).
 
+## Projections
+
+```csharp
+var rows = await db.Posts
+    .Where(p => p.IsPublished)
+    .OrderBy(p => p.Title)
+    .Select(p => new { p.Id, p.Title, BlogName = p.Blog.Name, p.Blog.Owner })
+    .Take(20)
+    .ToListAsync(ct);
+```
+
+- The statement reads only the columns the lambda uses. Results can be anonymous types (nested too), records and
+  other constructors, object initializers, `ValueTuple.Create(...)`, or a single member (`p => p.Title`).
+- Members read entity properties, follow reference navigations (`p.Blog.Owner.Name`), or are entities themselves
+  (`p`, `p.Blog`). Each navigation is joined like an included reference: `INNER JOIN` when required, `LEFT JOIN`
+  when optional, with the target's query filters in the join.
+- A value read through an optional navigation is null when there is no related entity. For a non-nullable value
+  type that throws "Nullable object must have a value.", as in EF Core; cast it, `(int?)p.Blog.Owner.Id`, to get null.
+- Projected entities are tracked, identity-resolved and get the includes below them, as in EF Core:
+  `Include(p => p.Blog).ThenInclude(b => b.Posts).Select(p => p.Blog)` loads each blog's posts. Includes of
+  entities the projection doesn't select are ignored. Without tracking or identity resolution, every projected
+  entity is its own instance and nothing is connected.
+- A projection with entities reads every row before returning any; one with only columns streams them.
+- After `Select`, only `Skip`, `Take` and terminals without a predicate are allowed (KP1007). Filter and order the
+  entities before `Select`. `Skip`/`Take` after `Select` page the entity rows, so they give the same rows as before it.
+- `Count`, `LongCount` and `Any` ignore the projection, so they don't join its navigations, as in EF Core: with a
+  required, filtered reference, `Count()` can be higher than `ToList().Count`.
+- Not supported yet (KP2009): computed values (`p.Title + "!"`, `p.Title.ToUpper()`, captured variables,
+  constants), collection navigations (`b.Posts`, `b.Posts.Count`; include them on a projected entity instead), and
+  types or setters the generated code cannot reach (private nested types). `Distinct` and aggregates after `Select`
+  are not supported yet either (KP1007).
+- The indexed overload `Select((x, i) => ...)` is not supported (KP1006).
+
 ## Tracking
 
 Same behavior as EF Core:
@@ -136,6 +170,9 @@ Same behavior as EF Core:
 5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor; KetPsi itself adds none.
 6. Decimal comparisons in predicates (`p.Price < 20m`) are safe: the compiler builds them by reflection, and the
    generated interceptor keeps decimal's operator methods for it. Nothing to configure.
+7. A `Select` to an anonymous type or an object initializer warns IL2026 in your code: the compiler builds the
+   lambda's expression tree with reflection over the result type's properties. KetPsi never reads that tree, so the
+   warning is harmless. Records, other constructors, single members and `ValueTuple.Create` don't warn.
 
 ## Fixing KP diagnostics
 
@@ -146,9 +183,11 @@ Same behavior as EF Core:
 | KP1002 | Include one navigation per lambda, chain with `ThenInclude`, filter collections in a separate query |
 | KP1005 | Write the lambda inline at the call |
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
+| KP1007 | Filter and order before `Select`; after it use only `Skip`, `Take` and terminals without a predicate |
 | KP2001–KP2005 | Simplify the predicate to property-vs-value comparisons |
 | KP2006 | Compare a property with a value, not with another property |
 | KP2007 | Move the value into a local variable before the query |
 | KP2008 | Order by a direct property |
+| KP2009 | Project properties, reference navigations and entities; compute values after the query, in memory |
 | KP3001–KP3004 | Change the mapping to a supported type and shape |
 | KP3005 | Make the query filter a translatable predicate |
