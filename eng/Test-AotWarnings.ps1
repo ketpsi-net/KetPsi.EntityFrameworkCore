@@ -27,15 +27,19 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $warningPattern = 'warning (IL\d{4}): (.*?)(\s+\[[^\]]*\])?\s*$'
+# Lambdas and closures get numbered names (b__0_31, DisplayClass0_2) that change whenever the sample does.
+$generatedNumberPattern = '(?<=b__|DisplayClass)\d+(_\d+)?'
 $baselineHeader = @(
     '# Trim and AOT warnings the AOT sample is allowed to produce, as reported by eng/Test-AotWarnings.ps1.',
-    '# All of them come from EF Core and SqlClient. Regenerate with -Update after an EF Core or SDK upgrade.'
+    '# They come from EF Core and SqlClient, and from the expression trees the compiler builds for anonymous types and',
+    '# object initializers in Select (IL2026 in Program). Regenerate with -Update after an EF Core or SDK upgrade.'
 )
 
 function Get-Warnings([string] $path) {
     $found = foreach ($line in Get-Content -LiteralPath $path) {
         if ($line -match $warningPattern) {
-            "$($Matches[1]): $($Matches[2].Trim())"
+            $message = $Matches[2].Trim() -replace $generatedNumberPattern, 'N'
+            "$($Matches[1]): $message"
         }
     }
 

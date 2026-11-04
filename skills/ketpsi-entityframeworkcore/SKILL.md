@@ -188,9 +188,11 @@ Same behavior as EF Core:
 5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor; KetPsi itself adds none.
 6. Decimal comparisons in predicates (`p.Price < 20m`) are safe: the compiler builds them by reflection, and the
    generated interceptor keeps decimal's operator methods for it. Nothing to configure.
-7. A `Select` to an anonymous type or an object initializer warns IL2026 in your code: the compiler builds the
-   lambda's expression tree with reflection over the result type's properties. KetPsi never reads that tree, so the
-   warning is harmless. Records, other constructors, single members and `ValueTuple.Create` don't warn.
+7. A `Select` to an anonymous type or an object initializer warns IL2026 in your code (`Expression.New` with members,
+   `Expression.Bind`): the compiler builds the lambda's expression tree with reflection over the result type's
+   properties. KetPsi never reads that tree, so the warning is harmless and the query runs under Native AOT. Records,
+   other constructors, single members and `ValueTuple.Create` don't warn; use one of them where trim warnings must
+   stay at zero.
 
 ## Fixing KP diagnostics
 

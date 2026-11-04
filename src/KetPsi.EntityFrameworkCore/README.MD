@@ -117,7 +117,8 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
   what else the app references.
 - **Anonymous types and object initializers in `Select` warn IL2026** in the calling code, because the compiler builds
   their expression tree with reflection over the result type's properties. KetPsi never reads that tree, so the
-  warning is harmless. Records, other constructors, single members and `ValueTuple.Create` don't warn.
+  warning is harmless and the query runs under Native AOT. Records, other constructors, single members and
+  `ValueTuple.Create` don't warn; use one of them where trim warnings must stay at zero.
 - The `DbContext` constructor itself carries EF Core's trim and AOT warnings, which an application cannot remove.
 
 ## Diagnostics
