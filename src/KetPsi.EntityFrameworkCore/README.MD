@@ -92,7 +92,8 @@ navigations (`p.Blog.Owner.Name`, joined like an included reference) and entitie
 are tracked, identity-resolved and given the includes below them, as in EF Core. A value through a missing optional
 navigation is null, and a non-nullable value type there throws as it does in EF Core unless it is cast to nullable.
 Computed members run in C# on the values read, as EF Core evaluates a final projection on the client; captured values
-are read each time the query runs. After `Select`, only `Skip`, `Take`, `Distinct`, aggregates and terminals without a
+are read each time the query runs. Following C# rather than SQL, `Math.Round` rounds halves to even and string methods
+use the current culture. After `Select`, only `Skip`, `Take`, `Distinct`, aggregates and terminals without a
 predicate are allowed; filter and order before it. Collection navigations in projections are not supported yet.
 
 ### Aggregates

@@ -6,6 +6,17 @@ namespace KetPsi.EntityFrameworkCore.Differential;
 
 public sealed record RatingFilter(int Minimum);
 
+public sealed record BlogSummary(int Id, string Name, decimal Price);
+
+public sealed class BlogDates
+{
+    public int Id { get; set; }
+
+    public DateTime CreatedAt { get; init; }
+
+    public Guid ExternalId { get; set; }
+}
+
 public static class Queries
 {
     public static int Threshold = 4;
@@ -370,6 +381,187 @@ public static class Queries
         db.SaveChanges();
         return blog;
     }
+
+    // Projections of columns: the test compares every member of every result.
+    public static object SelectAnonymous(DiffDb db)
+        => db.Blogs.OrderBy(b => b.Id).Select(b => new { b.Id, b.Name, b.Views, b.Status, b.IsActive }).ToList();
+
+    public static List<BlogSummary> SelectRecord(DiffDb db) => db.Blogs.Select(b => new BlogSummary(b.Id, b.Name, b.Price)).ToList();
+
+    public static List<BlogDates> SelectInitializer(DiffDb db)
+        => db.Blogs.Select(b => new BlogDates { Id = b.Id, CreatedAt = b.CreatedAt, ExternalId = b.ExternalId }).ToList();
+
+    public static List<string> SelectName(DiffDb db) => db.Blogs.Select(b => b.Name).ToList();
+
+    public static List<int?> SelectViews(DiffDb db) => db.Blogs.Select(b => b.Views).ToList();
+
+    public static List<(int, bool)> SelectTuple(DiffDb db) => db.Blogs.Select(b => ValueTuple.Create(b.Id, b.IsActive)).ToList();
+
+    public static object SelectNested(DiffDb db) => db.Blogs.Select(b => new { b.Id, Inner = new { b.Rating, b.Price } }).ToList();
+
+    // Through navigations: optional references are left-joined, required ones inner-joined with the target's filters.
+    public static object SelectAuthorName(DiffDb db) => db.Blogs.Select(b => new { b.Id, AuthorName = b.Author!.Name }).ToList();
+
+    public static List<int?> SelectAuthorIdNullable(DiffDb db) => db.Blogs.Select(b => (int?)b.Author!.Id).ToList();
+
+    public static List<int> SelectAuthorIdMissing(DiffDb db) => db.Blogs.Select(b => b.Author!.Id).ToList();
+
+    public static object SelectPostBlogName(DiffDb db) => db.Posts.Select(p => new { p.Id, BlogName = p.Blog.Name }).ToList();
+
+    public static object SelectTwoLevels(DiffDb db)
+        => db.Comments.Select(c => new { c.Id, Blog = c.Post.Blog.Name, Author = c.Post.Blog.Author!.Name }).ToList();
+
+    public static object SelectIgnoringFilters(DiffDb db) => db.Posts.IgnoreQueryFilters().Select(p => new { p.Id, p.Blog.Name }).ToList();
+
+    // Operators after Select; these are compared in order.
+    public static object SelectPaged(DiffDb db)
+        => db.Blogs.Where(b => b.IsActive).OrderBy(b => b.Name).ThenBy(b => b.Id).Select(b => new { b.Id, b.Name }).Skip(1).Take(3).ToList();
+
+    public static List<string> SelectTakeAfterSelect(DiffDb db) => db.Posts.OrderBy(p => p.Id).Select(p => p.Blog.Name).Take(4).ToList();
+
+    public static string SelectFirst(DiffDb db) => db.Blogs.OrderBy(b => b.Id).Select(b => b.Name).First();
+
+    public static int SelectFirstOrDefaultNone(DiffDb db) => db.Blogs.Where(b => b.Rating > 100).Select(b => b.Id).FirstOrDefault();
+
+    public static int SelectSingleTooMany(DiffDb db) => db.Blogs.Select(b => b.Id).Single();
+
+    public static Task<BlogSummary> SelectSingleAsync(DiffDb db, int id)
+        => db.Blogs.Where(b => b.Id == id).Select(b => new BlogSummary(b.Id, b.Name, b.Price)).SingleAsync();
+
+    public static Task<string[]> SelectToArrayAsync(DiffDb db) => db.Blogs.OrderBy(b => b.Id).Select(b => b.Name).ToArrayAsync();
+
+    // Count ignores the projection, so the inner join that drops post 901 is not applied, as in EF Core.
+    public static int SelectCount(DiffDb db) => db.Posts.Select(p => p.Blog.Name).Count();
+
+    public static Task<long> SelectLongCountAsync(DiffDb db) => db.Blogs.Select(b => b.Author!.Name).LongCountAsync();
+
+    public static bool SelectAny(DiffDb db, int rating) => db.Blogs.Where(b => b.Rating > rating).Select(b => b.Name).Any();
+
+    public static List<string> SelectEnumerated(DiffDb db)
+    {
+        var names = new List<string>();
+        foreach (var name in db.Blogs.Where(b => b.IsActive).Select(b => b.Name))
+        {
+            names.Add(name);
+        }
+
+        return names;
+    }
+
+    // Entities in projections: tracked, identity-resolved and given their includes as in EF Core.
+    public static object SelectEntityAndColumn(DiffDb db) => db.Blogs.Select(b => new { b, b.Name }).ToList();
+
+    public static object SelectEntityAndColumnNoTracking(DiffDb db) => db.Blogs.AsNoTracking().Select(b => new { b, b.Name }).ToList();
+
+    public static List<Author?> SelectAuthors(DiffDb db) => db.Blogs.OrderBy(b => b.Id).Select(b => b.Author).ToList();
+
+    public static List<Author?> SelectAuthorsNoTracking(DiffDb db) => db.Blogs.AsNoTracking().OrderBy(b => b.Id).Select(b => b.Author).ToList();
+
+    public static List<Author?> SelectAuthorsIdentityResolution(DiffDb db)
+        => db.Blogs.AsNoTrackingWithIdentityResolution().OrderBy(b => b.Id).Select(b => b.Author).ToList();
+
+    public static object SelectBlogAndAuthor(DiffDb db) => db.Blogs.Select(b => new { b, b.Author }).ToList();
+
+    public static object SelectBlogAndAuthorNoTracking(DiffDb db) => db.Blogs.AsNoTracking().Select(b => new { b, b.Author }).ToList();
+
+    public static object SelectBlogAndAuthorIdentityResolution(DiffDb db)
+        => db.Blogs.AsNoTrackingWithIdentityResolution().Select(b => new { b, b.Author }).ToList();
+
+    public static object SelectPostAndBlog(DiffDb db) => db.Posts.Select(p => new { p, p.Blog }).ToList();
+
+    public static object SelectAuthorTwiceNoTracking(DiffDb db)
+        => db.Blogs.AsNoTracking().OrderBy(b => b.Id).Select(b => new { A = b.Author, B = b.Author }).ToList();
+
+    public static object SelectEntityWithInclude(DiffDb db) => db.Blogs.AsNoTracking().Include(b => b.Posts).Select(b => new { b, b.Name }).ToList();
+
+    public static List<Blog> SelectNavigationWithInclude(DiffDb db)
+        => db.Posts.Include(p => p.Blog).ThenInclude(b => b.Author).OrderBy(p => p.Id).Select(p => p.Blog).ToList();
+
+    public static object SelectEntityPaged(DiffDb db)
+        => db.Blogs.AsNoTracking().Include(b => b.Posts).OrderBy(b => b.Name).Select(b => new { b, Author = b.Author!.Name }).Skip(1).Take(3).ToList();
+
+    public static object SelectEntityFirst(DiffDb db)
+        => db.Blogs.Include(b => b.Posts).OrderByDescending(b => b.Name).Select(b => new { b, b.Author }).First();
+
+    // Computed members run in C# on the columns read; EF Core computes some of them in SQL.
+    public static object SelectComputed(DiffDb db, string suffix)
+        => db.Blogs.Select(b => new
+        {
+            b.Id,
+            Label = b.Name + suffix,
+            Upper = b.Name.ToUpper(),
+            b.Name.Length,
+            Views = b.Views ?? 0,
+            NextViews = b.Views + 1,
+            Doubled = b.Rating * 2,
+            DoubledPrice = b.Price * 2,
+            b.CreatedAt.Year,
+            State = b.Status == Status.Draft ? "draft" : "live",
+            Text = $"{b.Id}:{b.Name}",
+        }).ToList();
+
+    public static object SelectComputedCaptured(DiffDb db, int bonus)
+        => db.Blogs.Select(b => new { b.Id, Above = b.Rating > Threshold, Bonus = b.Rating + bonus, Featured = FeaturedIds.Contains(b.Id) }).ToList();
+
+    public static List<string?> SelectComputedThroughMissingNavigation(DiffDb db) => db.Blogs.Select(b => (string?)b.Author!.Name.ToUpper()).ToList();
+
+    // Distinct.
+    public static List<Blog> DistinctBlogs(DiffDb db) => db.Blogs.AsNoTracking().Distinct().ToList();
+
+    public static List<int> DistinctRatings(DiffDb db) => db.Blogs.Select(b => b.Rating).Distinct().ToList();
+
+    public static List<string> DistinctAuthorNames(DiffDb db) => db.Blogs.Select(b => b.Author!.Name).Distinct().ToList();
+
+    public static int DistinctCount(DiffDb db) => db.Blogs.Select(b => new { b.Status, b.IsActive }).Distinct().Count();
+
+    public static List<Author?> DistinctAuthorsNoTracking(DiffDb db) => db.Blogs.AsNoTracking().Select(b => b.Author).Distinct().ToList();
+
+    public static List<Status> DistinctAfterTake(DiffDb db) => db.Blogs.OrderBy(b => b.Id).Take(4).Select(b => b.Status).Distinct().ToList();
+
+    // Aggregates, with EF Core's SQL and its results on no rows.
+    public static int SumRating(DiffDb db) => db.Blogs.Sum(b => b.Rating);
+
+    public static int? SumViews(DiffDb db) => db.Blogs.Sum(b => b.Views);
+
+    public static decimal SumPrice(DiffDb db) => db.Blogs.Sum(b => b.Price);
+
+    public static double AverageRating(DiffDb db) => db.Blogs.Average(b => b.Rating);
+
+    public static double? AverageViews(DiffDb db) => db.Blogs.Average(b => b.Views);
+
+    public static decimal AveragePrice(DiffDb db) => db.Blogs.Average(b => b.Price);
+
+    public static string? MinName(DiffDb db) => db.Blogs.Min(b => b.Name);
+
+    public static DateTime MaxCreatedAt(DiffDb db) => db.Blogs.Max(b => b.CreatedAt);
+
+    public static Status MaxStatus(DiffDb db) => db.Blogs.Max(b => b.Status);
+
+    public static int? MinViews(DiffDb db) => db.Blogs.Min(b => b.Views);
+
+    public static string? MaxAuthorName(DiffDb db) => db.Blogs.Max(b => b.Author!.Name);
+
+    public static int MaxPostBlogRating(DiffDb db) => db.Posts.Max(p => p.Blog.Rating);
+
+    public static int SumNone(DiffDb db) => db.Blogs.Where(b => b.Rating > 100).Sum(b => b.Rating);
+
+    public static int MaxNone(DiffDb db) => db.Blogs.Where(b => b.Rating > 100).Max(b => b.Rating);
+
+    public static int? MaxNoneNullable(DiffDb db) => db.Blogs.Where(b => b.Rating > 100).Max(b => b.Views);
+
+    public static double AverageNone(DiffDb db) => db.Blogs.Where(b => b.Rating > 100).Average(b => b.Rating);
+
+    public static int SelectSum(DiffDb db) => db.Blogs.Select(b => b.Rating).Sum();
+
+    public static Task<int> SelectMaxAsync(DiffDb db) => db.Blogs.Select(b => b.Rating).MaxAsync();
+
+    public static int DistinctSum(DiffDb db) => db.Blogs.Select(b => b.Rating).Distinct().Sum();
+
+    public static int TakeThenSum(DiffDb db) => db.Blogs.OrderBy(b => b.Id).Take(3).Sum(b => b.Rating);
+
+    public static Task<decimal> SumAsync(DiffDb db, int rating) => db.Blogs.Where(b => b.Rating >= rating).SumAsync(b => b.Price);
+
+    public static Task<int> MinAsyncNone(DiffDb db) => db.Blogs.Where(b => b.Rating > 100).MinAsync(b => b.Rating);
 
 #if NET10_0_OR_GREATER
     public static List<Blog> IgnoringTenantFilter(DiffDb db)

@@ -126,6 +126,10 @@ var rows = await db.Posts
   interpolated strings, your own static and extension methods. Captured variables, fields of the enclosing instance
   and static members are read when the query runs, so each run sees their current values. A `string` method on a null
   column gives null, as the SQL EF Core sends does; any other member of a null value throws, as it does in C#.
+- Because computed members follow C#, a few results can differ from EF Core where EF Core computes in SQL:
+  `Math.Round` rounds halves to even (SQL rounds them away from zero), string methods use the current culture, and
+  `b.Author != null` reads the author entity, which a tracking query then tracks. Compare a foreign key instead
+  (`b.AuthorId != null`), or round explicitly with `MidpointRounding.AwayFromZero`.
 - Members read entity properties, follow reference navigations (`p.Blog.Owner.Name`), or are entities themselves
   (`p`, `p.Blog`). Each navigation is joined like an included reference: `INNER JOIN` when required, `LEFT JOIN`
   when optional, with the target's query filters in the join.

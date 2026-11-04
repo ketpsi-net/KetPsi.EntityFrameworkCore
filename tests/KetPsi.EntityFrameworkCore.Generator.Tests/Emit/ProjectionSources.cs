@@ -91,6 +91,8 @@ internal static class ProjectionSources
 
             public List<string> UpperNames() => db.Blogs.Select(b => b.Name.ToUpper()).ToList();
 
+            public List<string?> UpperOwnerNames() => db.Blogs.Select(b => (string?)b.Owner!.Name.ToUpper()).ToList();
+
             public List<string> DistinctNames() => db.Blogs.Select(b => b.Name).Distinct().ToList();
 
             public List<Blog> DistinctBlogs() => db.Blogs.Distinct().ToList();

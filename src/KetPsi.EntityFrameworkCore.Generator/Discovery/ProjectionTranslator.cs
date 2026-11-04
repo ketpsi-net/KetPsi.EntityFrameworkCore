@@ -35,6 +35,9 @@ internal sealed class ProjectionTranslator
     private const string ReasonInitializer = "only property and field assignments are supported in object initializers";
     private const string NullableObjectMustHaveAValue = "Nullable object must have a value.";
 
+    private static readonly SymbolDisplayFormat AnnotatedFormat = SymbolDisplayFormat.FullyQualifiedFormat
+        .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
+
     private readonly SemanticModel _model;
     private readonly IParameterSymbol _parameter;
     private readonly INamedTypeSymbol _root;
@@ -375,10 +378,11 @@ internal sealed class ProjectionTranslator
         return shape;
     }
 
-    // Types the reader names must be accessible to the generated code, which lives in the same assembly.
+    // Types the reader names must be accessible to the generated code, which lives in the same assembly. Nullable
+    // annotations are kept, so a cast such as (string?) means the same to the generated code's nullable analysis.
     private string NameOf(ITypeSymbol type, SyntaxNode syntax)
         => IsAccessible(type)
-            ? EntityDiscovery.TypeName(type)
+            ? type.ToDisplayString(AnnotatedFormat)
             : throw Fail(syntax, $"the type '{type.ToDisplayString()}' must be accessible to generated code in the same assembly");
 
     private bool IsAccessible(ISymbol symbol) => Compilation.IsSymbolAccessibleWithin(symbol, Compilation.Assembly);

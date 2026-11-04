@@ -170,6 +170,76 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "IncludeEnumerated", [] },
             { "IncludeAfterTrackingBlog", [] },
             { "LoadGraphModifySave", [] },
+            { "SelectAnonymous", [] },
+            { "SelectRecord", [] },
+            { "SelectInitializer", [] },
+            { "SelectName", [] },
+            { "SelectViews", [] },
+            { "SelectTuple", [] },
+            { "SelectNested", [] },
+            { "SelectAuthorName", [] },
+            { "SelectAuthorIdNullable", [] },
+            { "SelectAuthorIdMissing", [] },
+            { "SelectPostBlogName", [] },
+            { "SelectTwoLevels", [] },
+            { "SelectIgnoringFilters", [] },
+            { "SelectPaged", [] },
+            { "SelectTakeAfterSelect", [] },
+            { "SelectFirst", [] },
+            { "SelectFirstOrDefaultNone", [] },
+            { "SelectSingleTooMany", [] },
+            { "SelectSingleAsync", [3] },
+            { "SelectToArrayAsync", [] },
+            { "SelectCount", [] },
+            { "SelectLongCountAsync", [] },
+            { "SelectAny", [4] },
+            { "SelectAny", [5] },
+            { "SelectEnumerated", [] },
+            { "SelectEntityAndColumn", [] },
+            { "SelectEntityAndColumnNoTracking", [] },
+            { "SelectAuthors", [] },
+            { "SelectAuthorsNoTracking", [] },
+            { "SelectAuthorsIdentityResolution", [] },
+            { "SelectBlogAndAuthor", [] },
+            { "SelectBlogAndAuthorNoTracking", [] },
+            { "SelectBlogAndAuthorIdentityResolution", [] },
+            { "SelectPostAndBlog", [] },
+            { "SelectAuthorTwiceNoTracking", [] },
+            { "SelectEntityWithInclude", [] },
+            { "SelectNavigationWithInclude", [] },
+            { "SelectEntityPaged", [] },
+            { "SelectEntityFirst", [] },
+            { "SelectComputed", ["!"] },
+            { "SelectComputedCaptured", [10] },
+            { "SelectComputedThroughMissingNavigation", [] },
+            { "DistinctBlogs", [] },
+            { "DistinctRatings", [] },
+            { "DistinctAuthorNames", [] },
+            { "DistinctCount", [] },
+            { "DistinctAuthorsNoTracking", [] },
+            { "DistinctAfterTake", [] },
+            { "SumRating", [] },
+            { "SumViews", [] },
+            { "SumPrice", [] },
+            { "AverageRating", [] },
+            { "AverageViews", [] },
+            { "AveragePrice", [] },
+            { "MinName", [] },
+            { "MaxCreatedAt", [] },
+            { "MaxStatus", [] },
+            { "MinViews", [] },
+            { "MaxAuthorName", [] },
+            { "MaxPostBlogRating", [] },
+            { "SumNone", [] },
+            { "MaxNone", [] },
+            { "MaxNoneNullable", [] },
+            { "AverageNone", [] },
+            { "SelectSum", [] },
+            { "SelectMaxAsync", [] },
+            { "DistinctSum", [] },
+            { "TakeThenSum", [] },
+            { "SumAsync", [4] },
+            { "MinAsyncNone", [] },
         };
 
 #if NET10_0_OR_GREATER
@@ -216,7 +286,8 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "TrackedToListAsync()", "TrackedSingleOrDefaultAsync(5)", "RequeryKeepsTrackedValues()", "LoadModifySave(2)",
         "LoadModifyShadowSaveAsync(7)", "IncludePosts()", "IncludeAuthor()", "IncludeRequiredBlog()", "IncludePostsThenComments()",
         "IncludeBlogThenPosts()", "IncludeFirst()", "IncludeSingleAsync(1)", "IncludeSingleAsync(2)", "IncludeAfterTrackingBlog()",
-        "LoadGraphModifySave()",
+        "LoadGraphModifySave()", "SelectEntityAndColumn()", "SelectAuthors()", "SelectBlogAndAuthor()", "SelectPostAndBlog()",
+        "SelectNavigationWithInclude()", "SelectEntityFirst()",
     };
 
 #if NET8_0
@@ -236,10 +307,29 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "SecondOrderByReplaces", "Page", "SkipOnly", "TakeOnly", "TakeThenWhere", "TakeThenTake", "SkipThenSkip",
         "TakeThenOrderBy", "TakeThenSkip", "AllAsArray", "ToListAsync", "ToArrayAsync", "IgnoringFilters",
         "DeletedIgnoringFilters", "IgnoringTenantFilter", "IncludePostsPaged", "IncludePostsUnordered",
+        "SelectAnonymous", "SelectPaged", "SelectTakeAfterSelect", "SelectToArrayAsync", "SelectAuthors", "SelectAuthorsNoTracking",
+        "SelectAuthorsIdentityResolution", "SelectAuthorTwiceNoTracking", "SelectNavigationWithInclude", "SelectEntityPaged",
     };
 
     private static string Key(string query, object?[] arguments)
         => query + "(" + string.Join(", ", arguments.Select(a => Convert.ToString(a, CultureInfo.InvariantCulture) ?? "null")) + ")";
+
+    // Results are compared by their descriptions, so the description must show every projected member and instance.
+    [Fact]
+    public void Description_ShowsProjectedMembersAndSharedEntities()
+    {
+        var author = new Author { Id = 4, Name = "Dee" };
+        var rows = new object?[]
+        {
+            new { Id = 1, Price = 2.50m, Author = author, Inner = new { Twice = author } },
+            new Stock::KetPsi.EntityFrameworkCore.Differential.BlogSummary(2, "b", 3m),
+            (3, (string?)null),
+        };
+
+        Assert.Equal(
+            "roots {Id=1,Price=2.5,Author=@1,Inner={Twice=@1}},BlogSummary{Id=2,Name=b,Price=3},(3,null)\n@1 Author 4|Dee|blogs=null",
+            Describe(rows));
+    }
 
     [Fact]
     public void EveryCatalogQuery_HasACase()
@@ -258,29 +348,32 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         var counter = new CommandCounter();
         await using var db = new DiffDb(fixture.ConnectionString, SqlServerFixture.Tenant, counter);
 
-        string result;
+        // Only the query's own exceptions are results; describing the value runs outside, so a harness failure fails the
+        // test instead of matching on both sides.
+        object? value;
         try
         {
-            var value = queries.GetMethod(query)!.Invoke(null, [db, .. arguments]);
+            value = queries.GetMethod(query)!.Invoke(null, [db, .. arguments]);
             if (value is Task task)
             {
                 await task;
                 value = task.GetType().GetProperty("Result")!.GetValue(task);
             }
-
-            if (value is IEnumerable rows and not string && !OrderedQueries.Contains(query))
-            {
-                value = rows.Cast<object>().OrderBy(KeyOf).ToList();
-            }
-
-            result = Describe(value);
         }
         catch (Exception exception) when (Unwrap(exception) is { } inner)
         {
-            result = $"throws {inner.GetType().Name}: {inner.Message}";
+            return ($"throws {inner.GetType().Name}: {inner.Message}", DescribeTracking(db, counter), counter.Reads);
         }
 
-        return (result, DescribeTracking(db, counter), counter.Reads);
+        if (value is IEnumerable rows and not string && !OrderedQueries.Contains(query))
+        {
+            var items = rows.Cast<object?>().ToList();
+            value = items.TrueForAll(static r => r is Blog or Author or Post or Comment)
+                ? items.OrderBy(r => KeyOf(r!)).ToList()
+                : items.OrderBy(SortKey, StringComparer.Ordinal).ToList();
+        }
+
+        return (Describe(value), DescribeTracking(db, counter), counter.Reads);
     }
 
     // The change tracker after the query: every entry by type and key, with its state, modified properties, loaded
@@ -307,6 +400,32 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
     private static Exception? Unwrap(Exception exception)
         => exception is TargetInvocationException { InnerException: { } inner } ? inner : exception;
 
+    // Orders projected rows the same way on both sides: entities by type and key, every other value by its members.
+    private static string SortKey(object? value) => value switch
+    {
+        null => "",
+        Blog or Author or Post or Comment => value.GetType().Name + "#" + KeyOf(value).ToString("D6", CultureInfo.InvariantCulture),
+        _ when IsScalar(value) => Scalar(value),
+        System.Runtime.CompilerServices.ITuple tuple => string.Join("|", Enumerable.Range(0, tuple.Length).Select(i => SortKey(tuple[i]))),
+        _ => string.Join("|", Members(value).Select(m => SortKey(m.Value))),
+    };
+
+    private static bool IsScalar(object value)
+        => value is string or bool or char or Enum or DateTime or DateTimeOffset or Guid or decimal || value.GetType().IsPrimitive;
+
+    // Decimals are compared by value: the scale SQL Server returns depends on the expression that computed them.
+    private static string Scalar(object value) => value switch
+    {
+        decimal d => d.ToString("0.############################", CultureInfo.InvariantCulture),
+        DateTime d => d.ToString("O", CultureInfo.InvariantCulture),
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture)!,
+    };
+
+    private static IEnumerable<(string Name, object? Value)> Members(object value)
+        => value.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(static p => p.GetIndexParameters().Length == 0)
+            .Select(p => (p.Name, p.GetValue(value)));
+
     private static int KeyOf(object entity) => entity switch
     {
         Blog blog => blog.Id,
@@ -328,10 +447,10 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
 
         if (value is IEnumerable rows and not string)
         {
-            return new Graph().Describe([.. rows.Cast<object>()]);
+            return new Graph().Describe([.. rows.Cast<object?>()]);
         }
 
-        return Convert.ToString(value, CultureInfo.InvariantCulture) + " (" + value.GetType().Name + ")";
+        return IsScalar(value) ? Scalar(value) + " (" + value.GetType().Name + ")" : new Graph().Describe([value]);
     }
 
     private static string Values(object entity) => entity switch
@@ -353,9 +472,9 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         private readonly Dictionary<object, int> _ids = new(ReferenceEqualityComparer.Instance);
         private readonly Queue<object> _pending = new();
 
-        public string Describe(IReadOnlyList<object> roots)
+        public string Describe(IReadOnlyList<object?> roots)
         {
-            var lines = new List<string> { "roots " + string.Join(",", roots.Select(Ref)) };
+            var lines = new List<string> { "roots " + string.Join(",", roots.Select(Value)) };
             while (_pending.TryDequeue(out var entity))
             {
                 lines.Add($"{Ref(entity)} {entity.GetType().Name} {Values(entity)}{Navigations(entity)}");
@@ -371,6 +490,18 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             Post post => $"|blog={Ref(post.Blog)}|comments={Collection(post.Comments)}",
             Comment comment => $"|post={Ref(comment.Post)}",
             _ => "",
+        };
+
+        // A projected value: entities by reference, so shared instances show; anything else by its members. Anonymous
+        // types are named by neither side, since each assembly has its own.
+        private string Value(object? value) => value switch
+        {
+            null => "null",
+            Blog or Author or Post or Comment => Ref(value),
+            _ when IsScalar(value) => Scalar(value),
+            System.Runtime.CompilerServices.ITuple tuple => "(" + string.Join(",", Enumerable.Range(0, tuple.Length).Select(i => Value(tuple[i]))) + ")",
+            _ => (value.GetType().Name.Contains("AnonymousType", StringComparison.Ordinal) ? "" : value.GetType().Name)
+                + "{" + string.Join(",", Members(value).Select(m => m.Name + "=" + Value(m.Value))) + "}",
         };
 
         private string Ref(object? entity)
