@@ -11,6 +11,31 @@ public sealed class CapturedValuesTests
     private readonly int _instanceLimit = 9;
 
     [Fact]
+    public void ReadAll_ReadsCapturedValuesInSourceOrder_AndSkipsConstants()
+    {
+        var suffix = "!";
+        var request = (Min: 2, Name: "x");
+        Expression<Func<Blog, object>> selector = b => new
+        {
+            Label = b.Name + suffix,
+            Bounded = Math.Max(b.Rating, s_limit),
+            Above = b.Rating > request.Min,
+            Instance = _instanceLimit + 1,
+            Constant = 4,
+        };
+
+        Assert.Equal(["!", 7, (2, "x"), 9], CapturedValues.ReadAll(selector));
+    }
+
+    [Fact]
+    public void ReadAll_WithoutCapturedValues_IsEmpty()
+    {
+        Expression<Func<Blog, string>> selector = b => b.Name + "!";
+
+        Assert.Empty(CapturedValues.ReadAll(selector));
+    }
+
+    [Fact]
     public void Read_Constant_ReturnsValue()
         => Assert.Equal(3, CapturedValues.Read(RightOf(b => b.Rating > 3)));
 

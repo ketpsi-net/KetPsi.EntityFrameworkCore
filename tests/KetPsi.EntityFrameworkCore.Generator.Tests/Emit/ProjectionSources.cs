@@ -39,6 +39,16 @@ internal static class ProjectionSources
 
         public sealed record BlogRow(int Id, string Name);
 
+        public static class Limits
+        {
+            public static int Floor = 3;
+        }
+
+        public static class TextExtensions
+        {
+            public static string Shout(this string text) => text + "!!";
+        }
+
         public sealed class BlogDto
         {
             public int Id { get; set; }
@@ -64,6 +74,39 @@ internal static class ProjectionSources
 
         public sealed class Queries(ShopDb db)
         {
+            private readonly string _prefix = ">";
+
+            public object Computed(string suffix) => db.Blogs.Select(b => new
+            {
+                b.Id,
+                Label = b.Name + suffix,
+                Upper = b.Name.ToUpper(),
+                b.Name.Length,
+                Bounded = Math.Max(b.Id, Limits.Floor),
+                Views = b.Views ?? 0,
+                State = b.Status == Status.Draft ? "draft" : "published",
+                Text = $"{b.Id}:{_prefix}",
+                Shout = b.Name.Shout(),
+            }).ToList();
+
+            public List<string> UpperNames() => db.Blogs.Select(b => b.Name.ToUpper()).ToList();
+
+            public List<string> DistinctNames() => db.Blogs.Select(b => b.Name).Distinct().ToList();
+
+            public List<Blog> DistinctBlogs() => db.Blogs.Distinct().ToList();
+
+            public int? SumViews() => db.Blogs.Sum(b => b.Views);
+
+            public Task<double> AverageIdAsync(CancellationToken ct) => db.Blogs.AverageAsync(b => b.Id, ct);
+
+            public string? MaxOwnerName() => db.Blogs.Max(b => b.Owner!.Name);
+
+            public int SumIds() => db.Blogs.Select(b => b.Id).Sum();
+
+            public string? MinName() => db.Blogs.Select(b => b.Name).Min();
+
+            public Task<int> MaxIdAsync(CancellationToken ct) => db.Blogs.Select(b => b.Id).MaxAsync(ct);
+
             public object Anonymous() => db.Blogs.Select(b => new { b.Id, b.Name }).ToList();
 
             public object Nested() => db.Blogs.Select(b => new { b.Id, Inner = new { b.Name, b.Status, b.Views } }).ToList();

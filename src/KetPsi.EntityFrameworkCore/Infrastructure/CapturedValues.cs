@@ -47,9 +47,41 @@ public static class CapturedValues
         }
     }
 
+    /// <summary>
+    /// Reads every captured value of a <c>Select</c> lambda, in source order: each captured variable, field of the
+    /// enclosing instance and static field or property, as the compiler stores it in the tree. Constants are not
+    /// included; the generated reader writes them itself.
+    /// </summary>
+    public static object?[] ReadAll(LambdaExpression lambda)
+    {
+        ArgumentNullException.ThrowIfNull(lambda);
+
+        var collector = new Collector();
+        collector.Visit(lambda.Body);
+        return [.. collector.Values];
+    }
+
     private static bool IsSpan(Type? type)
         => type is { IsGenericType: true } && (type.GetGenericTypeDefinition() == typeof(ReadOnlySpan<>) || type.GetGenericTypeDefinition() == typeof(Span<>));
 
     private static NotSupportedException Unsupported(Expression node)
         => new(string.Format(CultureInfo.InvariantCulture, ExceptionMessages.CapturedValueNotSupported, node.NodeType, node));
+
+    // The visitor walks the tree in source order. A captured value is a member read from a closure or the enclosing
+    // instance, which the compiler stores as constants, or a static member; members read from it are left to the reader.
+    private sealed class Collector : ExpressionVisitor
+    {
+        public List<object?> Values { get; } = [];
+
+        protected override Expression VisitMember(MemberExpression node)
+        {
+            if (node.Expression is null or ConstantExpression)
+            {
+                Values.Add(Read(node));
+                return node;
+            }
+
+            return base.VisitMember(node);
+        }
+    }
 }

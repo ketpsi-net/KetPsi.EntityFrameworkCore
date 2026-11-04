@@ -41,11 +41,17 @@ var page = await db.Blogs
 - `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`,
   `IgnoreQueryFilters()` (EF Core 10 also `IgnoreQueryFilters(["name"])`).
 - `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`, `AsSplitQuery()`, `AsSingleQuery()` (see Include below).
-- `Select(x => ...)`, then `Skip`, `Take` and the terminals below without a predicate (see Projections below).
+- `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below without a predicate (see
+  Projections below).
+- `Distinct()` on the entities or on a projection.
 - Terminals: `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`,
   their `Async` versions and predicate overloads, plus `foreach` / `await foreach` over the query.
+- Aggregates: `Sum`, `Average`, `Min`, `Max` and their `Async` versions, with a selector that reads one property
+  (`Sum(o => o.Total)`, `Max(p => p.Blog.Name)`) or after a `Select` of one property (`Select(o => o.Total).Sum()`).
+  The SQL and the empty-set behavior are EF Core's: `Sum` of no rows is 0, a nullable or reference result is null, and
+  `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
-**Not supported yet** (build error): `Distinct`, `GroupBy`, `Join`, `Sum`/`Min`/`Max`/`Average`, `Last`,
+**Not supported yet** (build error): `GroupBy`, `Join`, `Last`,
 `FromSql*` (KP1004), `TagWith`, `Find`, `ExecuteUpdate`/`ExecuteDelete`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
@@ -115,6 +121,11 @@ var rows = await db.Posts
 
 - The statement reads only the columns the lambda uses. Results can be anonymous types (nested too), records and
   other constructors, object initializers, `ValueTuple.Create(...)`, or a single member (`p => p.Title`).
+- Computed members run in C# on the values read, as EF Core evaluates a final projection on the client:
+  `p.Title + "!"`, `p.Title.ToUpper()`, `Math.Round(p.Price, 2)`, `p.Created.Year`, `p.Views ?? 0`, conditionals,
+  interpolated strings, your own static and extension methods. Captured variables, fields of the enclosing instance
+  and static members are read when the query runs, so each run sees their current values. A `string` method on a null
+  column gives null, as the SQL EF Core sends does; any other member of a null value throws, as it does in C#.
 - Members read entity properties, follow reference navigations (`p.Blog.Owner.Name`), or are entities themselves
   (`p`, `p.Blog`). Each navigation is joined like an included reference: `INNER JOIN` when required, `LEFT JOIN`
   when optional, with the target's query filters in the join.
@@ -125,14 +136,17 @@ var rows = await db.Posts
   entities the projection doesn't select are ignored. Without tracking or identity resolution, every projected
   entity is its own instance and nothing is connected.
 - A projection with entities reads every row before returning any; one with only columns streams them.
-- After `Select`, only `Skip`, `Take` and terminals without a predicate are allowed (KP1007). Filter and order the
-  entities before `Select`. `Skip`/`Take` after `Select` page the entity rows, so they give the same rows as before it.
+- After `Select`, only `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are allowed (KP1007).
+  Filter and order the entities before `Select`. `Skip`/`Take` after `Select` page the entity rows, so they give the
+  same rows as before it.
+- `Distinct` after `Select` compares the projected columns in SQL, so it can't follow computed members (KP1007).
+  An aggregate after `Select` needs a projection of one property.
 - `Count`, `LongCount` and `Any` ignore the projection, so they don't join its navigations, as in EF Core: with a
   required, filtered reference, `Count()` can be higher than `ToList().Count`.
-- Not supported yet (KP2009): computed values (`p.Title + "!"`, `p.Title.ToUpper()`, captured variables,
-  constants), collection navigations (`b.Posts`, `b.Posts.Count`; include them on a projected entity instead), and
-  types or setters the generated code cannot reach (private nested types). `Distinct` and aggregates after `Select`
-  are not supported yet either (KP1007).
+- Not supported yet (KP2009): collection navigations (`b.Posts`, `b.Posts.Count`, `b.Posts.Any()`; include them on a
+  projected entity instead), calling methods of the enclosing instance or projecting `this` (compute the value
+  first), types or members the generated code cannot reach (private nested types and methods), and aggregate
+  selectors that compute (`Sum(o => o.Price * o.Quantity)`).
 - The indexed overload `Select((x, i) => ...)` is not supported (KP1006).
 
 ## Tracking
@@ -183,11 +197,11 @@ Same behavior as EF Core:
 | KP1002 | Include one navigation per lambda, chain with `ThenInclude`, filter collections in a separate query |
 | KP1005 | Write the lambda inline at the call |
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
-| KP1007 | Filter and order before `Select`; after it use only `Skip`, `Take` and terminals without a predicate |
+| KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate |
 | KP2001–KP2005 | Simplify the predicate to property-vs-value comparisons |
 | KP2006 | Compare a property with a value, not with another property |
 | KP2007 | Move the value into a local variable before the query |
 | KP2008 | Order by a direct property |
-| KP2009 | Project properties, reference navigations and entities; compute values after the query, in memory |
+| KP2009 | Avoid collection navigations and instance methods in projections; aggregate one property; make projected types accessible |
 | KP3001–KP3004 | Change the mapping to a supported type and shape |
 | KP3005 | Make the query filter a translatable predicate |

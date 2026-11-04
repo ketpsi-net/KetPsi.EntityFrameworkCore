@@ -13,8 +13,22 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// with each property read from its column. It builds the same type, an anonymous one included.
 /// </param>
 /// <param name="Entities">The entities the projection selects, which need a reader and navigation accessors.</param>
+/// <param name="HasComputedValues">
+/// Whether a member is computed in C# from what is read, such as <c>x.Name + "!"</c>, as EF Core evaluates a final
+/// projection on the client.
+/// </param>
+/// <param name="CaptureCount">
+/// How many captured values the reader uses, from <c>captures</c>: the values the interceptor reads from the lambda's
+/// expression tree, in source order.
+/// </param>
 internal sealed record ProjectionModel(
     EquatableArray<string> PropertyPaths,
     EquatableArray<string> EntityPaths,
     string ReaderCode,
-    EquatableArray<EntityShape> Entities);
+    EquatableArray<EntityShape> Entities,
+    bool HasComputedValues = false,
+    int CaptureCount = 0)
+{
+    /// <summary>Whether the projection reads one column and nothing else, which an aggregate can work on.</summary>
+    public bool IsSingleColumn => PropertyPaths.Count == 1 && EntityPaths.Count == 0 && !HasComputedValues;
+}

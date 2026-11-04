@@ -204,6 +204,92 @@ public sealed class ProjectionInterceptorTests : IDisposable
     }
 
     [Fact]
+    public void ComputedMembers_RunInCSharpOnTheColumnsRead()
+    {
+        _connection.Rows = Table(["Id", "Name", "Views", "Status"], [1, "alpha", DBNull.Value, 0]);
+
+        var row = Assert.Single(AsList(Invoke("Computed", "!")));
+
+        Assert.Equal("SELECT [t0].[Id], [t0].[Name], [t0].[Views], [t0].[Status] FROM [Blogs] AS [t0]", _connection.LastCommand.CommandText);
+        Assert.Equal("alpha!", Get(row, "Label"));
+        Assert.Equal("ALPHA", Get(row, "Upper"));
+        Assert.Equal(5, Get(row, "Length"));
+        Assert.Equal(3, Get(row, "Bounded"));
+        Assert.Equal(0, Get(row, "Views"));
+        Assert.Equal("draft", Get(row, "State"));
+        Assert.Equal("1:>", Get(row, "Text"));
+        Assert.Equal("alpha!!", Get(row, "Shout"));
+    }
+
+    [Fact]
+    public void ComputedMembers_ReadCapturedValuesForEachQuery()
+    {
+        _connection.Rows = Table(["Id", "Name", "Views", "Status"], [1, "alpha", 4, 1]);
+
+        Assert.Equal("alpha?", Get(Assert.Single(AsList(Invoke("Computed", "?"))), "Label"));
+        Assert.Equal("alpha.", Get(Assert.Single(AsList(Invoke("Computed", "."))), "Label"));
+    }
+
+    [Fact]
+    public void ComputedMethodOfANullString_IsNull_AsInEfCore()
+    {
+        _connection.Rows = Table(["Name"], [DBNull.Value]);
+
+        Assert.Equal([null], (List<string?>)Invoke("UpperNames")!);
+    }
+
+    [Fact]
+    public void Distinct_IsSelectedInSql()
+    {
+        _connection.Rows = Table(["Name"], ["alpha"]);
+        Assert.Equal(["alpha"], (List<string>)Invoke("DistinctNames")!);
+        Assert.Equal("SELECT DISTINCT [t0].[Name] FROM [Blogs] AS [t0]", _connection.LastCommand.CommandText);
+
+        _connection.Rows = Table(["Id", "Name", "OwnerId", "Status", "Views"], [1, "alpha", DBNull.Value, 0, DBNull.Value]);
+        Assert.Single(AsList(Invoke("DistinctBlogs")));
+        Assert.StartsWith("SELECT DISTINCT [t0].[Id], ", _connection.LastCommand.CommandText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Aggregates_WithASelector_ComputeInSql()
+    {
+        _connection.Scalar = 5;
+        Assert.Equal(5, Invoke("SumViews"));
+        Assert.Equal("SELECT COALESCE(SUM([t0].[Views]), 0) FROM [Blogs] AS [t0]", _connection.LastCommand.CommandText);
+
+        _connection.Scalar = 1.5;
+        Assert.Equal(1.5, await InvokeAsync("AverageIdAsync", Token));
+        Assert.Equal("SELECT AVG(CAST([t0].[Id] AS float)) FROM [Blogs] AS [t0]", _connection.LastCommand.CommandText);
+
+        _connection.Scalar = "Ann";
+        Assert.Equal("Ann", Invoke("MaxOwnerName"));
+        Assert.Equal(
+            "SELECT MAX([t1].[Name]) FROM [Blogs] AS [t0] LEFT JOIN [Authors] AS [t1] ON [t0].[OwnerId] = [t1].[Id]",
+            _connection.LastCommand.CommandText);
+    }
+
+    [Fact]
+    public async Task Aggregates_AfterSelect_ComputeTheColumn()
+    {
+        _connection.Scalar = 3;
+        Assert.Equal(3, Invoke("SumIds"));
+        Assert.Equal("SELECT COALESCE(SUM([t0].[Id]), 0) FROM [Blogs] AS [t0]", _connection.LastCommand.CommandText);
+        Assert.Equal(3, await InvokeAsync("MaxIdAsync", Token));
+        Assert.Equal("SELECT MAX([t0].[Id]) FROM [Blogs] AS [t0]", _connection.LastCommand.CommandText);
+
+        _connection.Scalar = "alpha";
+        Assert.Equal("alpha", Invoke("MinName"));
+    }
+
+    [Fact]
+    public async Task MaxOfNoRows_ThrowsAsEfCoreDoes()
+    {
+        _connection.Scalar = DBNull.Value;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => InvokeAsync("MaxIdAsync", Token));
+    }
+
+    [Fact]
     public void InMemoryQuery_FallsBackToLinqToObjects()
     {
         var blogType = Compiled.Value.Assembly.GetType("Shop.Blog")!;

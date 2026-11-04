@@ -19,8 +19,237 @@ namespace KetPsi.EntityFrameworkCore.Generated
     [global::System.CodeDom.Compiler.GeneratedCode("KetPsi.EntityFrameworkCore.Generator", null)]
     file static class KetPsiInterceptors
     {
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8NoGAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oQIIAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<TResult> Select0<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            var captures = global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.ReadAll(selector);
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Id", "Name", "Name", "Name", "Id", "Views", "Status", "Id", "Name" },
+                global::System.Array.Empty<string>(),
+                Reader((reader, ordinals, entities) => new { Id = reader.GetInt32(ordinals[0]), Label = ((reader.IsDBNull(ordinals[1]) ? null ! : reader.GetString(ordinals[1])) + ((string)captures[0]!)), Upper = ((reader.IsDBNull(ordinals[2]) ? null ! : reader.GetString(ordinals[2]))?.ToUpper()), Length = ((reader.IsDBNull(ordinals[3]) ? null ! : reader.GetString(ordinals[3])).Length), Bounded = (global::System.Math.Max(reader.GetInt32(ordinals[4]), ((int)captures[1]!))), Views = ((reader.IsDBNull(ordinals[5]) ? (int? )null : reader.GetInt32(ordinals[5])) ?? 0), State = ((global::Shop.Status)reader.GetInt32(ordinals[6]) == ((global::Shop.Status)(0)) ? "draft" : "published"), Text = ($"{reader.GetInt32(ordinals[7])}:{((string)captures[2]!)}"), Shout = (global::Shop.TextExtensions.Shout((reader.IsDBNull(ordinals[8]) ? null ! : reader.GetString(ordinals[8])))) }));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oWYJAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList1<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        {
+            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToList(query);
+            }
+
+            return global::System.Linq.Enumerable.ToList(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oaQJAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select2<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => ((reader.IsDBNull(ordinals[0]) ? null ! : reader.GetString(ordinals[0]))?.ToUpper())));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9ocIJAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList3<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        {
+            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToList(query);
+            }
+
+            return global::System.Linq.Enumerable.ToList(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oQMKAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select4<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oRcKAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TSource> Distinct5<TSource>(this global::System.Linq.IQueryable<TSource> source)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Distinct(query);
+            }
+
+            return global::System.Linq.Queryable.Distinct(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oSIKAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList6<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        {
+            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToList(query);
+            }
+
+            return global::System.Linq.Enumerable.ToList(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oWEKAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::Shop.Blog> Distinct7(this global::System.Linq.IQueryable<global::Shop.Blog> source)
+        {
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(source))
+            {
+                return global::System.Linq.Queryable.Distinct(source);
+            }
+
+            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Distinct(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oWwKAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<global::Shop.Blog> ToList8(this global::System.Collections.Generic.IEnumerable<global::Shop.Blog> source)
+        {
+            if (source is global::System.Linq.IQueryable<global::Shop.Blog> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.ToList(query);
+            }
+
+            return global::System.Linq.Enumerable.ToList(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oaAKAABRdWVyaWVzLmNz")]
+        public static int? Sum9(this global::System.Linq.IQueryable<global::Shop.Blog> source, global::System.Linq.Expressions.Expression<global::System.Func<global::Shop.Blog, int?>> selector)
+        {
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(source))
+            {
+                return global::System.Linq.Queryable.Sum(source, selector);
+            }
+
+            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Aggregate<global::Shop.Blog, int?>(source, global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, "Views", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Int32);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9of8KAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<double> AverageAsync10(this global::System.Linq.IQueryable<global::Shop.Blog> source, global::System.Linq.Expressions.Expression<global::System.Func<global::Shop.Blog, int>> selector, global::System.Threading.CancellationToken cancellationToken)
+        {
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(source))
+            {
+                return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AverageAsync(source, selector, cancellationToken);
+            }
+
+            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.AggregateAsync<global::Shop.Blog, double>(source, global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Average, "Id", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Int32, cancellationToken);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oU0LAABRdWVyaWVzLmNz")]
+        public static string? Max11(this global::System.Linq.IQueryable<global::Shop.Blog> source, global::System.Linq.Expressions.Expression<global::System.Func<global::Shop.Blog, string>> selector)
+        {
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(source))
+            {
+                return global::System.Linq.Queryable.Max(source, selector);
+            }
+
+            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Aggregate<global::Shop.Blog, string?>(source, global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Max, "Owner.Name", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Column);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oY0LAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select12<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Id" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oZ8LAABRdWVyaWVzLmNz")]
+        public static int Sum13(this global::System.Linq.IQueryable<int> source)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Aggregate<int, int>(query, global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Int32);
+            }
+
+            return global::System.Linq.Queryable.Sum(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9odILAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select14<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oeYLAABRdWVyaWVzLmNz")]
+        public static TSource? Min15<TSource>(this global::System.Linq.IQueryable<TSource> source)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Aggregate<TSource, TSource?>(query, global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Min, global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Column);
+            }
+
+            return global::System.Linq.Queryable.Min(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oTIMAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select16<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Id" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oUQMAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<TSource> MaxAsync17<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.AggregateAsync<TSource, TSource>(query, global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Max, global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Column, cancellationToken);
+            }
+
+            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.MaxAsync(source, cancellationToken);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oX8MAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select18<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -35,8 +264,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => new { Id = reader.GetInt32(ordinals[0]), Name = (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8PwGAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList1<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oaEMAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList19<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -46,8 +275,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8C4HAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select2<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9odUMAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select20<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -62,8 +291,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => new { Id = reader.GetInt32(ordinals[0]), Inner = new { Name = (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])), Status = (global::Shop.Status)reader.GetInt32(ordinals[2]), Views = (reader.IsDBNull(ordinals[3]) ? (int?)null : reader.GetInt32(ordinals[3])) } }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8HMHAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList3<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oRoNAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList21<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -73,8 +302,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8K0HAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select4<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oVYNAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select22<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -89,8 +318,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => new global::Shop.BlogRow(reader.GetInt32(ordinals[0]), (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8NQHAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList5<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oX0NAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList23<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -100,8 +329,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8BMIAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select6<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9ob4NAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select24<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -116,8 +345,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => new global::Shop.BlogDto() { Id = reader.GetInt32(ordinals[0]), Name = (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8EkIAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList7<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9ofQNAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList25<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -127,8 +356,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8IAIAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select8<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oS0OAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select26<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -143,8 +372,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8JQIAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList9<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oUEOAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList27<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -154,8 +383,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8NEIAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select10<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oYAOAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select28<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -170,8 +399,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => global::System.ValueTuple.Create(reader.GetInt32(ordinals[0]), (reader.IsDBNull(ordinals[1]) ? (int?)null : reader.GetInt32(ordinals[1])))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8P8IAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList11<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oa4OAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList29<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -181,8 +410,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8DYJAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select12<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oecOAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select30<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -197,8 +426,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => (object)(reader.GetInt32(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8FYJAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList13<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oQcPAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList31<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -208,8 +437,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8I0JAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select14<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oUAPAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select32<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -224,8 +453,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => ((long)(reader.GetInt32(ordinals[0])))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8KUJAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList15<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oVgPAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList33<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -235,8 +464,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8OEJAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select16<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oZYPAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select34<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -251,8 +480,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8PwJAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList17<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9obEPAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList35<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -262,8 +491,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8DwKAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select18<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9ofMPAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select36<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -278,8 +507,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? (int?)null : (int?)reader.GetInt32(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8FsKAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList19<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oRIQAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList37<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -289,8 +518,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8JIKAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select20<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oUsQAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select38<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -305,8 +534,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : reader.GetInt32(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8KsKAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList21<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oWQQAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList39<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -316,8 +545,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8OQKAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select22<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oZ8QAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select40<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -332,8 +561,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => ((global::Shop.Author)entities[0]!)));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8PkKAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList23<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9obQQAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList41<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -343,8 +572,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8DMLAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select24<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9ofAQAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select42<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Post>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -359,8 +588,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => new { p = ((global::Shop.Post)entities[0]!), Blog = ((global::Shop.Blog)entities[1]!), BlogName = (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0])) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8GoLAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList25<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oScRAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList43<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -370,8 +599,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8KQLAABRdWVyaWVzLmNz")]
-        public static global::Microsoft.EntityFrameworkCore.Query.IIncludableQueryable<global::Shop.Blog, global::System.Collections.Generic.List<global::Shop.Post>> Include26(this global::System.Linq.IQueryable<global::Shop.Blog> source, global::System.Linq.Expressions.Expression<global::System.Func<global::Shop.Blog, global::System.Collections.Generic.List<global::Shop.Post>>> navigationPropertyPath)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oWMRAABRdWVyaWVzLmNz")]
+        public static global::Microsoft.EntityFrameworkCore.Query.IIncludableQueryable<global::Shop.Blog, global::System.Collections.Generic.List<global::Shop.Post>> Include44(this global::System.Linq.IQueryable<global::Shop.Blog> source, global::System.Linq.Expressions.Expression<global::System.Func<global::Shop.Blog, global::System.Collections.Generic.List<global::Shop.Post>>> navigationPropertyPath)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(source))
             {
@@ -381,8 +610,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Include<global::Shop.Blog, global::System.Collections.Generic.List<global::Shop.Post>>(source, "Posts");
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8LoLAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select27<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oXkRAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select45<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -397,8 +626,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => new { b = ((global::Shop.Blog)entities[0]!), Name = (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0])) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8NkLAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList28<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oZgRAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList46<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -408,8 +637,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8CEMAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IOrderedQueryable<global::Shop.Blog> OrderBy29(this global::System.Linq.IQueryable<global::Shop.Blog> source, global::System.Linq.Expressions.Expression<global::System.Func<global::Shop.Blog, string>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oeIRAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IOrderedQueryable<global::Shop.Blog> OrderBy47(this global::System.Linq.IQueryable<global::Shop.Blog> source, global::System.Linq.Expressions.Expression<global::System.Func<global::Shop.Blog, string>> keySelector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(source))
             {
@@ -419,245 +648,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.OrderBy(source, "Name");
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8DYMAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select30<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.Select(source, selector);
-            }
-
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
-                query,
-                new string[] { "Name" },
-                global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8EoMAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TSource> Skip31<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
-        {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Skip(query, count);
-            }
-
-            return global::System.Linq.Queryable.Skip(source, count);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8FUMAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TSource> Take32<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
-        {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Take(query, count);
-            }
-
-            return global::System.Linq.Queryable.Take(source, count);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8GAMAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList33<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
-        {
-            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToList(query);
-            }
-
-            return global::System.Linq.Enumerable.ToList(source);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8JMMAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select34<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.Select(source, selector);
-            }
-
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
-                query,
-                new string[] { "Name" },
-                global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8KcMAABRdWVyaWVzLmNz")]
-        public static TSource[] ToArray35<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
-        {
-            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToArray(query);
-            }
-
-            return global::System.Linq.Enumerable.ToArray(source);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8P0MAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select36<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.Select(source, selector);
-            }
-
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
-                query,
-                new string[] { "Name" },
-                global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8BENAABRdWVyaWVzLmNz")]
-        public static global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<TSource>> ToListAsync37<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
-        {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToListAsync(query, cancellationToken);
-            }
-
-            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(source, cancellationToken);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8GoNAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select38<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.Select(source, selector);
-            }
-
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
-                query,
-                new string[] { "Name" },
-                global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8H4NAABRdWVyaWVzLmNz")]
-        public static global::System.Threading.Tasks.Task<TSource[]> ToArrayAsync39<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
-        {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToArrayAsync(query, cancellationToken);
-            }
-
-            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToArrayAsync(source, cancellationToken);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8LcNAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select40<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.Select(source, selector);
-            }
-
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
-                query,
-                new string[] { "Name" },
-                global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8MsNAABRdWVyaWVzLmNz")]
-        public static TSource First41<TSource>(this global::System.Linq.IQueryable<TSource> source)
-        {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.First(query);
-            }
-
-            return global::System.Linq.Queryable.First(source);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8CQOAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select42<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.Select(source, selector);
-            }
-
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
-                query,
-                new string[] { "Name" },
-                global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8DgOAABRdWVyaWVzLmNz")]
-        public static global::System.Threading.Tasks.Task<TSource?> FirstOrDefaultAsync43<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
-        {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.FirstOrDefaultAsync(query, cancellationToken);
-            }
-
-            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(source, cancellationToken);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8HoOAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select44<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.Select(source, selector);
-            }
-
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
-                query,
-                new string[] { "Id", "Name" },
-                global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => new global::Shop.BlogRow(reader.GetInt32(ordinals[0]), (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])))));
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8KEOAABRdWVyaWVzLmNz")]
-        public static TSource Single45<TSource>(this global::System.Linq.IQueryable<TSource> source)
-        {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Single(query);
-            }
-
-            return global::System.Linq.Queryable.Single(source);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8P0OAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select46<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.Select(source, selector);
-            }
-
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
-                query,
-                new string[] { "Id", "Name" },
-                global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => new global::Shop.BlogRow(reader.GetInt32(ordinals[0]), (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])))));
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8CQPAABRdWVyaWVzLmNz")]
-        public static global::System.Threading.Tasks.Task<TSource?> SingleOrDefaultAsync47<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
-        {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.SingleOrDefaultAsync(query, cancellationToken);
-            }
-
-            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleOrDefaultAsync(source, cancellationToken);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8GIPAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9ofcRAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<TResult> Select48<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
@@ -668,24 +659,46 @@ namespace KetPsi.EntityFrameworkCore.Generated
 
             return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
                 query,
-                new string[] { "Owner.Name" },
+                new string[] { "Name" },
                 global::System.Array.Empty<string>(),
                 Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8H0PAABRdWVyaWVzLmNz")]
-        public static int Count49<TSource>(this global::System.Linq.IQueryable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oQsSAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TSource> Skip49<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Count(query);
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Skip(query, count);
             }
 
-            return global::System.Linq.Queryable.Count(source);
+            return global::System.Linq.Queryable.Skip(source, count);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8M4PAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select50<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oRYSAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TSource> Take50<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Take(query, count);
+            }
+
+            return global::System.Linq.Queryable.Take(source, count);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oSESAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList51<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        {
+            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToList(query);
+            }
+
+            return global::System.Linq.Enumerable.ToList(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oVYSAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select52<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -700,45 +713,18 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8OIPAABRdWVyaWVzLmNz")]
-        public static global::System.Threading.Tasks.Task<long> LongCountAsync51<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oWoSAABRdWVyaWVzLmNz")]
+        public static TSource[] ToArray53<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.LongCountAsync(query, cancellationToken);
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToArray(query);
             }
 
-            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.LongCountAsync(source, cancellationToken);
+            return global::System.Linq.Enumerable.ToArray(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8BkQAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select52<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.Select(source, selector);
-            }
-
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
-                query,
-                new string[] { "Id" },
-                global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8CsQAABRdWVyaWVzLmNz")]
-        public static bool Any53<TSource>(this global::System.Linq.IQueryable<TSource> source)
-        {
-            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Any(query);
-            }
-
-            return global::System.Linq.Queryable.Any(source);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8HQQAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9ocISAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<TResult> Select54<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
@@ -749,23 +735,23 @@ namespace KetPsi.EntityFrameworkCore.Generated
 
             return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
                 query,
-                new string[] { "Id" },
+                new string[] { "Name" },
                 global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8IYQAABRdWVyaWVzLmNz")]
-        public static global::System.Threading.Tasks.Task<bool> AnyAsync55<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9odYSAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<global::System.Collections.Generic.List<TSource>> ToListAsync55<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.AnyAsync(query, cancellationToken);
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToListAsync(query, cancellationToken);
             }
 
-            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(source, cancellationToken);
+            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(source, cancellationToken);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8N8QAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oTETAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<TResult> Select56<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
@@ -781,30 +767,19 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8AkRAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TSource> Take57<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oUUTAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<TSource[]> ToArrayAsync57<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Take(query, count);
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToArrayAsync(query, cancellationToken);
             }
 
-            return global::System.Linq.Queryable.Take(source, count);
+            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToArrayAsync(source, cancellationToken);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8BERAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList58<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
-        {
-            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
-            {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToList(query);
-            }
-
-            return global::System.Linq.Enumerable.ToList(source);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8HMRAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select59<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oYATAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select58<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -819,8 +794,224 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8IcRAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TSource> Take60<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oZQTAABRdWVyaWVzLmNz")]
+        public static TSource First59<TSource>(this global::System.Linq.IQueryable<TSource> source)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.First(query);
+            }
+
+            return global::System.Linq.Queryable.First(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oe8TAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select60<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oQMUAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<TSource?> FirstOrDefaultAsync61<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.FirstOrDefaultAsync(query, cancellationToken);
+            }
+
+            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(source, cancellationToken);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oUcUAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select62<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Id", "Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => new global::Shop.BlogRow(reader.GetInt32(ordinals[0]), (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])))));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oW4UAABRdWVyaWVzLmNz")]
+        public static TSource Single63<TSource>(this global::System.Linq.IQueryable<TSource> source)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Single(query);
+            }
+
+            return global::System.Linq.Queryable.Single(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9ocwUAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select64<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Id", "Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => new global::Shop.BlogRow(reader.GetInt32(ordinals[0]), (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])))));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9ofMUAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<TSource?> SingleOrDefaultAsync65<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.SingleOrDefaultAsync(query, cancellationToken);
+            }
+
+            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleOrDefaultAsync(source, cancellationToken);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oTMVAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select66<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Owner.Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oU4VAABRdWVyaWVzLmNz")]
+        public static int Count67<TSource>(this global::System.Linq.IQueryable<TSource> source)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Count(query);
+            }
+
+            return global::System.Linq.Queryable.Count(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oaEVAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select68<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9obUVAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<long> LongCountAsync69<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.LongCountAsync(query, cancellationToken);
+            }
+
+            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.LongCountAsync(source, cancellationToken);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oe4VAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select70<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Id" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oQAWAABRdWVyaWVzLmNz")]
+        public static bool Any71<TSource>(this global::System.Linq.IQueryable<TSource> source)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Any(query);
+            }
+
+            return global::System.Linq.Queryable.Any(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oUsWAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select72<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Id" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oV0WAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<bool> AnyAsync73<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.AnyAsync(query, cancellationToken);
+            }
+
+            return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(source, cancellationToken);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oboWAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select74<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oeUWAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TSource> Take75<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -830,8 +1021,46 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Queryable.Take(source, count);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "Fmyxhrm20xKB8PQT2m9o8I8RAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList61<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oe0WAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList76<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        {
+            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ToList(query);
+            }
+
+            return global::System.Linq.Enumerable.ToList(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oVIXAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select77<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.Select(source, selector);
+            }
+
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
+                query,
+                new string[] { "Name" },
+                global::System.Array.Empty<string>(),
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oWYXAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TSource> Take78<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
+        {
+            if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Take(query, count);
+            }
+
+            return global::System.Linq.Queryable.Take(source, count);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "/VQq2FwGfmy+LaqEseV9oW4XAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList79<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {

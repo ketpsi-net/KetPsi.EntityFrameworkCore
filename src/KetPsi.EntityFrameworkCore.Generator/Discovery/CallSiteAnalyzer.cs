@@ -23,7 +23,14 @@ internal static class CallSiteAnalyzer
     private const string ReasonRangeCount = "only an int count is supported";
     private const string ReasonDefaultValue = "overloads with a default value are not supported";
     private const string ReasonAfterSelect =
-        "only Skip, Take and terminals without a predicate can follow Select; filter and order the entities before it";
+        "only Skip, Take, Distinct, aggregates and terminals without a predicate can follow Select; filter and order the entities before it";
+    private const string ReasonDistinctComputed =
+        "Distinct compares the projected values in SQL, so the projection cannot compute values in C#";
+    private const string ReasonAggregateProjection =
+        "an aggregate works on a projection of one property, such as Select(x => x.Price).Sum()";
+    private const string ReasonAggregateSelector =
+        "an aggregate's selector must read one property, such as x => x.Price, or one through reference navigations";
+    private const string ReasonSelectorAfterSelect = "select the aggregated property instead, such as Select(x => x.Price).Sum()";
 
     // Names of every method the classification below handles; anything else is not looked at.
     private static readonly HashSet<string> OperatorNames = new(StringComparer.Ordinal)
@@ -120,13 +127,14 @@ internal static class CallSiteAnalyzer
         }
 
         var nameSyntax = ((MemberAccessExpressionSyntax)invocation.Expression).Name;
-        var projectedFrom = ProjectedFrom(GetSource(operation), semanticModel, queryableInterface, cancellationToken);
+        var location = LocationInfo.From(nameSyntax.Identifier.GetLocation());
+        var projectedFrom = ProjectedFrom(GetSource(operation), semanticModel, queryableInterface, location, cancellationToken);
         var site = new SiteBuilder(
-            elementType, LocationInfo.From(nameSyntax.Identifier.GetLocation()), method.Name, operation, invocation, semanticModel, projectedFrom, cancellationToken);
+            elementType, location, method.Name, operation, invocation, semanticModel, projectedFrom?.EntityType, cancellationToken);
 
-        if (projectedFrom is not null)
+        if (projectedFrom is { } projection)
         {
-            return ClassifyProjected(site, method, family);
+            return ClassifyProjected(site, method, family, projection.Projection);
         }
 
         return family switch
@@ -171,6 +179,10 @@ internal static class CallSiteAnalyzer
                 return IsSelector(parameters[1].Type)
                     ? site.Supported(OperatorKind.Select, lambdaOrdinal: 1)
                     : site.Overload(ReasonIndexedSelector);
+            case "Distinct":
+                return parameters.Length == 1 ? site.Supported(OperatorKind.Distinct) : site.Overload(ReasonComparer);
+            case "Sum" or "Average" or "Min" or "Max" when parameters.Length == 2 && IsSelector(parameters[1].Type):
+                return site.Supported(AggregateKind(method.Name), lambdaOrdinal: 1);
             case "First" or "FirstOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count" or "LongCount":
                 if (parameters.Length == 1)
                 {
@@ -205,6 +217,8 @@ internal static class CallSiteAnalyzer
                     : site.Supported(include, lambdaOrdinal: 1);
             case "ToListAsync" or "ToArrayAsync":
                 return site.Supported(method.Name == "ToListAsync" ? OperatorKind.ToList : OperatorKind.ToArray, isAsync: true);
+            case "SumAsync" or "AverageAsync" or "MinAsync" or "MaxAsync" when parameters.Length == 3 && IsSelector(parameters[1].Type):
+                return site.Supported(AggregateKind(method.Name.Substring(0, method.Name.Length - "Async".Length)), lambdaOrdinal: 1, isAsync: true);
             case "FirstAsync" or "FirstOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync" or "AnyAsync" or "CountAsync"
                 or "LongCountAsync":
                 var kind = TerminalKind(method.Name.Substring(0, method.Name.Length - "Async".Length));
@@ -216,12 +230,27 @@ internal static class CallSiteAnalyzer
         }
     }
 
-    // After Select the query is a projection: paging and terminals run it, anything else is reported.
-    private static CallSite? ClassifyProjected(SiteBuilder site, IMethodSymbol method, Family family)
+    // After Select the query is a projection: paging, Distinct, aggregates and terminals run it, anything else is reported.
+    // The projection is null when the Select itself is reported.
+    private static CallSite? ClassifyProjected(SiteBuilder site, IMethodSymbol method, Family family, ProjectionModel? projection)
     {
         var parameters = method.Parameters;
         switch (family)
         {
+            case Family.Queryable when method.Name == "Distinct" && parameters.Length == 1:
+                return projection is { HasComputedValues: true }
+                    ? site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonDistinctComputed)
+                    : site.SupportedAfterSelect(OperatorKind.Distinct);
+            case Family.Queryable or Family.EntityFramework when AggregateName(method.Name) is { } aggregate:
+                var isAsync = family == Family.EntityFramework;
+                if (parameters.Length != (isAsync ? 2 : 1))
+                {
+                    return site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonSelectorAfterSelect);
+                }
+
+                return projection is { IsSingleColumn: false }
+                    ? site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonAggregateProjection)
+                    : site.SupportedAfterSelect(AggregateKind(aggregate), isAsync);
             case Family.Queryable when method.Name is "Skip" or "Take" && parameters[1].Type.SpecialType == SpecialType.System_Int32:
                 return site.SupportedAfterSelect(method.Name == "Skip" ? OperatorKind.Skip : OperatorKind.Take);
             case Family.Queryable when parameters.Length == 1
@@ -246,10 +275,12 @@ internal static class CallSiteAnalyzer
     }
 
     /// <summary>
-    /// The entity query a projection was made from: the source of the <c>Select</c> that <paramref name="source"/>
-    /// comes from, through other operators and local variables. <see langword="null"/> when it isn't a projection.
+    /// The entity query a projection was made from, the source of the <c>Select</c> that <paramref name="source"/>
+    /// comes from through other operators and local variables, with that <c>Select</c>'s projection when it translates.
+    /// <see langword="null"/> when the query isn't a projection.
     /// </summary>
-    private static string? ProjectedFrom(IOperation? source, SemanticModel semanticModel, INamedTypeSymbol queryableInterface, CancellationToken cancellationToken)
+    private static ProjectionSource? ProjectedFrom(
+        IOperation? source, SemanticModel semanticModel, INamedTypeSymbol queryableInterface, LocationInfo location, CancellationToken cancellationToken)
     {
         // A bound guards against a local initialized from itself through other locals.
         for (var steps = 0; source is not null && steps < 64; steps++)
@@ -266,9 +297,21 @@ internal static class CallSiteAnalyzer
                     && family is Family.Queryable or Family.EntityFramework or Family.Relational or Family.KetPsi:
                     if (family == Family.Queryable && invocation.TargetMethod.Name == "Select")
                     {
-                        return GetSource(invocation)?.Type is { } selected && GetElementType(selected, queryableInterface) is { } element
-                            ? EntityDiscovery.TypeName(element)
+                        if (GetSource(invocation)?.Type is not { } selected || GetElementType(selected, queryableInterface) is not { } element)
+                        {
+                            return null;
+                        }
+
+                        var selector = invocation.Arguments.FirstOrDefault(static a => a.Parameter?.Ordinal == 1)?.Value.Syntax;
+                        while (selector is ParenthesizedExpressionSyntax parenthesized)
+                        {
+                            selector = parenthesized.Expression;
+                        }
+
+                        var projection = selector is LambdaExpressionSyntax lambda
+                            ? ProjectionTranslator.Translate(lambda, element, semanticModel, location, cancellationToken).Projection
                             : null;
+                        return new ProjectionSource(EntityDiscovery.TypeName(element), projection);
                     }
 
                     source = GetSource(invocation);
@@ -368,6 +411,51 @@ internal static class CallSiteAnalyzer
             && expression.TypeArguments[0] is INamedTypeSymbol { TypeArguments.Length: 2 } func
             && func.TypeArguments[1].SpecialType == SpecialType.System_Boolean;
 
+    private static string? AggregateName(string name) => name switch
+    {
+        "Sum" or "SumAsync" => "Sum",
+        "Average" or "AverageAsync" => "Average",
+        "Min" or "MinAsync" => "Min",
+        "Max" or "MaxAsync" => "Max",
+        _ => null,
+    };
+
+    private static OperatorKind AggregateKind(string name) => name switch
+    {
+        "Sum" => OperatorKind.Sum,
+        "Average" => OperatorKind.Average,
+        "Min" => OperatorKind.Min,
+        _ => OperatorKind.Max,
+    };
+
+    // The runtime's AggregateValueType: the numeric type of a Sum or Average overload; Min and Max read the column as it is.
+    private static string AggregateValueType(OperatorKind kind, ITypeSymbol type)
+    {
+        if (kind is OperatorKind.Min or OperatorKind.Max)
+        {
+            return "Column";
+        }
+
+        if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+        {
+            type = nullable.TypeArguments[0];
+        }
+
+        return type.SpecialType switch
+        {
+            SpecialType.System_Int32 => "Int32",
+            SpecialType.System_Int64 => "Int64",
+            SpecialType.System_Decimal => "Decimal",
+            SpecialType.System_Double => "Double",
+            SpecialType.System_Single => "Single",
+            _ => "Column",
+        };
+    }
+
+    // An async terminal's result is the task's type argument.
+    private static ITypeSymbol ResultType(IMethodSymbol method, bool isAsync)
+        => isAsync && method.ReturnType is INamedTypeSymbol { TypeArguments.Length: 1 } task ? task.TypeArguments[0] : method.ReturnType;
+
     // Expression<Func<T, TResult>>, as opposed to the index-taking Expression<Func<T, int, TResult>>.
     private static bool IsSelector(ITypeSymbol type)
         => type is INamedTypeSymbol { TypeArguments.Length: 1 } expression
@@ -409,7 +497,15 @@ internal static class CallSiteAnalyzer
         /// reads no entity.
         /// </summary>
         public CallSite SupportedAfterSelect(OperatorKind kind, bool isAsync = false)
-            => new(
+        {
+            var declared = (operation.TargetMethod.ReducedFrom ?? operation.TargetMethod).OriginalDefinition;
+            var aggregate = kind is OperatorKind.Sum or OperatorKind.Average or OperatorKind.Min or OperatorKind.Max
+                ? new AggregateModel(
+                    AggregateValueType(kind, elementSymbol),
+                    PropertyPath: null,
+                    ResultType(declared, isAsync).ToDisplayString(SignatureFormat))
+                : null;
+            return new(
                 _elementType,
                 location,
                 kind,
@@ -418,7 +514,9 @@ internal static class CallSiteAnalyzer
                 Diagnostic: null,
                 Interception: semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax(),
                 Signature: GetGenericSignature(operation.TargetMethod),
-                ProjectedFrom: projectedFrom);
+                ProjectedFrom: projectedFrom,
+                Aggregate: aggregate);
+        }
 
         /// <param name="kind">The operator.</param>
         /// <param name="lambdaOrdinal">The parameter that must be a lambda written at the call site.</param>
@@ -430,6 +528,7 @@ internal static class CallSiteAnalyzer
             string? orderProperty = null;
             IncludeModel? include = null;
             ProjectionModel? projection = null;
+            AggregateModel? aggregate = null;
             var usesDecimalOperators = false;
             if (lambdaOrdinal is { } ordinal)
             {
@@ -460,6 +559,20 @@ internal static class CallSiteAnalyzer
                     }
 
                     orderProperty = property;
+                }
+                else if (lambda is not null && kind is OperatorKind.Sum or OperatorKind.Average or OperatorKind.Min or OperatorKind.Max)
+                {
+                    var path = ProjectionTranslator.TranslatePropertyPath(lambda, elementSymbol, semanticModel, cancellationToken);
+                    if (path is null)
+                    {
+                        var diagnostic = DiagnosticInfo.Create(
+                            DiagnosticDescriptors.ProjectionNotSupported, LocationInfo.From(lambda.GetLocation()), lambda.ToString(), ReasonAggregateSelector);
+                        return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, diagnostic);
+                    }
+
+                    var selected = ((INamedTypeSymbol)((INamedTypeSymbol)operation.TargetMethod.Parameters[1].Type).TypeArguments[0]).TypeArguments[1];
+                    aggregate = new AggregateModel(
+                        AggregateValueType(kind, selected), path, ResultType(operation.TargetMethod, isAsync).ToDisplayString(SignatureFormat));
                 }
                 else if (lambda is not null && kind == OperatorKind.Select)
                 {
@@ -510,7 +623,8 @@ internal static class CallSiteAnalyzer
                 orderProperty,
                 include,
                 usesDecimalOperators,
-                projection);
+                projection,
+                Aggregate: aggregate);
         }
 
         private static bool IsPredicate(OperatorKind kind, bool hasPredicate)
@@ -590,3 +704,6 @@ internal static class CallSiteAnalyzer
         }
     }
 }
+
+/// <summary>The entity query a projection was made from, and its <c>Select</c>'s projection when it translates.</summary>
+internal readonly record struct ProjectionSource(string EntityType, ProjectionModel? Projection);
