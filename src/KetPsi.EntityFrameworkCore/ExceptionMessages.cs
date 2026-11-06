@@ -103,7 +103,11 @@ internal static class ExceptionMessages
         "KetPsi.EntityFrameworkCore can only continue a query grouped by an intercepted GroupBy, but the source is of type '{0}'.";
 
     public const string GroupEnumerationNotSupported =
-        "KetPsi.EntityFrameworkCore cannot return the groups of a GroupBy yet; select the key and aggregates with Select.";
+        "The groups of a GroupBy are read through their key and element readers; a statement for grouped rows needs a Select.";
+
+    public const string GroupRowsAfterGroupOperators =
+        "KetPsi.EntityFrameworkCore can only return the groups of a GroupBy directly; after Where or OrderBy on the " +
+        "groups, select their keys and aggregates with Select.";
 
     public const string GroupAggregateThroughNavigation =
         "An aggregate of a group must read a property of the grouped entity itself, not one through a navigation.";

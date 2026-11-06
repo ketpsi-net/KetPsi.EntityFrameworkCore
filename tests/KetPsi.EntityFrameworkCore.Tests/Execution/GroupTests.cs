@@ -104,8 +104,58 @@ public sealed class GroupTests : IDisposable
     }
 
     [Fact]
-    public void EnumeratingGroups_IsNotSupportedYet()
-        => Assert.Throws<NotSupportedException>(() => ByScore().ToList());
+    public void ToList_OfGroups_GroupsTheRowsByKey()
+    {
+        _connection.Rows = NameTable((null, "a"), (null, "b"), (5, "c"));
+
+        var groups = SqlGrouping.ToList(NamesByScore());
+
+        Assert.Equal([null, 5], groups.Select(static g => g.Key));
+        Assert.Equal(["a", "b"], groups[0]);
+        Assert.Equal(["c"], groups[1]);
+        Assert.Equal("SELECT [t0].[Score], [t0].[Name] FROM [shop].[Items] AS [t0] ORDER BY [t0].[Score]", _connection.LastCommand.CommandText);
+    }
+
+    [Fact]
+    public void Groups_StartWhereTheKeyChanges_AsInEfCore()
+    {
+        _connection.Rows = NameTable((1, "a"), (2, "b"), (1, "c"));
+
+        var groups = SqlGrouping.ToArray(NamesByScore());
+
+        Assert.Equal([1, 2, 1], groups.Select(static g => g.Key));
+    }
+
+    [Fact]
+    public async Task Groups_AsyncAndEnumerated_ReadTheSameGroups()
+    {
+        _connection.Rows = NameTable((1, "a"), (1, "b"), (2, "c"));
+
+        Assert.Equal(2, (await SqlGrouping.ToListAsync(NamesByScore(), Token)).Count);
+        Assert.Equal(2, (await SqlGrouping.ToArrayAsync(NamesByScore(), Token)).Length);
+        Assert.Equal(2, NamesByScore().AsEnumerable().Count());
+
+        var elements = 0;
+        await foreach (var group in (IAsyncEnumerable<IGrouping<int?, string>>)NamesByScore())
+        {
+            elements += group.Count();
+        }
+
+        Assert.Equal(3, elements);
+    }
+
+    [Fact]
+    public void Groups_OfNoRows_AreEmpty()
+    {
+        _connection.Rows = NameTable();
+
+        Assert.Empty(SqlGrouping.ToList(NamesByScore()));
+    }
+
+    [Fact]
+    public void Groups_AfterWhereOnGroups_AreNotSupported()
+        => Assert.Throws<NotSupportedException>(() => SqlGrouping.ToList(SqlGrouping.Where(
+            NamesByScore(), new ComparisonTemplate("0", ComparisonOperator.GreaterThan, 0), [CountAll], [1])));
 
     [Fact]
     public void OperatorsOnOtherQueries_Throw()
@@ -116,7 +166,29 @@ public sealed class GroupTests : IDisposable
         Assert.Throws<InvalidOperationException>(() => SqlGrouping.OrderBy(groups, Key0, []));
     }
 
-    private IQueryable<IGrouping<int?, Item>> ByScore() => SqlGrouping.GroupBy<Item, int?, Item>(_db.Items, [nameof(Item.Score)]);
+    private IQueryable<IGrouping<int?, Item>> ByScore()
+        => SqlGrouping.GroupBy<Item, int?, Item>(_db.Items, [nameof(Item.Score)], ReadScore, [], [""], static (_, _, entities) => (Item)entities[0]!);
+
+    // GroupBy(i => i.Score, i => i.Name)
+    private IQueryable<IGrouping<int?, string>> NamesByScore()
+        => SqlGrouping.GroupBy<Item, int?, string>(
+            _db.Items, [nameof(Item.Score)], ReadScore, [nameof(Item.Name)], [], static (reader, ordinals, _) => reader.GetString(ordinals[0]));
+
+    private static int? ReadScore(System.Data.Common.DbDataReader reader, ReadOnlySpan<int> ordinals, ReadOnlySpan<object?> entities)
+        => reader.IsDBNull(ordinals[0]) ? null : reader.GetInt32(ordinals[0]);
+
+    private static DataTable NameTable(params (int? Score, string Name)[] rows)
+    {
+        var table = new DataTable();
+        table.Columns.Add("Score", typeof(int));
+        table.Columns.Add("Name", typeof(string));
+        foreach (var (score, name) in rows)
+        {
+            table.Rows.Add(score is { } value ? value : DBNull.Value, name);
+        }
+
+        return table;
+    }
 
     private IQueryable<KeyCount> KeyAndCount()
         => SqlGrouping.Select(

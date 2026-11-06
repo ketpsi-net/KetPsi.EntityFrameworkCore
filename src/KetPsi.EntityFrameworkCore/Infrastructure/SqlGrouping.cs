@@ -10,7 +10,8 @@ namespace KetPsi.EntityFrameworkCore.Infrastructure;
 
 /// <summary>
 /// The operators and terminals generated interceptors call for <c>GroupBy</c>: grouping an entity query, filtering and
-/// ordering the groups, selecting their keys and aggregates, and counting them. Applications don't call this.
+/// ordering the groups, selecting their keys and aggregates, counting them, and returning the groups themselves.
+/// Applications don't call this.
 /// </summary>
 /// <remarks>
 /// The statement groups with <c>GROUP BY</c>, filters groups with <c>HAVING</c> and orders them by key parts and
@@ -29,19 +30,37 @@ public static class SqlGrouping
     }
 
     /// <summary>
-    /// Appends <c>GroupBy</c>, with or without an element selector: the rows are grouped by the key paths.
+    /// Appends <c>GroupBy</c>, with or without an element selector: the rows are grouped by the key paths. When the
+    /// groups themselves are returned, each row is read with <paramref name="keyReader"/> and
+    /// <paramref name="elementReader"/>.
     /// </summary>
     /// <param name="source">The entity query.</param>
     /// <param name="keyPaths">
     /// The property paths of the key, one per member of a composite key: <c>"Status"</c> for <c>x =&gt; x.Status</c>,
     /// or <c>"Blog.Name"</c> for <c>x =&gt; x.Blog.Name</c> through a reference navigation.
     /// </param>
+    /// <param name="keyReader">The generated key reader: its ordinals are those of <paramref name="keyPaths"/>, in order.</param>
+    /// <param name="elementPropertyNames">The property paths the element reader reads, in the order of its ordinals.</param>
+    /// <param name="elementEntityPaths">
+    /// The navigation paths of the entities the element reader uses, in the order of its entities: <c>[""]</c> for
+    /// the grouped entity itself when there is no element selector.
+    /// </param>
+    /// <param name="elementReader">The generated element reader: the element selector's body, or the grouped entity.</param>
     /// <exception cref="ArgumentException"><paramref name="keyPaths"/> is empty or has an empty path.</exception>
     public static IQueryable<IGrouping<TKey, TElement>> GroupBy<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TKey, TElement>(
-        IQueryable<TSource> source, IReadOnlyList<string> keyPaths)
+        IQueryable<TSource> source,
+        IReadOnlyList<string> keyPaths,
+        ProjectionReader<TKey> keyReader,
+        IReadOnlyList<string> elementPropertyNames,
+        IReadOnlyList<string> elementEntityPaths,
+        ProjectionReader<TElement> elementReader)
         where TSource : class
     {
         ArgumentNullException.ThrowIfNull(keyPaths);
+        ArgumentNullException.ThrowIfNull(keyReader);
+        ArgumentNullException.ThrowIfNull(elementPropertyNames);
+        ArgumentNullException.ThrowIfNull(elementEntityPaths);
+        ArgumentNullException.ThrowIfNull(elementReader);
         if (keyPaths.Count == 0)
         {
             throw new ArgumentException(ExceptionMessages.GroupKeyRequired, nameof(keyPaths));
@@ -53,7 +72,8 @@ public static class SqlGrouping
         }
 
         var query = SqlQuery.ToSqlQueryable(source);
-        return new GroupedQueryable<TKey, TElement>(query.Context, new GroupByNode(query.Tail, [.. keyPaths]));
+        var group = new GroupByNode(query.Tail, [.. keyPaths], [.. elementPropertyNames], [.. elementEntityPaths]);
+        return new GroupedQueryable<TKey, TElement>(query.Context, group, keyReader, elementReader);
     }
 
     /// <summary>Appends <c>Where</c> on the groups: the predicate becomes a <c>HAVING</c> condition.</summary>
@@ -113,6 +133,24 @@ public static class SqlGrouping
         var query = ToGrouped(source);
         return new ProjectedQueryable<TResult>(query.Context, new GroupSelectNode(query.Tail, [.. values], predicateValues), reader);
     }
+
+    /// <summary>Returns the groups: <c>ToList</c>. Rows are read ordered by the key and grouped where it changes.</summary>
+    public static List<IGrouping<TKey, TElement>> ToList<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)
+        => GroupRunner.ToList(ToGrouped(source));
+
+    /// <summary>Returns the groups: <c>ToListAsync</c>.</summary>
+    public static Task<List<IGrouping<TKey, TElement>>> ToListAsync<TKey, TElement>(
+        IQueryable<IGrouping<TKey, TElement>> source, CancellationToken cancellationToken = default)
+        => GroupRunner.ToListAsync(ToGrouped(source), cancellationToken);
+
+    /// <summary>Returns the groups: <c>ToArray</c>.</summary>
+    public static IGrouping<TKey, TElement>[] ToArray<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)
+        => [.. GroupRunner.ToList(ToGrouped(source))];
+
+    /// <summary>Returns the groups: <c>ToArrayAsync</c>.</summary>
+    public static async Task<IGrouping<TKey, TElement>[]> ToArrayAsync<TKey, TElement>(
+        IQueryable<IGrouping<TKey, TElement>> source, CancellationToken cancellationToken = default)
+        => [.. await GroupRunner.ToListAsync(ToGrouped(source), cancellationToken).ConfigureAwait(false)];
 
     /// <summary>Counts the groups: <c>Count</c>.</summary>
     public static int Count<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)

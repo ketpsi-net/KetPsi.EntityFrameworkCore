@@ -256,6 +256,18 @@ internal sealed class SqlBuilder
                 WrapIf(State.Limit is not null || State.Distinct);
                 State.Limit = AddParameter(take.Count, property: null);
                 break;
+            case ProjectionNode projection when State.Keys is not null:
+                // The groups themselves: EF Core reads each row's key and element ordered by the key, and groups them in
+                // memory. Groups filtered or ordered by an aggregate can only be selected from.
+                if (State.Having.Count > 0 || State.Ordering.Count > 0 || State.Columns is not null)
+                {
+                    throw new NotSupportedException(ExceptionMessages.GroupRowsAfterGroupOperators);
+                }
+
+                State.Ordering.AddRange(State.Keys.Select(static k => new Ordering(k.Column, Descending: false)));
+                State.Keys = null;
+                State.Pending = new Projection(projection.Columns, projection.EntityPaths);
+                break;
             case ProjectionNode projection:
                 // Distinct entity rows are made distinct before they are projected.
                 EnsureNotProjected();

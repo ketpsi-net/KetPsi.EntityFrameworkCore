@@ -224,8 +224,51 @@ public sealed class SqlBuilderGroupTests : SqlBuilderTestBase, IDisposable
         => Assert.Throws<ArgumentException>(() => Sql(Select(ByScore(), GroupValue.Key(1))));
 
     [Fact]
-    public void RowsOfGroupsWithoutSelect_AreNotSupportedYet()
+    public void GroupedRowsWithoutAProjection_Throw()
         => Assert.Throws<NotSupportedException>(() => Sql(ByScore()));
+
+    [Fact]
+    public void Groups_ReadTheKeyAndElementOrderedByTheKey()
+        => Assert.Equal(
+            "SELECT [t0].[Score], [t0].[Name] FROM " + Table + " ORDER BY [t0].[Score]",
+            GroupRowsSql(ByScore(), nameof(Item.Score), nameof(Item.Name)));
+
+    [Fact]
+    public void Groups_DropTheOrderingBeforeGroupBy()
+        => Assert.Equal(
+            "SELECT [t0].[Score], [t0].[Name] FROM " + Table + " ORDER BY [t0].[Score]",
+            GroupRowsSql(GroupBy(SqlQuery.OrderBy(Items, nameof(Item.Name)), nameof(Item.Score)), nameof(Item.Score), nameof(Item.Name)));
+
+    [Fact]
+    public void Groups_WithACompositeKey_AreOrderedByEveryPart_AndReadASharedColumnOnce()
+        => Assert.Equal(
+            "SELECT [t0].[IsActive], [t0].[Score] FROM " + Table + " ORDER BY [t0].[IsActive], [t0].[Score]",
+            GroupRowsSql(GroupBy(Items, nameof(Item.IsActive), nameof(Item.Score)), nameof(Item.IsActive), nameof(Item.Score), nameof(Item.Score)));
+
+    [Fact]
+    public void Groups_AfterTake_ReadThePage()
+        => Assert.Equal(
+            "SELECT [t1].[Score], [t1].[Name] FROM (SELECT TOP(@p0) " + Columns0 + " FROM " + Table + ") AS [t1] ORDER BY [t1].[Score]",
+            GroupRowsSql(GroupBy(SqlQuery.Take(Items, 3), nameof(Item.Score)), nameof(Item.Score), nameof(Item.Name)));
+
+    [Fact]
+    public void Groups_ThroughANavigation_AreOrderedByTheJoinedColumn()
+    {
+        var groups = GroupBy(Books, "Writer.Name");
+        var tail = new ProjectionNode(Tail(groups), ["Writer.Name", "Id"], []);
+
+        Assert.Equal(
+            "SELECT [t1].[Name], [t0].[Id] FROM [Book] AS [t0] INNER JOIN [Writer] AS [t1] ON [t0].[WriterId] = [t1].[Id] ORDER BY [t1].[Name]",
+            LibrarySql(tail));
+    }
+
+    [Fact]
+    public void Groups_AfterWhereOnGroups_AreNotSupported()
+        => Assert.Throws<NotSupportedException>(() => GroupRowsSql(SqlGrouping.Where(ByScore(), OperandAbove, [CountAll], [1]), nameof(Item.Score)));
+
+    [Fact]
+    public void Groups_AfterOrderByOnGroups_AreNotSupported()
+        => Assert.Throws<NotSupportedException>(() => GroupRowsSql(SqlGrouping.OrderBy(ByScore(), CountAll, []), nameof(Item.Score)));
 
     [Fact]
     public void KeyThroughRequiredReference_IsInnerJoined()
@@ -276,7 +319,7 @@ public sealed class SqlBuilderGroupTests : SqlBuilderTestBase, IDisposable
 
     private static IQueryable<IGrouping<object, T>> GroupBy<T>(IQueryable<T> source, params string[] keyPaths)
         where T : class
-        => SqlGrouping.GroupBy<T, object, T>(source, keyPaths);
+        => SqlGrouping.GroupBy<T, object, T>(source, keyPaths, static (_, _, _) => null!, [], [""], static (_, _, entities) => (T)entities[0]!);
 
     private static IQueryable<int> Select<T>(IQueryable<IGrouping<object, T>> source, params GroupValue[] values)
         => SqlGrouping.Select(source, values, [], Reader);
@@ -294,14 +337,20 @@ public sealed class SqlBuilderGroupTests : SqlBuilderTestBase, IDisposable
     private string Sql<T>(IQueryable<T> query, QueryTerminal terminal = QueryTerminal.Rows, int? rowLimit = null, SqlAggregate? aggregate = null)
         => SqlBuilder.Build(Entity, Tail(query), SqlServerDialect.Instance, terminal, rowLimit, aggregate: aggregate).CommandText;
 
+    // The statement for the groups themselves selects the key and element columns, as the group runner asks.
+    private string GroupRowsSql<T>(IQueryable<IGrouping<object, T>> groups, params string[] propertyNames)
+        => SqlBuilder.Build(Entity, new ProjectionNode(Tail(groups), propertyNames, []), SqlServerDialect.Instance, QueryTerminal.Rows).CommandText;
+
     private SqlStatement Statement<T>(IQueryable<T> query) => SqlBuilder.Build(Entity, Tail(query), SqlServerDialect.Instance, QueryTerminal.Rows);
 
     // A chain the generator never emits, to check the builder rejects it.
     private SqlStatement Statement(QueryNode tail) => SqlBuilder.Build(Entity, tail, SqlServerDialect.Instance, QueryTerminal.Rows);
 
-    private string LibrarySql<T>(IQueryable<T> query, QueryTerminal terminal = QueryTerminal.Rows)
+    private string LibrarySql<T>(IQueryable<T> query, QueryTerminal terminal = QueryTerminal.Rows) => LibrarySql(Tail(query), terminal);
+
+    private string LibrarySql(QueryNode tail, QueryTerminal terminal = QueryTerminal.Rows)
     {
         BoundEntity Bind(Type type) => ModelBinder.GetEntity(_library.Model, type);
-        return SqlBuilder.Build(Bind(typeof(Book)), Tail(query), SqlServerDialect.Instance, terminal, bindEntity: Bind).CommandText;
+        return SqlBuilder.Build(Bind(typeof(Book)), tail, SqlServerDialect.Instance, terminal, bindEntity: Bind).CommandText;
     }
 }
