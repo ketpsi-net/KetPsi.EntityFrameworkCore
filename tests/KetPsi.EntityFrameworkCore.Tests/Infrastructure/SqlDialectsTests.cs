@@ -89,6 +89,8 @@ public sealed class SqlDialectsTests
 
         public string Exists(string subquery) => throw new NotSupportedException();
 
+        public string Aggregate(AggregateFunction function, string column, AggregateValueType valueType) => throw new NotSupportedException();
+
         public SqlPaging Paging(string? offsetParameter, string? limitParameter, bool hasOrderBy) => throw new NotSupportedException();
 
         public string InList(string column, string listParameter, string storeType) => throw new NotSupportedException();

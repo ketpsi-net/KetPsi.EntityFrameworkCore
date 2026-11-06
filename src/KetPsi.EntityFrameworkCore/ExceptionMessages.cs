@@ -84,6 +84,21 @@ internal static class ExceptionMessages
         "No generated reader is registered for the entity type '{0}'. Make sure the project that declares the query " +
         "references KetPsi.EntityFrameworkCore.Generator.";
 
+    public const string AggregateNeedsOneColumn =
+        "An aggregate without a selector works on a query projected to one property, such as Select(x => x.Price).Sum().";
+
+    public const string ProjectionRequiresColumns =
+        "A projection reads at least one entity property or entity.";
+
+    public const string CollectionNavigationInProjection =
+        "KetPsi.EntityFrameworkCore cannot project the collection navigation '{1}' of '{0}' yet; include it on a projected entity instead.";
+
+    public const string AggregateNeedsColumnOnly =
+        "An aggregate works on one column, but the projection selects an entity.";
+
+    public const string NotAProjectedQuery =
+        "KetPsi.EntityFrameworkCore can only continue a query projected by an intercepted Select, but the source is of type '{0}'.";
+
     // EF Core's own message, so no-tracking queries with a cycle fail the same way.
     public const string IncludeWithCycle =
         "The Include path '{0}->{1}' results in a cycle. Cycles are not allowed in no-tracking queries; either use a " +
@@ -112,6 +127,9 @@ internal static class ExceptionMessages
     public const string SequenceContainsNoElementsAsync = "Sequence contains no elements.";
 
     public const string SequenceContainsMoreThanOneElementAsync = "Sequence contains more than one element.";
+
+    // What EF Core 10 throws for Min, Max or Average of no rows into a non-nullable type.
+    public const string NullableObjectMustHaveAValue = "Nullable object must have a value.";
 
     public const string CapturedValueNotSupported =
         "The predicate value '{1}' ({0}) cannot be read. The generated interceptor does not match the expression tree " +

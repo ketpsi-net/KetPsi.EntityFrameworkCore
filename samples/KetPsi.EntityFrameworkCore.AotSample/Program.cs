@@ -116,6 +116,81 @@ await CheckAsync(
         .Select(r => r.Product.Name)),
     "Dune,Dune,Hades,Kind of Blue");
 
+static string Invariant(FormattableString value) => FormattableString.Invariant(value);
+
+await CheckAsync(
+    "Select to an anonymous type through a navigation",
+    async db => string.Join(",", (await db.Reviews.OrderBy(r => r.Id).Select(r => new { r.Id, r.Product.Name }).ToListAsync(cancellationToken))
+        .Select(r => $"{r.Id}:{r.Name}")),
+    "11:Dune,12:Dune,21:Hades,61:Kind of Blue");
+
+await CheckAsync(
+    "Select to a record",
+    db => Task.FromResult(string.Join(",", db.Products.Where(p => p.Category == Category.Music).OrderBy(p => p.Id)
+        .Select(p => new ProductPrice(p.Id, p.Price)).ToList().Select(p => Invariant($"{p.Id}:{p.Price}")))),
+    "3:15.00,6:12.00");
+
+var suffix = "!";
+await CheckAsync(
+    "Select to an object initializer with computed members",
+    db => Task.FromResult(string.Join(",", db.Products.Where(p => p.Id <= 2).OrderBy(p => p.Id)
+        .Select(p => new ProductLabel { Id = p.Id, Label = p.Name.ToUpper() + suffix + (p.Stock ?? 0) }).ToList().Select(p => $"{p.Id}:{p.Label}"))),
+    "1:DUNE!12,2:HADES!0");
+
+await CheckAsync(
+    "Select to a tuple",
+    db => Task.FromResult(string.Join(",", db.Products.Where(p => p.Stock == null).OrderBy(p => p.Id).Select(p => ValueTuple.Create(p.Id, p.Stock)).ToList())),
+    "(2, ),(6, )");
+
+await CheckAsync(
+    "Select one member, then page",
+    db => Task.FromResult(string.Join(",", db.Products.OrderBy(p => p.Price).Select(p => p.Name).Skip(1).Take(2).ToList())),
+    "Foundation,Dune");
+
+await CheckAsync(
+    "Select through a navigation, then FirstAsync",
+    async db => await db.Reviews.OrderByDescending(r => r.Stars).ThenBy(r => r.Id).Select(r => r.Product.Name).FirstAsync(cancellationToken),
+    "Dune");
+
+await CheckAsync(
+    "Select an entity through a navigation, with its include",
+    db =>
+    {
+        var products = db.Reviews.AsNoTracking().Include(r => r.Product).ThenInclude(p => p.Reviews).OrderBy(r => r.Id).Select(r => r.Product).ToList();
+        return Task.FromResult(string.Join(",", products.Select(p => $"{p.Id}:{p.Reviews.Count}")) + $"|{ReferenceEquals(products[0], products[1])}");
+    },
+    "1:2,1:2,2:1,6:1|False");
+
+await CheckAsync(
+    "Distinct, then Count",
+    db => Task.FromResult(db.Products.Select(p => p.Category).Distinct().Count()),
+    3);
+
+await CheckAsync(
+    "Distinct values through a navigation",
+    db => Task.FromResult(string.Join(",", db.Reviews.Select(r => r.Product.Name).Distinct().ToList().Order(StringComparer.Ordinal))),
+    "Dune,Hades,Kind of Blue");
+
+await CheckAsync(
+    "Sum, Average, Min and Max",
+    async db => Invariant($"{db.Products.Sum(p => p.Price)}|{db.Reviews.Average(r => r.Stars)}|{await db.Products.MinAsync(p => p.Stock, cancellationToken)}|{db.Products.Max(p => p.CreatedAt):yyyy-MM-dd}"),
+    "119.48|4.25|0|2024-01-08");
+
+await CheckAsync(
+    "Max on no rows throws, as in EF Core",
+    db =>
+    {
+        try
+        {
+            return Task.FromResult(db.Products.Where(p => p.Price > 1000m).Max(p => p.Id).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch (InvalidOperationException)
+        {
+            return Task.FromResult("throws");
+        }
+    },
+    "throws");
+
 #if NET8_0
 // EF Core 8 cannot track entities under Native AOT: tracking queries fail with a clear error instead of EF Core's
 // "model building is not supported". Add AsNoTracking(), or move to EF Core 9 or later to track.
@@ -186,6 +261,16 @@ await CheckAsync(
         return $"{loaded}|{saved}|{stars}";
     },
     "True|1|1");
+
+await CheckAsync(
+    "Tracked projection attaches its entities and connects them",
+    db =>
+    {
+        var rows = db.Reviews.OrderBy(r => r.Id).Select(r => new { Review = r, r.Product }).ToList();
+        var connected = rows.All(row => ReferenceEquals(row.Review.Product, row.Product));
+        return Task.FromResult($"{db.ChangeTracker.Entries().Count()}|{ReferenceEquals(rows[0].Product, rows[1].Product)}|{connected}");
+    },
+    "7|True|True");
 
 await CheckAsync(
     "SaveChanges through EF Core, read back through KetPsi",

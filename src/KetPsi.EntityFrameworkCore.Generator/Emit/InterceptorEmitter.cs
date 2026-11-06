@@ -13,19 +13,29 @@ internal static class InterceptorEmitter
     public const string HintName = "KetPsi.Interceptors.g.cs";
 
     private const string SqlQuery = "global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery";
+    private const string SqlProjection = "global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection";
+    private const string ProjectionReader = "global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader";
+    private const string Queryable = "global::System.Linq.IQueryable";
+    private const string ReaderHelper = "Reader";
+    private const string AggregateFunction = "global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction";
+    private const string AggregateValueType = "global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType";
     private const string CapturedValues = "global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues";
     private const string PredicateTemplate = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate";
     private const string Enumerable = "global::System.Linq.Enumerable";
     private const string ExpressionType = "global::System.Linq.Expressions.Expression<";
     private const string NoValues = "global::System.Array.Empty<object?>()";
     private const string AsyncSuffix = "Async";
+    private const string DynamicDependency = "global::System.Diagnostics.CodeAnalysis.DynamicDependency";
+    private const string DynamicallyAccessedMemberTypes = "global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes";
 
     /// <summary>Whether the site has everything its interceptor needs.</summary>
     public static bool CanIntercept(CallSite site)
         => site is { Interception: not null, Signature: not null, Operator: { } kind }
             && (!TakesPredicate(site) || site.Predicate is not null)
             && (!IsOrdering(kind) || site.OrderProperty is not null)
-            && (kind is not (OperatorKind.Include or OperatorKind.ThenInclude) || site.Include is not null);
+            && (kind is not (OperatorKind.Include or OperatorKind.ThenInclude) || site.Include is not null)
+            && (kind != OperatorKind.Select || site.Projection is not null)
+            && (!IsAggregate(kind) || site.Aggregate is not null);
 
     public static string Emit(IReadOnlyList<CallSite> sites)
     {
@@ -50,6 +60,14 @@ internal static class InterceptorEmitter
             }
 
             WriteInterceptor(writer, sites[i], i);
+        }
+
+        if (sites.Any(static s => s.Operator == OperatorKind.Select))
+        {
+            // Converts a reader lambda to its delegate type, inferring the projected type, which can be anonymous.
+            writer
+                .Line()
+                .Line($"private static {ProjectionReader}<T> {ReaderHelper}<T>({ProjectionReader}<T> reader) => reader;");
         }
 
         return writer.Close().Close().ToString();
@@ -84,9 +102,27 @@ internal static class InterceptorEmitter
             writer.Line($"private static readonly {PredicateTemplate} {template} = {site.Predicate.TemplateCode};").Line();
         }
 
-        writer
-            .Line(site.Interception!)
-            .Open($"public static {signature.ReturnType} {signature.Name}{number}({declaration})");
+        writer.Line(site.Interception!);
+        if (site.UsesDecimalOperators)
+        {
+            // The caller builds this lambda's decimal operators by reflection; keep decimal's methods for it under Native AOT.
+            writer.Line($"[{DynamicDependency}({DynamicallyAccessedMemberTypes}.PublicMethods, typeof(decimal))]");
+        }
+
+        var typeParameters = signature.TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", signature.TypeParameters) + ">";
+        writer.Open($"public static {signature.ReturnType} {signature.Name}{number}{typeParameters}({declaration})");
+
+        if (site.ProjectedFrom is not null)
+        {
+            WriteProjected(writer, site, source, fallback);
+            return;
+        }
+
+        if (site.Operator == OperatorKind.Select)
+        {
+            WriteSelect(writer, site, source, fallback);
+            return;
+        }
 
         if (signature.ContainingType == Enumerable)
         {
@@ -117,6 +153,93 @@ internal static class InterceptorEmitter
         writer.Line("return " + Body(site, source, template) + ";").Close();
     }
 
+    // The query is cast to the entity query it is, so its type argument can be named.
+    private static void WriteSelect(CodeWriter writer, CallSite site, string source, string fallback)
+    {
+        var projection = site.Projection!;
+        var signature = site.Signature!;
+        var result = signature.TypeParameters[signature.TypeParameters.Count - 1];
+        writer
+            .Line($"var query = ({Queryable}<{site.ElementType}>)(object){source};")
+            .Open($"if (!{SqlQuery}.IsInterceptable(query))")
+            .Line($"return {fallback};")
+            .Close()
+            .Line();
+
+        if (projection.CaptureCount > 0)
+        {
+            // Captured values are read once per query, in source order, from the lambda the caller built.
+            writer.Line($"var {ProjectionTranslator.Captures} = {CapturedValues}.ReadAll({signature.Parameters[1].Name});");
+        }
+
+        writer
+            .Line($"return ({Queryable}<{result}>)(object){SqlQuery}.Select(")
+            .Line($"    query,")
+            .Line($"    {Strings(projection.PropertyPaths)},")
+            .Line($"    {Strings(projection.EntityPaths)},")
+            .Line($"    {ReaderHelper}({projection.ReaderCode}));")
+            .Close();
+    }
+
+    private static void WriteProjected(CodeWriter writer, CallSite site, string source, string fallback)
+    {
+        var parameters = site.Signature!.Parameters;
+        var element = site.Signature.TypeParameters.Count > 0 ? site.Signature.TypeParameters[0] : site.ElementType;
+        var call = site.Operator switch
+        {
+            OperatorKind.Skip or OperatorKind.Take => $"{SqlProjection}.{site.Operator}(query, {parameters[1].Name})",
+            _ when site.Aggregate is { } aggregate => Aggregate(
+                SqlProjection,
+                site,
+                site.Signature.TypeParameters.Count > 0 ? element : site.ElementType,
+                "query",
+                propertyPath: null,
+                aggregate),
+            _ when site.IsAsync => $"{SqlProjection}.{site.Operator}{AsyncSuffix}(query, {parameters[parameters.Count - 1].Name})",
+            _ => $"{SqlProjection}.{site.Operator}(query)",
+        };
+
+        // Enumerable.ToList and ToArray accept any sequence; every other operator is on a query already.
+        var test = site.Signature.ContainingType == Enumerable
+            ? $"{source} is {Queryable}<{element}> query && {SqlProjection}.IsInterceptable(query)"
+            : $"{source} is var query && {SqlProjection}.IsInterceptable(query)";
+        writer
+            .Open($"if ({test})")
+            .Line($"return {call};")
+            .Close()
+            .Line()
+            .Line($"return {fallback};")
+            .Close();
+    }
+
+    // SqlQuery.Aggregate over an entity property, or SqlProjection.Aggregate over a one-column projection.
+    private static string Aggregate(string type, CallSite site, string element, string source, string? propertyPath, AggregateModel aggregate)
+    {
+        var parameters = site.Signature!.Parameters;
+        var arguments = new List<string> { source, $"{AggregateFunction}.{site.Operator}" };
+        if (propertyPath is not null)
+        {
+            arguments.Add($"\"{propertyPath}\"");
+        }
+
+        arguments.Add($"{AggregateValueType}.{aggregate.ValueType}");
+        if (site.IsAsync)
+        {
+            arguments.Add(parameters[parameters.Count - 1].Name);
+        }
+
+        var method = site.IsAsync ? "AggregateAsync" : "Aggregate";
+        return $"{type}.{method}<{element}, {aggregate.ResultType}>({string.Join(", ", arguments)})";
+    }
+
+    private static bool IsAggregate(OperatorKind kind)
+        => kind is OperatorKind.Sum or OperatorKind.Average or OperatorKind.Min or OperatorKind.Max;
+
+    private static string Strings(EquatableArray<string> values)
+        => values.Count == 0
+            ? "global::System.Array.Empty<string>()"
+            : "new string[] { " + string.Join(", ", values.Select(static v => "\"" + v + "\"")) + " }";
+
     private static string Body(CallSite site, string source, string template)
     {
         var parameters = site.Signature!.Parameters;
@@ -138,6 +261,10 @@ internal static class InterceptorEmitter
             case OperatorKind.Include or OperatorKind.ThenInclude:
                 var include = site.Include!;
                 return $"{SqlQuery}.{site.Operator}<{site.ElementType}, {include.PropertyTypeName}>({source}, \"{include.Navigation}\")";
+            case OperatorKind.Distinct:
+                return $"{SqlQuery}.Distinct({source})";
+            case OperatorKind.Sum or OperatorKind.Average or OperatorKind.Min or OperatorKind.Max:
+                return Aggregate(SqlQuery, site, site.ElementType, source, site.Aggregate!.PropertyPath, site.Aggregate);
             case OperatorKind.AsSplitQuery or OperatorKind.AsSingleQuery:
                 // KetPsi always loads included collections with their own statements; both give the same results.
                 return source;

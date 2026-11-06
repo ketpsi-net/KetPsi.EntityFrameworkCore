@@ -32,6 +32,13 @@ public interface ISqlDialect
     /// <summary>Wraps <paramref name="subquery"/> in a statement that returns one boolean: whether it has any row.</summary>
     string Exists(string subquery);
 
+    /// <summary>
+    /// Returns the select expression that computes <paramref name="function"/> over <paramref name="column"/>, with
+    /// EF Core's semantics: a <c>Sum</c> of no rows is zero of <paramref name="valueType"/>, and an <c>Average</c> of
+    /// integers is computed in floating point.
+    /// </summary>
+    string Aggregate(AggregateFunction function, string column, AggregateValueType valueType);
+
     /// <summary>Returns the clauses that apply <c>Skip</c> and <c>Take</c>.</summary>
     /// <param name="offsetParameter">The SQL for the <c>Skip</c> count, a parameter or an integer literal; or <see langword="null"/>.</param>
     /// <param name="limitParameter">The SQL for the <c>Take</c> count, a parameter or an integer literal; or <see langword="null"/>.</param>

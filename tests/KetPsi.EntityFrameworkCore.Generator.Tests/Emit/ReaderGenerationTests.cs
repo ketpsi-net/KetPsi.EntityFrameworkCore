@@ -21,7 +21,7 @@ public sealed class ReaderGenerationTests
     {
         var run = GeneratorHost.Run(ReaderSources.Source);
 
-        // The sample uses Select on Authors on purpose, to show entities with only unsupported operators get no reader.
+        // The sample uses an indexed Select on Authors on purpose, to show entities with only unsupported operators get no reader.
         Assert.Equal("Select", run.TextAt(Assert.Single(run.Diagnostics)));
         Assert.Empty(run.OutputProblems());
     }
@@ -60,7 +60,7 @@ public sealed class ReaderGenerationTests
 
     [Fact]
     public void NoSupportedOperators_GeneratesNothing()
-        => Assert.Empty(GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Select(b => b.Id);")).Result.GeneratedTrees);
+        => Assert.Empty(GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Reverse();")).Result.GeneratedTrees);
 
     [Fact]
     public void GeneratedReader_ReadsEveryPropertyKind()

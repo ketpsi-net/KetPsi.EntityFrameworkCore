@@ -9,9 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace KetPsi.EntityFrameworkCore.Execution;
 
 /// <summary>
-/// Runs a query with included navigations: the statement that reads the entities with their joined references,
-/// then one statement per included collection with the keys of the parents already read, and connects the
-/// entities the way EF Core's own queries do.
+/// Runs a query that reads entities, the queried one or those a projection selects, with their included navigations:
+/// the statement that reads the entities with their joined references, then one statement per included collection
+/// with the keys of the parents already read, and connects the entities the way EF Core's own queries do.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,7 +21,8 @@ namespace KetPsi.EntityFrameworkCore.Execution;
 /// <para>
 /// No-tracking queries create one instance per row and set the navigations, inverse navigations included, with
 /// the generated <see cref="INavigationAccessor"/>s; a reference shared by several rows is a separate instance in
-/// each. With identity resolution, every entity is one instance per key across the whole query.
+/// each. With identity resolution, every entity is one instance per key across the whole query, and, as the change
+/// tracker would, the navigations between any two entities the query read are fixed up too.
 /// </para>
 /// </remarks>
 internal sealed class IncludeLoader
@@ -33,6 +34,7 @@ internal sealed class IncludeLoader
     private readonly Func<Type, BoundEntity> _bindEntity;
     private readonly Dictionary<Type, Dictionary<object?[], object>> _identities = [];
     private readonly HashSet<(object Owner, object Item)> _addedToCollections = new(PairComparer.Instance);
+    private readonly List<(object Entity, BoundForeignKey ForeignKey, object?[] Values)> _foreignKeys = [];
 
     public IncludeLoader(
         DbContext context,
@@ -52,25 +54,51 @@ internal sealed class IncludeLoader
 
     /// <summary>Runs <paramref name="statement"/> and its collection loads, and returns the read entities in row order.</summary>
     public List<object> Load(IncludeStatement statement)
-        => LoadAsync(statement, isAsync: false, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        => Load(statement, QueriedEntity(statement));
 
     /// <summary>Runs <paramref name="statement"/> and its collection loads, and returns the read entities in row order.</summary>
     public ValueTask<List<object>> LoadAsync(IncludeStatement statement, CancellationToken cancellationToken)
-        => LoadAsync(statement, isAsync: true, cancellationToken);
+        => LoadAsync(statement, QueriedEntity(statement), cancellationToken);
 
-    private async ValueTask<List<object>> LoadAsync(IncludeStatement statement, bool isAsync, CancellationToken cancellationToken)
+    /// <summary>
+    /// Runs <paramref name="statement"/> and its collection loads, and returns what <paramref name="read"/> builds from
+    /// each row and the entities of its <see cref="IncludeStatement.Roots"/>, in row order. The entities' collections
+    /// are loaded after every row is read, before this returns.
+    /// </summary>
+    public List<T> Load<T>(IncludeStatement statement, Func<DbDataReader, object?[], T> read)
+        => LoadAsync(statement, read, isAsync: false, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+
+    /// <summary>The async form of <see cref="Load{T}(IncludeStatement, Func{DbDataReader, object[], T})"/>.</summary>
+    public ValueTask<List<T>> LoadAsync<T>(IncludeStatement statement, Func<DbDataReader, object?[], T> read, CancellationToken cancellationToken)
+        => LoadAsync(statement, read, isAsync: true, cancellationToken);
+
+    private static Func<DbDataReader, object?[], object> QueriedEntity(IncludeStatement statement)
+    {
+        var root = statement.Roots[0];
+        return (_, entities) => entities[root]!;
+    }
+
+    private async ValueTask<List<T>> LoadAsync<T>(
+        IncludeStatement statement, Func<DbDataReader, object?[], T> read, bool isAsync, CancellationToken cancellationToken)
     {
         var plan = new StatementPlan(statement);
-        var roots = new List<object>();
+        var results = new List<T>();
         await ReadAsync(statement.Statement, row =>
         {
             var entities = ReadRow(plan, row);
-            roots.Add(entities[0]!);
+            var roots = new object?[statement.Roots.Count];
+            for (var i = 0; i < roots.Length; i++)
+            {
+                roots[i] = entities[statement.Roots[i]];
+            }
+
+            results.Add(read(row, roots));
             plan.CollectParents(row, entities);
         }, isAsync, cancellationToken).ConfigureAwait(false);
 
         await LoadCollectionsAsync(plan, isAsync, cancellationToken).ConfigureAwait(false);
-        return roots;
+        FixUpResolvedIdentities();
+        return results;
     }
 
     private async ValueTask LoadCollectionsAsync(StatementPlan plan, bool isAsync, CancellationToken cancellationToken)
@@ -155,7 +183,8 @@ internal sealed class IncludeLoader
             var segment = plan.Segments[i];
             if (segment.Parent is not { } parentIndex)
             {
-                entities[i] = Resolve(segment, row);
+                // A projected entity reached through an optional navigation can be missing.
+                entities[i] = segment.IsPresent(row) ? Resolve(segment, row) : null;
                 continue;
             }
 
@@ -211,6 +240,10 @@ internal sealed class IncludeLoader
             if (!identities.TryGetValue(key, out var existing))
             {
                 identities.Add(key, existing = segment.Materialize(row));
+                foreach (var (foreignKey, reader) in segment.ForeignKeys)
+                {
+                    _foreignKeys.Add((existing, foreignKey, reader.Read(row)));
+                }
             }
 
             return existing;
@@ -270,6 +303,43 @@ internal sealed class IncludeLoader
         {
             accessor.AddToCollection(target, source);
         }
+    }
+
+    /// <summary>
+    /// With identity resolution, connects every entity the query read to the principals it read, as the change tracker
+    /// does: the reference to the principal, and the principal's reference or collection back.
+    /// </summary>
+    private void FixUpResolvedIdentities()
+    {
+        foreach (var (dependent, foreignKey, values) in _foreignKeys)
+        {
+            if (values.Any(static value => value is null)
+                || !_identities.TryGetValue(foreignKey.PrincipalClrType, out var principals)
+                || !principals.TryGetValue(values, out var principal))
+            {
+                continue;
+            }
+
+            if (foreignKey.DependentToPrincipal is { } reference)
+            {
+                EntityNavigations.Get(dependent.GetType(), reference).SetReference(dependent, principal);
+            }
+
+            if (foreignKey.PrincipalToDependent is { } inverse)
+            {
+                var accessor = EntityNavigations.Get(principal.GetType(), inverse);
+                if (foreignKey.IsUnique)
+                {
+                    accessor.SetReference(principal, dependent);
+                }
+                else if (_addedToCollections.Add((principal, dependent)))
+                {
+                    accessor.AddToCollection(principal, dependent);
+                }
+            }
+        }
+
+        _foreignKeys.Clear();
     }
 
     private void MarkLoaded(object entity, BoundNavigation navigation)
@@ -359,6 +429,7 @@ internal sealed class IncludeLoader
             _ordinals = [.. Entity.GetOrdinals(Operations.PropertyNames).Select(o => o < 0 ? o : o + Offset)];
             Key = Entity.PrimaryKey is null ? null : new KeyReader(Entity, Offset);
             ShadowProperties = [.. Entity.ShadowProperties.Select(p => (p.Name, Offset + KeyReader.Ordinal(Entity, p), p.ClrType))];
+            ForeignKeys = [.. Entity.ForeignKeys.Select(fk => (fk, new KeyReader(Entity, fk.Properties, Offset)))];
         }
 
         public BoundEntity Entity { get; }
@@ -374,6 +445,9 @@ internal sealed class IncludeLoader
         public KeyReader? Key { get; }
 
         public IReadOnlyList<(string Name, int Ordinal, Type ClrType)> ShadowProperties { get; }
+
+        /// <summary>The entity's foreign keys, each with the reader of its values.</summary>
+        public IReadOnlyList<(BoundForeignKey ForeignKey, KeyReader Reader)> ForeignKeys { get; }
 
         /// <summary>Whether a left join found the entity: a missing one has null key columns.</summary>
         public bool IsPresent(DbDataReader row) => Key is null || !row.IsDBNull(Key.FirstOrdinal);

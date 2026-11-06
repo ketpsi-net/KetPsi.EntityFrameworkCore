@@ -28,11 +28,11 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Theory]
-    [InlineData("var r = db.Blogs.Select(b => b.Id).ToList();", "Select")]
+    [InlineData("var r = db.Blogs.Reverse().ToList();", "Reverse")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).ToList();", "GroupBy")]
-    [InlineData("var r = db.Blogs.Distinct().ToList();", "Distinct")]
+    [InlineData("var r = db.Blogs.DistinctBy(b => b.Rating).ToList();", "DistinctBy")]
     [InlineData("var r = db.Blogs.Join(db.Posts, b => b.Id, p => p.BlogId, (b, p) => b).ToList();", "Join")]
-    [InlineData("var r = db.Blogs.Max(b => b.Rating);", "Max")]
+    [InlineData("var r = db.Blogs.Max();", "Max")]
     [InlineData("var r = db.Blogs.Last();", "Last")]
     [InlineData("var r = db.Blogs.IgnoreAutoIncludes().ToList();", "IgnoreAutoIncludes")]
     [InlineData("var r = db.Blogs.TagWith(\"x\").ToList();", "TagWith")]
@@ -42,8 +42,8 @@ public sealed class GeneratorDiagnosticsTests
     [InlineData("var r = await db.Blogs.FindAsync(1);", "FindAsync")]
     [InlineData("var r = db.Blogs.AsAsyncEnumerable();", "AsAsyncEnumerable")]
     [InlineData("var r = db.Blogs.AsEnumerable().ToList();", "AsEnumerable")]
-    [InlineData("var r = await db.Blogs.MaxAsync(b => b.Rating, ct);", "MaxAsync")]
-    [InlineData("var r = Queryable.Select(db.Blogs, b => b.Id).ToList();", "Select")]
+    [InlineData("var r = await db.Blogs.MaxAsync(ct);", "MaxAsync")]
+    [InlineData("var r = Queryable.Reverse(db.Blogs).ToList();", "Reverse")]
     public void UnsupportedOperator_ReportsKP1001AtOperatorName(string body, string operatorName)
     {
         var run = GeneratorHost.Run(TestSources.WithBody(body));
@@ -138,7 +138,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void SeveralUnsupportedOperators_ReportEach()
     {
-        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Include(\"Posts\").Select(b => b.Id).ToList();"));
+        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Include(\"Posts\").Reverse().ToList();"));
 
         Assert.Equal(["KP1002", "KP1001"], run.Diagnostics.OrderBy(d => d.Location.SourceSpan.Start).Select(d => d.Id));
     }
@@ -155,7 +155,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void InMemoryQueryOfEntityType_IsCheckedLikeEntityQuery()
     {
-        var run = GeneratorHost.Run(TestSources.WithBody("var r = new List<Blog>().AsQueryable().Select(b => b.Id).ToList();"));
+        var run = GeneratorHost.Run(TestSources.WithBody("var r = new List<Blog>().AsQueryable().Reverse().ToList();"));
 
         Assert.Equal("KP1001", Assert.Single(run.Diagnostics).Id);
     }
@@ -191,7 +191,7 @@ public sealed class GeneratorDiagnosticsTests
     [Fact]
     public void InterceptorsDisabled_OnlyUnsupportedOperators_ReportsOnlyThem()
     {
-        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Select(b => b.Id);"), interceptorsEnabled: false);
+        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Reverse();"), interceptorsEnabled: false);
 
         Assert.Equal("KP1001", Assert.Single(run.Diagnostics).Id);
     }

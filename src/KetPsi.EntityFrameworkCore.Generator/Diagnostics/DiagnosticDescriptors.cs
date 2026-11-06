@@ -46,6 +46,11 @@ internal static class DiagnosticDescriptors
         "Operator overload not supported",
         "This overload of '{0}' is not supported: {1}");
 
+    public static readonly DiagnosticDescriptor OperatorAfterSelectNotSupported = Error(
+        "KP1007",
+        "Operator not supported after Select",
+        "'{0}' after Select is not supported yet: {1}");
+
     public static readonly DiagnosticDescriptor ExpressionNotSupported = Error(
         "KP2001",
         "Expression not supported",
@@ -87,6 +92,11 @@ internal static class DiagnosticDescriptors
         "KP2008",
         "Order key not supported",
         "The order key '{0}' must be a property of the entity itself, such as x => x.Name");
+
+    public static readonly DiagnosticDescriptor ProjectionNotSupported = Error(
+        "KP2009",
+        "Projection not supported",
+        "The projection '{0}' is not supported yet: {1}");
 
     public static readonly DiagnosticDescriptor PropertyTypeNotSupported = Error(
         "KP3001",

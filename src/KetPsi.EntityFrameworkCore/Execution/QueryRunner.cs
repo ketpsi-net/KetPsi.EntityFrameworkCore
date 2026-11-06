@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -17,15 +18,15 @@ namespace KetPsi.EntityFrameworkCore.Execution;
 /// </summary>
 internal static class QueryRunner
 {
-    private const int FirstRowLimit = 1;
+    internal const int FirstRowLimit = 1;
 
     // Two rows are enough to tell "exactly one" from "more than one".
-    private const int SingleRowLimit = 2;
+    internal const int SingleRowLimit = 2;
 
     // EF Core 9 is the first version that can track entities under Native AOT, with a --nativeaot compiled model.
     private const int MinimumEfCoreMajorForAotTracking = 9;
 
-    private static readonly int EfCoreMajorVersion = typeof(DbContext).Assembly.GetName().Version?.Major ?? 0;
+    internal static readonly int EfCoreMajorVersion = typeof(DbContext).Assembly.GetName().Version?.Major ?? 0;
 
     public static IEnumerable<T> Enumerate<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
         where T : class
@@ -219,30 +220,15 @@ internal static class QueryRunner
         where T : class
     {
         var context = query.Context;
-        var model = context.Model;
-        BoundEntity Bind(Type type) => ModelBinder.GetEntity(model, type);
-
-        var entity = Bind(query.Root.EntityType);
-        if (IncludeTree.FromChain(entity, query.Tail, Bind) is not { } includes)
+        var bind = Binder(context);
+        var entity = bind(query.Root.EntityType);
+        if (IncludeTree.FromChain(entity, query.Tail, bind) is not { } includes)
         {
             return null;
         }
 
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
-
-        // IgnoreQueryFilters applies to every entity of the query, included ones too, as in EF Core.
-        var ignored = IgnoredQueryFilters.FromChain(query.Tail);
-        var filters = new Dictionary<BoundEntity, IReadOnlyList<ResolvedQueryFilter>>(ReferenceEqualityComparer.Instance);
-        IReadOnlyList<ResolvedQueryFilter> FiltersFor(BoundEntity bound)
-        {
-            if (!filters.TryGetValue(bound, out var resolved))
-            {
-                filters.Add(bound, resolved = QueryFilterResolver.Resolve(context, bound, ignored));
-            }
-
-            return resolved;
-        }
-
+        var filtersFor = FiltersFor(context, query.Tail);
         var tracking = ResolveTracking(query.Tail, context.ChangeTracker.QueryTrackingBehavior);
         if (tracking == QueryTrackingBehavior.TrackAll)
         {
@@ -253,8 +239,34 @@ internal static class QueryRunner
             includes.EnsureNoCycle();
         }
 
-        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, FiltersFor, rowLimit);
-        return new IncludedQuery(statement, new IncludeLoader(context, dialect, tracking, FiltersFor, Bind));
+        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, filtersFor, rowLimit);
+        return new IncludedQuery(statement, new IncludeLoader(context, dialect, tracking, filtersFor, bind));
+    }
+
+    /// <summary>Binds entity types against the context's model.</summary>
+    internal static Func<Type, BoundEntity> Binder(DbContext context)
+    {
+        var model = context.Model;
+        return type => ModelBinder.GetEntity(model, type);
+    }
+
+    /// <summary>
+    /// Resolves the query filters of each entity a query reads, once per entity. <c>IgnoreQueryFilters</c> applies to
+    /// every entity of the query, joined and included ones too, as in EF Core.
+    /// </summary>
+    internal static Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> FiltersFor(DbContext context, QueryNode tail)
+    {
+        var ignored = IgnoredQueryFilters.FromChain(tail);
+        var filters = new Dictionary<BoundEntity, IReadOnlyList<ResolvedQueryFilter>>(ReferenceEqualityComparer.Instance);
+        return bound =>
+        {
+            if (!filters.TryGetValue(bound, out var resolved))
+            {
+                filters.Add(bound, resolved = QueryFilterResolver.Resolve(context, bound, ignored));
+            }
+
+            return resolved;
+        };
     }
 
     private static PreparedRows<T> PrepareRows<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, int? rowLimit)
@@ -294,28 +306,44 @@ internal static class QueryRunner
     private static (BoundEntity Entity, ISqlDialect Dialect, SqlStatement Statement) PrepareWithEntity<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
         SqlQueryable<T> query, QueryTerminal terminal, int? rowLimit)
         where T : class
+        => PrepareStatement(query.Context, query.Tail, terminal, rowLimit);
+
+    /// <summary>Binds the chain's root entity, resolves the dialect and query filters, and builds the statement.</summary>
+    internal static (BoundEntity Entity, ISqlDialect Dialect, SqlStatement Statement) PrepareStatement(
+        DbContext context, QueryNode tail, QueryTerminal terminal, int? rowLimit, SqlAggregate? aggregate = null)
     {
-        var context = query.Context;
-        var entity = ModelBinder.GetEntity(context.Model, query.Root.EntityType);
+        var bind = Binder(context);
+        var entity = bind(RootOf(tail).EntityType);
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
-        var filters = QueryFilterResolver.Resolve(context, entity, IgnoredQueryFilters.FromChain(query.Tail));
-        var statement = SqlBuilder.Build(entity, query.Tail, dialect, terminal, rowLimit, filters);
+        var filtersFor = FiltersFor(context, tail);
+        var statement = SqlBuilder.Build(entity, tail, dialect, terminal, rowLimit, filtersFor(entity), aggregate, filtersFor, bind);
         return (entity, dialect, statement);
     }
 
+    internal static RootNode RootOf(QueryNode tail)
+    {
+        var node = tail;
+        while (node.Parent is not null)
+        {
+            node = node.Parent;
+        }
+
+        return node as RootNode ?? throw new UnreachableException("A chain always starts with a root node.");
+    }
+
     // LINQ's messages for sync terminals and EF Core's for async ones, so callers see the exceptions EF Core throws.
-    private static T FirstOf<T>(List<T> rows, bool isAsync) => rows.Count > 0 ? rows[0] : throw NoElements(isAsync);
+    internal static T FirstOf<T>(List<T> rows, bool isAsync) => rows.Count > 0 ? rows[0] : throw NoElements(isAsync);
 
-    private static T? FirstOrDefaultOf<T>(List<T> rows) => rows.Count > 0 ? rows[0] : default;
+    internal static T? FirstOrDefaultOf<T>(List<T> rows) => rows.Count > 0 ? rows[0] : default;
 
-    private static T SingleOf<T>(List<T> rows, bool isAsync) => rows.Count switch
+    internal static T SingleOf<T>(List<T> rows, bool isAsync) => rows.Count switch
     {
         0 => throw NoElements(isAsync),
         1 => rows[0],
         _ => throw MoreThanOneElement(isAsync),
     };
 
-    private static T? SingleOrDefaultOf<T>(List<T> rows, bool isAsync) => rows.Count switch
+    internal static T? SingleOrDefaultOf<T>(List<T> rows, bool isAsync) => rows.Count switch
     {
         0 => default,
         1 => rows[0],

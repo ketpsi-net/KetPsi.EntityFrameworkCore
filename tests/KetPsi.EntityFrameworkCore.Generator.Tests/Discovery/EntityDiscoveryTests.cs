@@ -144,7 +144,7 @@ public sealed class EntityDiscoveryTests
             {
                 protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<Tag>();
 
-                public void Query() => Set<Tag>().Select(t => t.Id).ToList();
+                public void Query() => Set<Tag>().Reverse().ToList();
             }
             """;
 
@@ -159,7 +159,7 @@ public sealed class EntityDiscoveryTests
         var source = TestSources.Usings + "namespace App;\n" + Entities + """
             public static class Queries
             {
-                public static void Run(DbContext db) => db.Set<Tag>().Select(t => t.Id).ToList();
+                public static void Run(DbContext db) => db.Set<Tag>().Reverse().ToList();
             }
             """;
 
@@ -182,7 +182,7 @@ public sealed class EntityDiscoveryTests
 
             public static class Queries
             {
-                public static void Run(ShopDb db) => db.Tags.Select(t => t.Id).ToList();
+                public static void Run(ShopDb db) => db.Tags.Reverse().ToList();
             }
             """;
 

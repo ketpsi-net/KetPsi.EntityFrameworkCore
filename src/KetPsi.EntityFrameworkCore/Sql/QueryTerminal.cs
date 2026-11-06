@@ -14,4 +14,7 @@ internal enum QueryTerminal
 
     /// <summary>Whether any row exists: <c>Any</c>.</summary>
     Any,
+
+    /// <summary>One aggregate value: <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c>.</summary>
+    Aggregate,
 }

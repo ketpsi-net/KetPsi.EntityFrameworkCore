@@ -77,6 +77,25 @@ public sealed class CallSiteAnalyzerTests
         Assert.Equal("global::App.Blog", site?.Include?.Target.TypeName);
     }
 
+    [Theory]
+    [InlineData("db.Blogs.Where(b => b.Price > 10m)", "Where")]
+    [InlineData("db.Blogs.Where(b => b.Price == decimal.One)", "Where")]
+    [InlineData("db.Blogs.Where(b => b.IsActive && b.Discount >= 0.5m)", "Where")]
+    [InlineData("db.Blogs.Where(b => !(b.Price < 1))", "Where")]
+    [InlineData("db.Blogs.First(b => b.Price != 0m)", "First")]
+    [InlineData("db.Blogs.WhereIf(true, b => b.Discount < 1m)", "WhereIf")]
+    public void Analyze_DecimalOperator_IsDetected(string expression, string operatorName)
+        => Assert.True(AnalyzeSingle(expression, operatorName)?.UsesDecimalOperators);
+
+    [Theory]
+    [InlineData("db.Blogs.Where(b => b.Rating > 1)", "Where")]
+    [InlineData("db.Blogs.Where(b => b.Name == \"x\" || b.Views == null)", "Where")]
+    [InlineData("db.Blogs.Where(b => b.Status != Status.Draft)", "Where")]
+    [InlineData("db.Blogs.OrderBy(b => b.Price)", "OrderBy")]
+    [InlineData("db.Blogs.Take(1)", "Take")]
+    public void Analyze_NoDecimalOperator_IsNotFlagged(string expression, string operatorName)
+        => Assert.False(AnalyzeSingle(expression, operatorName)?.UsesDecimalOperators);
+
     [Fact]
     public void Analyze_NotAnOperator_ReturnsNull()
         => Assert.Null(AnalyzeSingle("db.Blogs.GetHashCode()", "GetHashCode"));
@@ -88,7 +107,7 @@ public sealed class CallSiteAnalyzerTests
     [Fact]
     public void Analyze_UnsupportedOperator_HasDiagnosticAndNoOperator()
     {
-        var site = AnalyzeSingle("db.Blogs.Select(b => b.Id)", "Select");
+        var site = AnalyzeSingle("db.Blogs.Reverse()", "Reverse");
 
         Assert.NotNull(site);
         Assert.Null(site.Operator);

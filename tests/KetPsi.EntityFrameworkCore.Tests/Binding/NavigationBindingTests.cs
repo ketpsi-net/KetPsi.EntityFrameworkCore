@@ -145,4 +145,35 @@ public sealed class NavigationBindingTests
     [Fact]
     public void EntityWithoutNavigations_HasNone()
         => Assert.Empty(ModelBinderTests.Bind<ProductContext, Product>().Navigations);
+
+    [Fact]
+    public void ForeignKeys_HaveTheNavigationsOnEitherSide()
+    {
+        var foreignKeys = ModelBinderTests.Bind<LibraryContext, Book>().ForeignKeys;
+
+        Assert.Equal(2, foreignKeys.Count);
+        var editor = Assert.Single(foreignKeys, fk => fk.PrincipalClrType == typeof(Editor));
+        Assert.Equal([nameof(Book.EditorId)], editor.Properties.Select(p => p.Name));
+        Assert.Equal(nameof(Book.Editor), editor.DependentToPrincipal);
+        Assert.Null(editor.PrincipalToDependent);
+        var writer = Assert.Single(foreignKeys, fk => fk.PrincipalClrType == typeof(Writer));
+        Assert.Equal(nameof(Writer.Books), writer.PrincipalToDependent);
+        Assert.False(writer.IsUnique);
+    }
+
+    [Fact]
+    public void ForeignKeys_IncludeShadowAndOneToOneKeys()
+    {
+        var review = Assert.Single(ModelBinderTests.Bind<LibraryContext, Review>().ForeignKeys);
+        var profile = Assert.Single(ModelBinderTests.Bind<LibraryContext, WriterProfile>().ForeignKeys);
+
+        Assert.True(Assert.Single(review.Properties).IsShadow);
+        Assert.Equal(nameof(Book.Reviews), review.PrincipalToDependent);
+        Assert.True(profile.IsUnique);
+        Assert.Equal(nameof(Writer.Profile), profile.PrincipalToDependent);
+    }
+
+    [Fact]
+    public void PrincipalOnlyEntity_HasNoForeignKeys()
+        => Assert.Empty(ModelBinderTests.Bind<LibraryContext, Writer>().ForeignKeys);
 }

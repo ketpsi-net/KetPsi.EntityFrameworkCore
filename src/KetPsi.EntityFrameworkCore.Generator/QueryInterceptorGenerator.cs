@@ -108,21 +108,25 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
         context.AddSource(InterceptorEmitter.HintName, InterceptorEmitter.Emit(intercepted));
     }
 
-    /// <summary>The entities that get a reader: element types of supported operators and included entities, once each.</summary>
+    /// <summary>
+    /// The entities that get a reader: element types of supported operators, included entities and projected
+    /// entities, once each.
+    /// </summary>
     internal static IReadOnlyList<EntityShape> ReadableEntities(EquatableArray<CallSite> sites)
         => Distinct(sites
             .Where(static s => s.Operator is not null)
-            .SelectMany(static s => new[] { s.Entity, s.Include?.Target }))
+            .SelectMany(static s => new[] { s.Entity, s.Include?.Target }.Concat(s.Projection?.Entities ?? [])))
             .ToList();
 
     /// <summary>
-    /// The entities whose navigations get accessors: both sides of every include. The model decides at runtime which
-    /// navigation is the inverse of an included one, so every navigation of these entities can be set.
+    /// The entities whose navigations get accessors: both sides of every include, and every projected entity. The
+    /// model decides at runtime which navigations connect the entities a query reads, so every navigation of these
+    /// entities can be set.
     /// </summary>
     internal static IReadOnlyList<EntityShape> NavigationEntities(EquatableArray<CallSite> sites)
         => Distinct(sites
-            .Where(static s => s.Operator is not null && s.Include is not null)
-            .SelectMany(static s => new[] { s.Include!.Source, s.Include.Target }))
+            .Where(static s => s.Operator is not null)
+            .SelectMany(static s => (s.Include is { } include ? new[] { include.Source, include.Target } : []).Concat(s.Projection?.Entities ?? [])))
             .Where(static e => e.Navigations.Count > 0)
             .ToList();
 
@@ -155,13 +159,17 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
         context.AddSource(ReaderEmitter.HintName, ReaderEmitter.Emit(readable, references.HasSqlServer, NavigationEntities(sites)));
     }
 
-    /// <summary>Keeps the calls on entity queries, plus internal errors, which are reported whatever the query is.</summary>
+    /// <summary>
+    /// Keeps the calls on entity queries and on projections of them, plus internal errors, which are reported whatever
+    /// the query is.
+    /// </summary>
     internal static EquatableArray<CallSite> ForEntities(ImmutableArray<CallSite?> sites, EquatableArray<string> entities)
     {
         var entitySet = new HashSet<string>(entities, StringComparer.Ordinal);
         return sites
             .Where(site => site is not null
-                && (site.ElementType == CallSiteAnalyzer.UnknownElementType || entitySet.Contains(site.ElementType)))
+                && (site.ElementType == CallSiteAnalyzer.UnknownElementType
+                    || entitySet.Contains(site.ProjectedFrom ?? site.ElementType)))
             .Select(static site => site!)
             .ToEquatableArray();
     }

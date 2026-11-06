@@ -88,6 +88,36 @@ public sealed class SqlServerDialect : ISqlDialect
     public string Count(bool isLong) => isLong ? "COUNT_BIG(*)" : "COUNT(*)";
 
     /// <inheritdoc/>
+    /// <remarks>The same SQL as EF Core's SQL Server provider, so results have the same types and precision.</remarks>
+    public string Aggregate(AggregateFunction function, string column, AggregateValueType valueType)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(column);
+
+        return function switch
+        {
+            AggregateFunction.Sum => valueType switch
+            {
+                AggregateValueType.Int32 => $"COALESCE(SUM({column}), 0)",
+                AggregateValueType.Int64 => $"COALESCE(SUM({column}), CAST(0 AS bigint))",
+                AggregateValueType.Decimal => $"COALESCE(SUM({column}), 0.0)",
+                AggregateValueType.Double => $"COALESCE(SUM({column}), 0.0E0)",
+                AggregateValueType.Single => $"CAST(COALESCE(SUM({column}), 0.0E0) AS real)",
+                _ => throw new ArgumentOutOfRangeException(nameof(valueType), valueType, ExceptionMessages.SumNeedsNumericType),
+            },
+            AggregateFunction.Average => valueType switch
+            {
+                AggregateValueType.Int32 or AggregateValueType.Int64 => $"AVG(CAST({column} AS float))",
+                AggregateValueType.Decimal or AggregateValueType.Double => $"AVG({column})",
+                AggregateValueType.Single => $"CAST(AVG({column}) AS real)",
+                _ => throw new ArgumentOutOfRangeException(nameof(valueType), valueType, ExceptionMessages.SumNeedsNumericType),
+            },
+            AggregateFunction.Min => $"MIN({column})",
+            AggregateFunction.Max => $"MAX({column})",
+            _ => throw new ArgumentOutOfRangeException(nameof(function), function, null),
+        };
+    }
+
+    /// <inheritdoc/>
     public string Exists(string subquery)
     {
         ArgumentException.ThrowIfNullOrEmpty(subquery);

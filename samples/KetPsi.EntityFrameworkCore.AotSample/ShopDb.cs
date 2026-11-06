@@ -40,6 +40,17 @@ public sealed class Review
     public int Stars { get; set; }
 }
 
+/// <summary>A projection target built through its constructor.</summary>
+public sealed record ProductPrice(int Id, decimal Price);
+
+/// <summary>A projection target built with an object initializer.</summary>
+public sealed class ProductLabel
+{
+    public int Id { get; init; }
+
+    public string Label { get; init; } = "";
+}
+
 public sealed class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options)
 {
     /// <summary>A shadow property: tracked queries must hand its value to the change tracker.</summary>

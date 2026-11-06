@@ -22,7 +22,8 @@ internal sealed class BoundEntity
         IReadOnlyList<BoundProperty>? primaryKey,
         IReadOnlyList<string?> filterKeys,
         IReadOnlyList<BoundNavigation>? navigations = null,
-        IReadOnlyCollection<string>? skipNavigationNames = null)
+        IReadOnlyCollection<string>? skipNavigationNames = null,
+        IReadOnlyList<BoundForeignKey>? foreignKeys = null)
     {
         ClrType = clrType;
         Table = table;
@@ -32,6 +33,7 @@ internal sealed class BoundEntity
         ShadowProperties = [.. properties.Where(static p => p.IsShadow)];
         FilterKeys = filterKeys;
         Navigations = navigations ?? [];
+        ForeignKeys = foreignKeys ?? [];
         _propertiesByName = properties.ToDictionary(static p => p.Name, StringComparer.Ordinal);
         _navigationsByName = Navigations.ToDictionary(static n => n.Name, StringComparer.Ordinal);
         _skipNavigationNames = skipNavigationNames ?? [];
@@ -60,6 +62,11 @@ internal sealed class BoundEntity
 
     /// <summary>The navigations to other entity types, in model order. Many-to-many navigations are not included.</summary>
     public IReadOnlyList<BoundNavigation> Navigations { get; }
+
+    /// <summary>
+    /// The foreign keys to other entities' primary keys that have a navigation on either side, in model order.
+    /// </summary>
+    public IReadOnlyList<BoundForeignKey> ForeignKeys { get; }
 
     /// <exception cref="InvalidOperationException">The entity has no navigation named <paramref name="navigationName"/>.</exception>
     /// <exception cref="NotSupportedException">The navigation is many-to-many.</exception>
