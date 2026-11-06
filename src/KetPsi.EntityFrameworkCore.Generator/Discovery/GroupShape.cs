@@ -41,9 +41,6 @@ internal enum GroupKeyKind
 
     /// <summary>An anonymous type of properties: <c>g.Key.Member</c> is a part.</summary>
     Anonymous,
-
-    /// <summary><c>ValueTuple.Create</c> of properties: <c>g.Key.Item1</c> is a part.</summary>
-    Tuple,
 }
 
 /// <summary>A part of the key: the property it reads from the grouped entity, through reference navigations.</summary>

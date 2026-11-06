@@ -50,7 +50,9 @@ internal static class GroupSources
 
             public object Composite() => db.Blogs.GroupBy(b => new { b.Status, b.Name }).Select(g => new { g.Key, g.Key.Name, Count = g.LongCount() }).ToList();
 
-            public object Tuple() => db.Blogs.GroupBy(b => ValueTuple.Create(b.Status, b.Name)).Select(g => new { g.Key, g.Key.Item2 }).ToList();
+            public List<IGrouping<int?, int>> IdsByViews() => db.Blogs.GroupBy(b => b.Views, b => b.Id).ToList();
+
+            public List<int?> ViewKeys() => db.Blogs.GroupBy(b => b.Views).Select(g => g.Key).ToList();
 
             public object Aggregates() => db.Blogs.GroupBy(b => b.Status).Select(g => new
             {

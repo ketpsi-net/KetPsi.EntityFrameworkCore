@@ -20,8 +20,9 @@ internal sealed partial class ProjectionTranslator
     private const string GroupingType = "System.Linq.IGrouping<TKey, TElement>";
 
     private const string ReasonKey =
-        "a key must be a property, one through reference navigations, or an anonymous type or ValueTuple.Create of them; " +
+        "a key must be a property, one through reference navigations, or an anonymous type of them; " +
         "EF Core groups other keys through a derived table, which KetPsi.EntityFrameworkCore does not support yet";
+    private const string ReasonTupleKey = "EF Core cannot translate a ValueTuple.Create key; use an anonymous type, such as x => new { x.A, x.B }";
     private const string ReasonGroupItself =
         "the group itself cannot be read; select its key and aggregates, such as g.Key and g.Count()";
     private const string ReasonGroupOperator =
@@ -367,20 +368,10 @@ internal sealed partial class ProjectionTranslator
 
                 break;
 
-            case IInvocationOperation { TargetMethod: { IsStatic: true, Name: "Create" } method } invocation
+            case IInvocationOperation { TargetMethod: { IsStatic: true, Name: "Create" } method }
                 when method.ContainingType.ToDisplayString() == "System.ValueTuple":
-                kind = GroupKeyKind.Tuple;
-                foreach (var argument in invocation.Arguments.OrderBy(static a => a.Parameter?.Ordinal))
-                {
-                    if (PathOf(argument.Value, parameter, entity) is not { } path)
-                    {
-                        return (null, KeyNotSupported(argument.Syntax));
-                    }
-
-                    parts.Add(new KeyPart("Item" + (parts.Count + 1).ToString(CultureInfo.InvariantCulture), path.Path, path.Owner));
-                }
-
-                break;
+                // EF Core cannot translate a tuple key, so it is not one KetPsi translates either.
+                return (null, KeyNotSupported(node, ReasonTupleKey));
 
             default:
                 if (PathOf(operation, parameter, entity) is not { } single)
@@ -404,11 +395,28 @@ internal sealed partial class ProjectionTranslator
             return (null, diagnostic);
         }
 
-        return ((parts, kind, projection!), null);
+        // The key of groups returned directly: EF Core cannot read a null into a nullable value-type key there, and
+        // throws, so the reader does too. A Select on the groups reads the key itself, null included.
+        var translator = new ProjectionTranslator(model, parameter, entity, location, cancellationToken);
+        var reads = parts.Select((part, index) => translator.ReadGroupedKey(part, index, node)).ToList();
+        var code = kind == GroupKeyKind.Single
+            ? reads[0]
+            : "new { " + string.Join(", ", parts.Select((part, index) => $"{part.MemberName} = {reads[index]}")) + " }";
+        return ((parts, kind, projection! with { ReaderCode = translator.ReaderLambda(code) }), null);
     }
 
-    private static DiagnosticInfo KeyNotSupported(SyntaxNode syntax)
-        => DiagnosticInfo.Create(DiagnosticDescriptors.GroupKeyNotSupported, LocationInfo.From(syntax.GetLocation()), syntax.ToString(), ReasonKey);
+    private string ReadGroupedKey(KeyPart part, int index, SyntaxNode syntax)
+    {
+        var shape = PropertyShape(part.Owner, part.Path[part.Path.Count - 1], syntax);
+        var ordinal = Ordinal(index);
+        var read = ReadColumn(shape, ordinal, throughNavigation: part.Path.Count > 1, asNullable: false);
+        return shape.TypeName.EndsWith("?", StringComparison.Ordinal)
+            ? $"({Reader}.IsDBNull({ordinal}) ? throw new global::System.InvalidOperationException(\"{NullableObjectMustHaveAValue}\") : {read})"
+            : read;
+    }
+
+    private static DiagnosticInfo KeyNotSupported(SyntaxNode syntax, string reason = ReasonKey)
+        => DiagnosticInfo.Create(DiagnosticDescriptors.GroupKeyNotSupported, LocationInfo.From(syntax.GetLocation()), syntax.ToString(), reason);
 
     /// <summary>
     /// The properties a member access reads from <paramref name="parameter"/> to a column, through reference navigations,
@@ -535,12 +543,7 @@ internal sealed partial class ProjectionTranslator
 
     private int? KeyPartIndex(IOperation operation)
     {
-        var (instance, name) = operation switch
-        {
-            IPropertyReferenceOperation { Instance: { } i, Property.Name: var n } => (i, n),
-            IFieldReferenceOperation { Instance: { } i, Field.Name: var n } => (i, n),
-            _ => (null, null),
-        };
+        var (instance, name) = operation is IPropertyReferenceOperation { Instance: { } target, Property.Name: var member } ? (target, member) : (null, null);
 
         if (instance is null || _group!.KeyKind == GroupKeyKind.Single || !IsWholeKey(instance))
         {
@@ -568,9 +571,7 @@ internal sealed partial class ProjectionTranslator
 
         valueCode = null;
         var parts = group.KeyParts.Select((p, i) => (p.MemberName, Code: ReadKeyPart(i, syntax, out _))).ToList();
-        return group.KeyKind == GroupKeyKind.Anonymous
-            ? "new { " + string.Join(", ", parts.Select(static p => $"{p.MemberName} = {p.Code}")) + " }"
-            : "global::System.ValueTuple.Create(" + string.Join(", ", parts.Select(static p => p.Code)) + ")";
+        return "new { " + string.Join(", ", parts.Select(static p => $"{p.MemberName} = {p.Code}")) + " }";
     }
 
     private string ReadKeyPart(int index, SyntaxNode syntax, out string? valueCode)

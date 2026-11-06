@@ -48,7 +48,7 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Projection | `Select` to anonymous types, records and constructors, object initializers, `ValueTuple.Create` or one member, reading properties, reference navigations and entities, with computed members; then `Skip`, `Take`, `Distinct`, aggregates and terminals |
 | Distinct | `Distinct()` on entities and on projections without computed members |
 | Aggregates | `Sum`, `Average`, `Min`, `Max` and their `Async` versions, over one property (through reference navigations too) or a projection of one property |
-| Grouping | `GroupBy` on properties, ones through reference navigations, or an anonymous type or `ValueTuple.Create` of them, with an element or result selector too; then `Where`, `OrderBy`/`ThenBy`, a `Select` of keys and aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups |
+| Grouping | `GroupBy` on properties, ones through reference navigations, or an anonymous type of them, with an element or result selector too; then `Where`, `OrderBy`/`ThenBy`, a `Select` of keys and aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups |
 | Terminals | `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`, their `Async` versions, the predicate overloads, and `foreach` / `await foreach` |
 
 ### Predicates
@@ -149,7 +149,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP1008 | Operator not supported on the groups of `GroupBy` |
 | KP2001–KP2008 | Expression, navigation, method, `EF.Functions`, collection, property comparison, value or order key not translatable |
 | KP2009 | Projection not supported: a collection navigation, an instance method or `this`, a computed aggregate selector, or a type the generated code cannot reach |
-| KP2010 | `GroupBy` key not supported: a computed, constant or entity key |
+| KP2010 | `GroupBy` key not supported: a computed, constant, entity or `ValueTuple.Create` key |
 | KP2011 | Group expression not supported: the group's rows (`g.First()`, `g.ToList()`), an aggregate through a navigation or with a computed selector |
 | KP3001–KP3005 | Property type, value converter, owned/complex/JSON mapping, entity construction or query filter not supported |
 

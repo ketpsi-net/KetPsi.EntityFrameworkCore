@@ -240,6 +240,55 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "TakeThenSum", [] },
             { "SumAsync", [4] },
             { "MinAsyncNone", [] },
+            { "GroupKeyAndCount", [] },
+            { "GroupKeyOnly", [] },
+            { "GroupAggregates", [] },
+            { "GroupNullableKey", [] },
+            { "GroupCompositeKey", [] },
+            { "GroupCompositeKeyWhole", [] },
+            { "GroupKeyThroughOptionalNavigation", [] },
+            { "GroupKeyThroughRequiredNavigation", [] },
+            { "GroupCountWithPredicate", [4] },
+            { "GroupDistinctCount", [] },
+            { "GroupComputed", ["!"] },
+            { "GroupHaving", [2] },
+            { "GroupHaving", [3] },
+            { "GroupHavingOnKey", [] },
+            { "GroupWhereAfterSelect", [2] },
+            { "GroupOrderByKey", [] },
+            { "GroupOrderByAggregate", [] },
+            { "GroupOrderAfterSelect", [] },
+            { "GroupPaged", [1, 2] },
+            { "GroupPaged", [0, 10] },
+            { "GroupFirst", [] },
+            { "GroupCount", [] },
+            { "GroupLongCountAsync", [] },
+            { "GroupAny", [2] },
+            { "GroupAny", [5] },
+            { "GroupCountAfterSelect", [] },
+            { "GroupDistinctAfterSelect", [] },
+            { "GroupMaxOfCounts", [] },
+            { "GroupWhereBefore", [] },
+            { "GroupTakeBefore", [] },
+            { "GroupIgnoringFilters", [] },
+            { "GroupElementSelector", [] },
+            { "GroupResultSelector", [] },
+            { "GroupElementAndResultSelector", [] },
+            { "GroupRecord", [] },
+            { "GroupEmpty", [] },
+            { "GroupToListAsync", [] },
+            { "Groups", [] },
+            { "GroupsNoTracking", [] },
+            { "GroupsIdentityResolution", [] },
+            { "GroupsNullableKey", [] },
+            { "GroupsNullableReferenceKey", [] },
+            { "GroupsNullableKeyElement", [] },
+            { "GroupsElementSelector", [] },
+            { "GroupsAsync", [] },
+            { "GroupsCompositeKey", [] },
+            { "GroupsAfterOrderBy", [] },
+            { "GroupsWithInclude", [] },
+            { "GroupsEnumerated", [] },
         };
 
 #if NET10_0_OR_GREATER
@@ -287,7 +336,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "LoadModifyShadowSaveAsync(7)", "IncludePosts()", "IncludeAuthor()", "IncludeRequiredBlog()", "IncludePostsThenComments()",
         "IncludeBlogThenPosts()", "IncludeFirst()", "IncludeSingleAsync(1)", "IncludeSingleAsync(2)", "IncludeAfterTrackingBlog()",
         "LoadGraphModifySave()", "SelectEntityAndColumn()", "SelectAuthors()", "SelectBlogAndAuthor()", "SelectPostAndBlog()",
-        "SelectNavigationWithInclude()", "SelectEntityFirst()",
+        "SelectNavigationWithInclude()", "SelectEntityFirst()", "Groups()",
     };
 
 #if NET8_0
@@ -309,6 +358,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "DeletedIgnoringFilters", "IgnoringTenantFilter", "IncludePostsPaged", "IncludePostsUnordered",
         "SelectAnonymous", "SelectPaged", "SelectTakeAfterSelect", "SelectToArrayAsync", "SelectAuthors", "SelectAuthorsNoTracking",
         "SelectAuthorsIdentityResolution", "SelectAuthorTwiceNoTracking", "SelectNavigationWithInclude", "SelectEntityPaged",
+        "GroupOrderByKey", "GroupOrderByAggregate", "GroupOrderAfterSelect", "GroupPaged", "GroupElementAndResultSelector",
     };
 
     private static string Key(string query, object?[] arguments)
@@ -407,8 +457,23 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         Blog or Author or Post or Comment => value.GetType().Name + "#" + KeyOf(value).ToString("D6", CultureInfo.InvariantCulture),
         _ when IsScalar(value) => Scalar(value),
         System.Runtime.CompilerServices.ITuple tuple => string.Join("|", Enumerable.Range(0, tuple.Length).Select(i => SortKey(tuple[i]))),
+        _ when GroupingKey(value) is { } grouping => "group|" + SortKey(grouping.Key),
         _ => string.Join("|", Members(value).Select(m => SortKey(m.Value))),
     };
+
+    // An IGrouping's key and elements; the elements in a stable order, since the order within a group is undefined.
+    private static (object? Key, List<object?> Elements)? GroupingKey(object value)
+    {
+        var grouping = value.GetType().GetInterfaces()
+            .FirstOrDefault(static i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IGrouping<,>));
+        if (grouping is null)
+        {
+            return null;
+        }
+
+        var key = grouping.GetProperty(nameof(IGrouping<object, object>.Key))!.GetValue(value);
+        return (key, [.. ((IEnumerable)value).Cast<object?>().OrderBy(SortKey, StringComparer.Ordinal)]);
+    }
 
     private static bool IsScalar(object value)
         => value is string or bool or char or Enum or DateTime or DateTimeOffset or Guid or decimal || value.GetType().IsPrimitive;
@@ -500,6 +565,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             Blog or Author or Post or Comment => Ref(value),
             _ when IsScalar(value) => Scalar(value),
             System.Runtime.CompilerServices.ITuple tuple => "(" + string.Join(",", Enumerable.Range(0, tuple.Length).Select(i => Value(tuple[i]))) + ")",
+            _ when GroupingKey(value) is { } grouping => "group " + Value(grouping.Key) + "[" + string.Join(",", grouping.Elements.Select(Value)) + "]",
             _ => (value.GetType().Name.Contains("AnonymousType", StringComparison.Ordinal) ? "" : value.GetType().Name)
                 + "{" + string.Join(",", Members(value).Select(m => m.Name + "=" + Value(m.Value))) + "}",
         };

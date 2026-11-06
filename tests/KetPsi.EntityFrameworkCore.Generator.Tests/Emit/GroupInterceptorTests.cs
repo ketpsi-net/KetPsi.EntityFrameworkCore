@@ -75,14 +75,21 @@ public sealed class GroupInterceptorTests : IDisposable
     }
 
     [Fact]
-    public void TupleKey_IsRebuiltAndReadByPart()
+    public void NullKey_OfGroupsReturnedDirectly_ThrowsAsInEfCore()
     {
-        _connection.Rows = Table(["Status", "Name"], [0, "beta"]);
+        _connection.Rows = Table(["Views", "Id"], [DBNull.Value, 1], [3, 2]);
 
-        var row = Assert.Single(AsList(Invoke("Tuple")));
+        var exception = Assert.Throws<TargetInvocationException>(() => Invoke("IdsByViews"));
 
-        Assert.Equal("beta", Get(row, "Item2"));
-        Assert.Equal("(Draft, beta)", Get(row, "Key")!.ToString());
+        Assert.Equal("Nullable object must have a value.", Assert.IsType<InvalidOperationException>(exception.InnerException).Message);
+    }
+
+    [Fact]
+    public void NullKey_InASelect_IsRead()
+    {
+        _connection.Rows = Table(["Views"], [DBNull.Value], [3]);
+
+        Assert.Equal([null, 3], (List<int?>)Invoke("ViewKeys")!);
     }
 
     [Fact]

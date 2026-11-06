@@ -17,7 +17,7 @@ public sealed class BlogDates
     public Guid ExternalId { get; set; }
 }
 
-public static class Queries
+public static partial class Queries
 {
     public static int Threshold = 4;
 

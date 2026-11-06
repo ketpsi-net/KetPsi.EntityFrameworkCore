@@ -19,7 +19,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
     [global::System.CodeDom.Compiler.GeneratedCode("KetPsi.EntityFrameworkCore.Generator", null)]
     file static class KetPsiInterceptors
     {
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tBQFAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxzwFAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy0<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
@@ -40,7 +40,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
 
         private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values1 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tCsFAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox1MFAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<TResult> Select1<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
@@ -51,7 +51,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values1, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Key = (global::Shop.Status)reader.GetInt32(ordinals[0]), Count = reader.GetInt32(ordinals[1]) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tFkFAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox4EFAABRdWVyaWVzLmNz")]
         public static global::System.Collections.Generic.List<TSource> ToList2<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
@@ -62,7 +62,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tI4FAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox7gFAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy3<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
@@ -83,7 +83,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
 
         private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values4 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(1), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: true) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tLUFAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox98FAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<TResult> Select4<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
@@ -94,7 +94,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values4, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Key = new { Status = (global::Shop.Status)reader.GetInt32(ordinals[0]), Name = (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])) }, Name = (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])), Count = reader.GetInt64(ordinals[2]) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tPMFAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxx0GAABRdWVyaWVzLmNz")]
         public static global::System.Collections.Generic.List<TSource> ToList5<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
@@ -105,8 +105,38 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tCQGAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy6<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox2kGAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TElement>> GroupBy6<TSource, TKey, TElement>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TElement>> elementSelector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.GroupBy(source, keySelector, elementSelector);
+            }
+
+            var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TElement>(
+                query,
+                new string[] { "Views" },
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
+                new string[] { "Id" },
+                global::System.Array.Empty<string>(),
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TElement>)(object)Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
+            return groups;
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox4oGAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList7<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        {
+            if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(query))
+            {
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.ToList(query);
+            }
+
+            return global::System.Linq.Enumerable.ToList(source);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox8QGAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy8<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -116,29 +146,29 @@ namespace KetPsi.EntityFrameworkCore.Generated
 
             var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
                 query,
-                new string[] { "Status", "Name" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => global::System.ValueTuple.Create((global::Shop.Status)reader.GetInt32(ordinals[0]), (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])))),
+                new string[] { "Views" },
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
                 global::System.Array.Empty<string>(),
                 new string[] { "" },
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values7 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(1) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values9 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tFYGAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select7<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox9oGAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select9<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
                 return global::System.Linq.Queryable.Select(source, selector);
             }
 
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values7, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Key = global::System.ValueTuple.Create((global::Shop.Status)reader.GetInt32(ordinals[0]), (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1]))), Item2 = (reader.IsDBNull(ordinals[1]) ? null! : reader.GetString(ordinals[1])) }));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values9, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tH4GAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList8<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox+0GAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList10<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -148,8 +178,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tLQGAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy9<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxyUHAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy11<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -167,21 +197,21 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values10 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, "Id", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Int32), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Average, "Id", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Int32), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Min, "Name", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Column), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Max, "Views", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Column), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, "Price", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Decimal) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values12 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, "Id", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Int32), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Average, "Id", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Int32), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Min, "Name", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Column), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Max, "Views", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Column), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, "Price", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Decimal) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tMsGAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select10<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxzwHAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select12<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
                 return global::System.Linq.Queryable.Select(source, selector);
             }
 
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values10, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Sum = reader.GetInt32(ordinals[0]), Average = reader.GetDouble(ordinals[1]), Min = (reader.IsDBNull(ordinals[2]) ? null! : reader.GetString(ordinals[2])), Max = (reader.IsDBNull(ordinals[3]) ? (int?)null : reader.GetInt32(ordinals[3])), Price = reader.GetDecimal(ordinals[4]) }));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values12, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Sum = reader.GetInt32(ordinals[0]), Average = reader.GetDouble(ordinals[1]), Min = (reader.IsDBNull(ordinals[2]) ? null! : reader.GetString(ordinals[2])), Max = (reader.IsDBNull(ordinals[3]) ? (int?)null : reader.GetInt32(ordinals[3])), Price = reader.GetDecimal(ordinals[4]) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tJoHAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList11<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxxIIAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList13<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -191,8 +221,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tNMHAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy12<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox00IAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy14<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -210,10 +240,10 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values13 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false, new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("Id", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.GreaterThan, 0)), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: true, new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("Name", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.NotEqual, 1)), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.DistinctCount("Name", isLong: false) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values15 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false, new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("Id", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.GreaterThan, 0)), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: true, new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("Name", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.NotEqual, 1)), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.DistinctCount("Name", isLong: false) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tOoHAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select13<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox2QIAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select15<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
@@ -221,11 +251,11 @@ namespace KetPsi.EntityFrameworkCore.Generated
             }
 
             var captures = global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.ReadAll(selector);
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values13, new object?[] { ((int)captures[0]!), "" }, Reader((reader, ordinals, entities) => new { Above = reader.GetInt32(ordinals[0]), Named = reader.GetInt64(ordinals[1]), Names = reader.GetInt32(ordinals[2]) }));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values15, new object?[] { ((int)captures[0]!), "" }, Reader((reader, ordinals, entities) => new { Above = reader.GetInt32(ordinals[0]), Named = reader.GetInt64(ordinals[1]), Names = reader.GetInt32(ordinals[2]) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tKMIAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList14<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxyIJAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList16<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -235,8 +265,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tOAIAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy15<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox2EJAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy17<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -247,19 +277,19 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
                 query,
                 new string[] { "Views" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0]))),
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
                 global::System.Array.Empty<string>(),
                 new string[] { "" },
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate Template16 = new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.AndTemplate(new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("0", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.GreaterThan, 0), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.NullCheckTemplate("1", isNull: false));
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate Template18 = new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.AndTemplate(new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("0", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.GreaterThan, 0), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.NullCheckTemplate("1", isNull: false));
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values16 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values18 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tPYIAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TSource> Where16<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, bool>> predicate)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox3cJAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TSource> Where18<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, bool>> predicate)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
@@ -267,24 +297,24 @@ namespace KetPsi.EntityFrameworkCore.Generated
             }
 
             var captures = global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.ReadAll(predicate);
-            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Where(source, Template16, Values16, new object?[] { ((int)captures[0]!) });
+            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Where(source, Template18, Values18, new object?[] { ((int)captures[0]!) });
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values17 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values19 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tCMJAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select17<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox6QJAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select19<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
                 return global::System.Linq.Queryable.Select(source, selector);
             }
 
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values17, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0]))));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values19, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tDYJAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList18<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox7cJAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList20<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -294,8 +324,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tIEJAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy19<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxwQKAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy21<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -313,63 +343,63 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values20 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values22 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tKEJAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select20<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxyUKAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select22<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
                 return global::System.Linq.Queryable.Select(source, selector);
             }
 
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values20, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Key = (global::Shop.Status)reader.GetInt32(ordinals[0]), Count = reader.GetInt32(ordinals[1]) }));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values22, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Key = (global::Shop.Status)reader.GetInt32(ordinals[0]), Count = reader.GetInt32(ordinals[1]) }));
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate Template21 = new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("0", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.GreaterThanOrEqual, 0);
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate Template23 = new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("0", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.GreaterThanOrEqual, 0);
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values21 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values23 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tNgJAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TSource> Where21<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, bool>> predicate)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox10KAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TSource> Where23<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, bool>> predicate)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
                 var captures = global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.ReadAll(predicate);
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Where(query, Template21, Values21, new object?[] { ((int)captures[0]!) });
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.Where(query, Template23, Values23, new object?[] { ((int)captures[0]!) });
             }
 
             return global::System.Linq.Queryable.Where(source, predicate);
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values22 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values24 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tPwJAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IOrderedQueryable<TSource> OrderByDescending22<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox4IKAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IOrderedQueryable<TSource> OrderByDescending24<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.OrderByDescending(query, Values22[0], global::System.Array.Empty<object?>());
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.OrderByDescending(query, Values24[0], global::System.Array.Empty<object?>());
             }
 
             return global::System.Linq.Queryable.OrderByDescending(source, keySelector);
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values23 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values25 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tCUKAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IOrderedQueryable<TSource> ThenBy23<TSource, TKey>(this global::System.Linq.IOrderedQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox6wKAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IOrderedQueryable<TSource> ThenBy25<TSource, TKey>(this global::System.Linq.IOrderedQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ThenBy(query, Values23[0], global::System.Array.Empty<object?>());
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.ThenBy(query, Values25[0], global::System.Array.Empty<object?>());
             }
 
             return global::System.Linq.Queryable.ThenBy(source, keySelector);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tEEKAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList24<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox8kKAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList26<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -379,8 +409,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tHwKAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy25<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxwYLAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy27<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -391,41 +421,41 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
                 query,
                 new string[] { "Views" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0]))),
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
                 global::System.Array.Empty<string>(),
                 new string[] { "" },
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values26 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, "Price", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Decimal) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values28 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, "Price", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Decimal) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tJIKAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IOrderedQueryable<TSource> OrderByDescending26<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxxwLAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IOrderedQueryable<TSource> OrderByDescending28<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
                 return global::System.Linq.Queryable.OrderByDescending(source, keySelector);
             }
 
-            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.OrderByDescending(source, Values26[0], global::System.Array.Empty<object?>());
+            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.OrderByDescending(source, Values28[0], global::System.Array.Empty<object?>());
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values27 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values29 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tL4KAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select27<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox0gLAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select29<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
                 return global::System.Linq.Queryable.Select(source, selector);
             }
 
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values27, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0]))));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values29, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0]))));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tNEKAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TSource> Take28<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox1sLAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TSource> Take30<TSource>(this global::System.Linq.IQueryable<TSource> source, int count)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -435,8 +465,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Queryable.Take(source, count);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tNkKAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList29<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox2MLAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList31<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -446,8 +476,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tBoLAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy30<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox6YLAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy32<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -465,10 +495,10 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values31 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values33 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tDELAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select31<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox70LAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select33<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
@@ -476,11 +506,11 @@ namespace KetPsi.EntityFrameworkCore.Generated
             }
 
             var captures = global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.ReadAll(selector);
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values31, global::System.Array.Empty<object?>(), Reader((reader, ordinals, entities) => new { Label = ((global::Shop.Status)reader.GetInt32(ordinals[0]) + ((string)captures[0]!)), Double = (reader.GetInt32(ordinals[1]) * 2) }));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values33, global::System.Array.Empty<object?>(), Reader((reader, ordinals, entities) => new { Label = ((global::Shop.Status)reader.GetInt32(ordinals[0]) + ((string)captures[0]!)), Double = (reader.GetInt32(ordinals[1]) * 2) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tHULAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList32<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxwEMAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList34<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -490,10 +520,10 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values33 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, "Id", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Int32) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values35 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Aggregate(global::KetPsi.EntityFrameworkCore.Sql.AggregateFunction.Sum, "Id", global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType.Int32) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tK8LAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> GroupBy33<TSource, TKey, TElement, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TElement>> elementSelector, global::System.Linq.Expressions.Expression<global::System.Func<TKey, global::System.Collections.Generic.IEnumerable<TElement>, TResult>> resultSelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxz0MAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> GroupBy35<TSource, TKey, TElement, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TElement>> elementSelector, global::System.Linq.Expressions.Expression<global::System.Func<TKey, global::System.Collections.Generic.IEnumerable<TElement>, TResult>> resultSelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -508,11 +538,11 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 global::System.Array.Empty<string>(),
                 global::System.Array.Empty<string>(),
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TElement>)(static (reader, ordinals, entities) => default!));
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(groups, Values33, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { key = (global::Shop.Status)reader.GetInt32(ordinals[0]), Total = reader.GetInt32(ordinals[1]) }));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(groups, Values35, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { key = (global::Shop.Status)reader.GetInt32(ordinals[0]), Total = reader.GetInt32(ordinals[1]) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tP8LAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList34<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox40MAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList36<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -522,8 +552,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tDwMAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy35<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox8wMAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy37<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Post>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -541,21 +571,21 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values36 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values38 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tFYMAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select36<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox+YMAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select38<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
                 return global::System.Linq.Queryable.Select(source, selector);
             }
 
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values36, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Key = (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0])), Count = reader.GetInt32(ordinals[1]) }));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values38, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Key = (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0])), Count = reader.GetInt32(ordinals[1]) }));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tIQMAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList37<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxxQNAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList39<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -565,37 +595,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tLgMAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy38<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
-        {
-            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
-            {
-                return global::System.Linq.Queryable.GroupBy(source, keySelector);
-            }
-
-            var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
-                query,
-                new string[] { "Status" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (global::Shop.Status)reader.GetInt32(ordinals[0])),
-                global::System.Array.Empty<string>(),
-                new string[] { "" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));
-            return groups;
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tM8MAABRdWVyaWVzLmNz")]
-        public static int Count39<TSource>(this global::System.Linq.IQueryable<TSource> source)
-        {
-            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
-            {
-                return global::System.Linq.Queryable.Count(source);
-            }
-
-            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Count(source);
-        }
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tCgNAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox0oNAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy40<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
@@ -614,23 +614,18 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate Template41 = new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("0", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.GreaterThan, 0);
-
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values41 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
-
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tD8NAABRdWVyaWVzLmNz")]
-        public static global::System.Threading.Tasks.Task<bool> AnyAsync41<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, bool>> predicate, global::System.Threading.CancellationToken cancellationToken)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox2ENAABRdWVyaWVzLmNz")]
+        public static int Count41<TSource>(this global::System.Linq.IQueryable<TSource> source)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
-                return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(source, predicate, cancellationToken);
+                return global::System.Linq.Queryable.Count(source);
             }
 
-            var captures = global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.ReadAll(predicate);
-            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.AnyAsync(global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Where(source, Template41, Values41, new object?[] { ((int)captures[0]!) }), cancellationToken);
+            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Count(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tI8NAABRdWVyaWVzLmNz")]
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox7wNAABRdWVyaWVzLmNz")]
         public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy42<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
@@ -649,34 +644,69 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values43 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate Template43 = new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("0", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.GreaterThan, 0);
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tKYNAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select43<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values43 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox9MNAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<bool> AnyAsync43<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, bool>> predicate, global::System.Threading.CancellationToken cancellationToken)
+        {
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
+            {
+                return global::Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(source, predicate, cancellationToken);
+            }
+
+            var captures = global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.ReadAll(predicate);
+            return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.AnyAsync(global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Where(source, Template43, Values43, new object?[] { ((int)captures[0]!) }), cancellationToken);
+        }
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxyUOAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy44<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        {
+            var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
+            if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
+            {
+                return global::System.Linq.Queryable.GroupBy(source, keySelector);
+            }
+
+            var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
+                query,
+                new string[] { "Status" },
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (global::Shop.Status)reader.GetInt32(ordinals[0])),
+                global::System.Array.Empty<string>(),
+                new string[] { "" },
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));
+            return groups;
+        }
+
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values45 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0), global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
+
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxzwOAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select45<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
                 return global::System.Linq.Queryable.Select(source, selector);
             }
 
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values43, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Key = (global::Shop.Status)reader.GetInt32(ordinals[0]), Count = reader.GetInt32(ordinals[1]) }));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values45, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => new { Key = (global::Shop.Status)reader.GetInt32(ordinals[0]), Count = reader.GetInt32(ordinals[1]) }));
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values44 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values46 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Key(0) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tNQNAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IOrderedQueryable<TSource> OrderBy44<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox2oOAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IOrderedQueryable<TSource> OrderBy46<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
-                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.OrderBy(query, Values44[0], global::System.Array.Empty<object?>());
+                return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.OrderBy(query, Values46[0], global::System.Array.Empty<object?>());
             }
 
             return global::System.Linq.Queryable.OrderBy(source, keySelector);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tOgNAABRdWVyaWVzLmNz")]
-        public static TSource First45<TSource>(this global::System.Linq.IQueryable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox34OAABRdWVyaWVzLmNz")]
+        public static TSource First47<TSource>(this global::System.Linq.IQueryable<TSource> source)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -686,8 +716,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Queryable.First(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tBgOAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy46<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox7AOAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy48<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -705,21 +735,21 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values47 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
+        private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] Values49 = new global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue[] { global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue.Count(isLong: false) };
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tC8OAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<TResult> Select47<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox8cOAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<TResult> Select49<TSource, TResult>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TResult>> selector)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
                 return global::System.Linq.Queryable.Select(source, selector);
             }
 
-            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values47, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
+            return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.Select(source, Values49, global::System.Array.Empty<object?>(), Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tEYOAABRdWVyaWVzLmNz")]
-        public static TSource? Max48<TSource>(this global::System.Linq.IQueryable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox94OAABRdWVyaWVzLmNz")]
+        public static TSource? Max50<TSource>(this global::System.Linq.IQueryable<TSource> source)
         {
             if (source is var query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection.IsInterceptable(query))
             {
@@ -729,8 +759,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Queryable.Max(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tIwOAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy49<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxyYPAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy51<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -748,8 +778,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tKMOAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList50<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxz0PAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList52<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(query))
             {
@@ -759,8 +789,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::System.Linq.Enumerable.ToList(source);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tBAPAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TElement>> GroupBy51<TSource, TKey, TElement>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TElement>> elementSelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox6wPAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TElement>> GroupBy53<TSource, TKey, TElement>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TElement>> elementSelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -778,8 +808,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return groups;
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tDQPAABRdWVyaWVzLmNz")]
-        public static global::System.Threading.Tasks.Task<TSource[]> ToArrayAsync52<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPox9APAABRdWVyaWVzLmNz")]
+        public static global::System.Threading.Tasks.Task<TSource[]> ToArrayAsync54<TSource>(this global::System.Linq.IQueryable<TSource> source, global::System.Threading.CancellationToken cancellationToken)
         {
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(source))
             {
@@ -789,8 +819,8 @@ namespace KetPsi.EntityFrameworkCore.Generated
             return global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.ToArrayAsync(source, cancellationToken);
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tHcPAABRdWVyaWVzLmNz")]
-        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy53<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxxUQAABRdWVyaWVzLmNz")]
+        public static global::System.Linq.IQueryable<global::System.Linq.IGrouping<TKey, TSource>> GroupBy55<TSource, TKey>(this global::System.Linq.IQueryable<TSource> source, global::System.Linq.Expressions.Expression<global::System.Func<TSource, TKey>> keySelector)
         {
             var query = (global::System.Linq.IQueryable<global::Shop.Blog>)(object)source;
             if (!global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.IsInterceptable(query))
@@ -801,15 +831,15 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
                 query,
                 new string[] { "Status", "Views" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => new { Status = (global::Shop.Status)reader.GetInt32(ordinals[0]), Views = (reader.IsDBNull(ordinals[1]) ? (int?)null : reader.GetInt32(ordinals[1])) }),
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => new { Status = (global::Shop.Status)reader.GetInt32(ordinals[0]), Views = (reader.IsDBNull(ordinals[1]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[1]) ? (int?)null : reader.GetInt32(ordinals[1]))) }),
                 global::System.Array.Empty<string>(),
                 new string[] { "" },
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));
             return groups;
         }
 
-        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "SvqsjSvVI3aET9zciC72tJ8PAABRdWVyaWVzLmNz")]
-        public static global::System.Collections.Generic.List<TSource> ToList54<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
+        [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "LcC2XbMmw74d2AtbuzPoxz0QAABRdWVyaWVzLmNz")]
+        public static global::System.Collections.Generic.List<TSource> ToList56<TSource>(this global::System.Collections.Generic.IEnumerable<TSource> source)
         {
             if (source is global::System.Linq.IQueryable<TSource> query && global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.IsInterceptable(query))
             {

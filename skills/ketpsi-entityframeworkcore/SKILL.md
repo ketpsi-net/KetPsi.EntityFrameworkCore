@@ -169,7 +169,8 @@ var stats = await db.Posts
 ```
 
 - Keys: a property, one through reference navigations (`p => p.Blog.Name`, joined like an included reference), or an
-  anonymous type or `ValueTuple.Create` of them. Computed, constant and entity keys are KP2010.
+  anonymous type of them. Computed, constant and entity keys are KP2010, and so are `ValueTuple.Create` keys, which EF
+  Core cannot translate either.
 - Group values: `g.Key` and its members, `g.Count()`, `g.LongCount()`, `g.Count(predicate)` and
   `g.Where(predicate).Count()` (`COUNT(CASE WHEN ...)`), `g.Sum/Average/Min/Max(x => x.Property)`, and
   `g.Select(x => x.Property).Distinct().Count()` (`COUNT(DISTINCT ...)`). With an element selector that reads one
@@ -185,7 +186,9 @@ var stats = await db.Posts
 - `GroupBy(...).ToList()` and `foreach` return the groups themselves: the rows are read ordered by the key and grouped
   where the key changes, so the order inside a group is the database's, as in EF Core. Elements are tracked and
   identity-resolved like any queried entity, and get the includes before the `GroupBy`. After `Where` or `OrderBy` on
-  the groups, they can only be selected from (KP1008).
+  the groups, they can only be selected from (KP1008). As in EF Core, a null in a nullable value-type key (`int?`)
+  throws "Nullable object must have a value." when the groups are returned directly; a `Select` on the groups reads
+  the null key.
 - Not supported yet (KP2011): `g.First()`, `g.ToList()`, `g.Select(...).ToList()` and other uses of the group's rows,
   aggregates through navigations (`g.Max(p => p.Blog.Rating)`, a correlated subquery in EF Core), aggregate selectors
   that compute (`g.Sum(p => p.Likes * 2)`), and count predicates that compare with the key. Operators other than the
@@ -248,7 +251,7 @@ Same behavior as EF Core:
 | KP2007 | Move the value into a local variable before the query |
 | KP2008 | Order by a direct property |
 | KP2009 | Avoid collection navigations and instance methods in projections; aggregate one property; make projected types accessible |
-| KP2010 | Group by properties, ones through reference navigations, or an anonymous type or `ValueTuple.Create` of them |
+| KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
 | KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
 | KP3001–KP3004 | Change the mapping to a supported type and shape |
 | KP3005 | Make the query filter a translatable predicate |
