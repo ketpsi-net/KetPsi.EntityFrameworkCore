@@ -14,7 +14,7 @@ namespace KetPsi.EntityFrameworkCore.Query;
 /// </summary>
 internal sealed class GroupedQueryable<TKey, TElement>(
     DbContext context, QueryNode tail, ProjectionReader<TKey> keyReader, ProjectionReader<TElement> elementReader)
-    : IOrderedQueryable<IGrouping<TKey, TElement>>, IAsyncEnumerable<IGrouping<TKey, TElement>>
+    : IOrderedQueryable<IGrouping<TKey, TElement>>, IAsyncEnumerable<IGrouping<TKey, TElement>>, IGroupedQueryable
 {
     public DbContext Context { get; } = context;
 
@@ -52,10 +52,37 @@ internal sealed class GroupedQueryable<TKey, TElement>(
     /// <summary>Returns a new query over the same context and readers whose chain ends at <paramref name="newTail"/>.</summary>
     public GroupedQueryable<TKey, TElement> WithTail(QueryNode newTail) => new(Context, newTail, KeyReader, ElementReader);
 
+    IQueryable IGroupedQueryable.WithTail(QueryNode newTail) => WithTail(newTail);
+
+    IList IGroupedQueryable.ToList() => GroupRunner.ToList(this);
+
+    async Task<IList> IGroupedQueryable.ToListAsync(CancellationToken cancellationToken)
+        => await GroupRunner.ToListAsync(this, cancellationToken).ConfigureAwait(false);
+
     public IEnumerator<IGrouping<TKey, TElement>> GetEnumerator() => GroupRunner.Enumerate(this).GetEnumerator();
 
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
     public IAsyncEnumerator<IGrouping<TKey, TElement>> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         => GroupRunner.EnumerateAsync(this, cancellationToken).GetAsyncEnumerator(cancellationToken);
+}
+
+/// <summary>
+/// A grouped query whatever its key and element types, which generated interceptors may not be able to name: an
+/// anonymous key makes the grouping type unnameable.
+/// </summary>
+internal interface IGroupedQueryable
+{
+    DbContext Context { get; }
+
+    QueryNode Tail { get; }
+
+    /// <summary>Returns a new query of the same type whose chain ends at <paramref name="newTail"/>.</summary>
+    IQueryable WithTail(QueryNode newTail);
+
+    /// <summary>Returns the groups, a <c>List&lt;IGrouping&lt;TKey, TElement&gt;&gt;</c>.</summary>
+    IList ToList();
+
+    /// <summary>Returns the groups asynchronously, a <c>List&lt;IGrouping&lt;TKey, TElement&gt;&gt;</c>.</summary>
+    Task<IList> ToListAsync(CancellationToken cancellationToken);
 }

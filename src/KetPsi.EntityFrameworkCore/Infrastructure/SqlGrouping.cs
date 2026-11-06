@@ -22,11 +22,12 @@ namespace KetPsi.EntityFrameworkCore.Infrastructure;
 public static class SqlGrouping
 {
     /// <summary>Whether <paramref name="source"/> is a grouped KetPsi query; otherwise the interceptor calls the original operator.</summary>
-    public static bool IsInterceptable<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)
+    /// <typeparam name="T">The grouping type, <c>IGrouping&lt;TKey, TElement&gt;</c>, which generated code may not be able to name.</typeparam>
+    public static bool IsInterceptable<T>(IQueryable<T> source)
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        return source is GroupedQueryable<TKey, TElement>;
+        return source is IGroupedQueryable;
     }
 
     /// <summary>
@@ -81,31 +82,26 @@ public static class SqlGrouping
     /// <param name="predicate">The predicate over <paramref name="operands"/>: property name <c>"0"</c> is <c>operands[0]</c>.</param>
     /// <param name="operands">The key parts and aggregates the predicate compares.</param>
     /// <param name="values">The value slots of the predicate and the operands' count predicates. The query takes ownership of the array.</param>
-    public static IQueryable<IGrouping<TKey, TElement>> Where<TKey, TElement>(
-        IQueryable<IGrouping<TKey, TElement>> source, PredicateTemplate predicate, IReadOnlyList<GroupValue> operands, object?[] values)
+    public static IQueryable<T> Where<T>(IQueryable<T> source, PredicateTemplate predicate, IReadOnlyList<GroupValue> operands, object?[] values)
     {
         var query = ToGrouped(source);
-        return query.WithTail(CreateHaving(query.Tail, predicate, operands, values));
+        return (IQueryable<T>)query.WithTail(CreateHaving(query.Tail, predicate, operands, values));
     }
 
     /// <summary>Appends <c>OrderBy</c> on a key part or aggregate of the groups.</summary>
-    public static IOrderedQueryable<IGrouping<TKey, TElement>> OrderBy<TKey, TElement>(
-        IQueryable<IGrouping<TKey, TElement>> source, GroupValue value, object?[] values)
+    public static IOrderedQueryable<T> OrderBy<T>(IQueryable<T> source, GroupValue value, object?[] values)
         => AppendOrder(source, value, values, descending: false, isThenBy: false);
 
     /// <summary>Appends <c>OrderByDescending</c> on a key part or aggregate of the groups.</summary>
-    public static IOrderedQueryable<IGrouping<TKey, TElement>> OrderByDescending<TKey, TElement>(
-        IQueryable<IGrouping<TKey, TElement>> source, GroupValue value, object?[] values)
+    public static IOrderedQueryable<T> OrderByDescending<T>(IQueryable<T> source, GroupValue value, object?[] values)
         => AppendOrder(source, value, values, descending: true, isThenBy: false);
 
     /// <summary>Appends <c>ThenBy</c> on a key part or aggregate of the groups.</summary>
-    public static IOrderedQueryable<IGrouping<TKey, TElement>> ThenBy<TKey, TElement>(
-        IOrderedQueryable<IGrouping<TKey, TElement>> source, GroupValue value, object?[] values)
+    public static IOrderedQueryable<T> ThenBy<T>(IOrderedQueryable<T> source, GroupValue value, object?[] values)
         => AppendOrder(source, value, values, descending: false, isThenBy: true);
 
     /// <summary>Appends <c>ThenByDescending</c> on a key part or aggregate of the groups.</summary>
-    public static IOrderedQueryable<IGrouping<TKey, TElement>> ThenByDescending<TKey, TElement>(
-        IOrderedQueryable<IGrouping<TKey, TElement>> source, GroupValue value, object?[] values)
+    public static IOrderedQueryable<T> ThenByDescending<T>(IOrderedQueryable<T> source, GroupValue value, object?[] values)
         => AppendOrder(source, value, values, descending: true, isThenBy: true);
 
     /// <summary>
@@ -117,8 +113,8 @@ public static class SqlGrouping
     /// <param name="predicateValues">The value slots of the values' count predicates. The query takes ownership of the array.</param>
     /// <param name="reader">The generated reader: the <c>Select</c> lambda's body over the values.</param>
     /// <exception cref="ArgumentException"><paramref name="values"/> is empty, or a predicate reads a missing value slot.</exception>
-    public static IQueryable<TResult> Select<TKey, TElement, TResult>(
-        IQueryable<IGrouping<TKey, TElement>> source, IReadOnlyList<GroupValue> values, object?[] predicateValues, ProjectionReader<TResult> reader)
+    public static IQueryable<TResult> Select<T, TResult>(
+        IQueryable<T> source, IReadOnlyList<GroupValue> values, object?[] predicateValues, ProjectionReader<TResult> reader)
     {
         ArgumentNullException.ThrowIfNull(values);
         ArgumentNullException.ThrowIfNull(predicateValues);
@@ -135,45 +131,41 @@ public static class SqlGrouping
     }
 
     /// <summary>Returns the groups: <c>ToList</c>. Rows are read ordered by the key and grouped where it changes.</summary>
-    public static List<IGrouping<TKey, TElement>> ToList<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)
-        => GroupRunner.ToList(ToGrouped(source));
+    public static List<T> ToList<T>(IQueryable<T> source) => (List<T>)ToGrouped(source).ToList();
 
     /// <summary>Returns the groups: <c>ToListAsync</c>.</summary>
-    public static Task<List<IGrouping<TKey, TElement>>> ToListAsync<TKey, TElement>(
-        IQueryable<IGrouping<TKey, TElement>> source, CancellationToken cancellationToken = default)
-        => GroupRunner.ToListAsync(ToGrouped(source), cancellationToken);
+    public static async Task<List<T>> ToListAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        => (List<T>)await ToGrouped(source).ToListAsync(cancellationToken).ConfigureAwait(false);
 
     /// <summary>Returns the groups: <c>ToArray</c>.</summary>
-    public static IGrouping<TKey, TElement>[] ToArray<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)
-        => [.. GroupRunner.ToList(ToGrouped(source))];
+    public static T[] ToArray<T>(IQueryable<T> source) => [.. ToList(source)];
 
     /// <summary>Returns the groups: <c>ToArrayAsync</c>.</summary>
-    public static async Task<IGrouping<TKey, TElement>[]> ToArrayAsync<TKey, TElement>(
-        IQueryable<IGrouping<TKey, TElement>> source, CancellationToken cancellationToken = default)
-        => [.. await GroupRunner.ToListAsync(ToGrouped(source), cancellationToken).ConfigureAwait(false)];
+    public static async Task<T[]> ToArrayAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        => [.. await ToListAsync(source, cancellationToken).ConfigureAwait(false)];
 
     /// <summary>Counts the groups: <c>Count</c>.</summary>
-    public static int Count<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)
+    public static int Count<T>(IQueryable<T> source)
         => Convert.ToInt32(ExecuteScalar(source, QueryTerminal.Count), CultureInfo.InvariantCulture);
 
     /// <summary>Counts the groups: <c>CountAsync</c>.</summary>
-    public static async Task<int> CountAsync<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source, CancellationToken cancellationToken = default)
+    public static async Task<int> CountAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
         => Convert.ToInt32(await ExecuteScalarAsync(source, QueryTerminal.Count, cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
     /// <summary>Counts the groups: <c>LongCount</c>.</summary>
-    public static long LongCount<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)
+    public static long LongCount<T>(IQueryable<T> source)
         => Convert.ToInt64(ExecuteScalar(source, QueryTerminal.LongCount), CultureInfo.InvariantCulture);
 
     /// <summary>Counts the groups: <c>LongCountAsync</c>.</summary>
-    public static async Task<long> LongCountAsync<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source, CancellationToken cancellationToken = default)
+    public static async Task<long> LongCountAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
         => Convert.ToInt64(await ExecuteScalarAsync(source, QueryTerminal.LongCount, cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
     /// <summary>Whether there is any group: <c>Any</c>.</summary>
-    public static bool Any<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)
+    public static bool Any<T>(IQueryable<T> source)
         => Convert.ToBoolean(ExecuteScalar(source, QueryTerminal.Any), CultureInfo.InvariantCulture);
 
     /// <summary>Whether there is any group: <c>AnyAsync</c>.</summary>
-    public static async Task<bool> AnyAsync<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source, CancellationToken cancellationToken = default)
+    public static async Task<bool> AnyAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
         => Convert.ToBoolean(await ExecuteScalarAsync(source, QueryTerminal.Any, cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
     /// <summary>Creates the node of a <c>Where</c> on groups, before or after the grouped <c>Select</c>.</summary>
@@ -217,31 +209,29 @@ public static class SqlGrouping
         }
     }
 
-    private static GroupedQueryable<TKey, TElement> AppendOrder<TKey, TElement>(
-        IQueryable<IGrouping<TKey, TElement>> source, GroupValue value, object?[] values, bool descending, bool isThenBy)
+    private static IOrderedQueryable<T> AppendOrder<T>(IQueryable<T> source, GroupValue value, object?[] values, bool descending, bool isThenBy)
     {
         var query = ToGrouped(source);
-        return query.WithTail(CreateOrder(query.Tail, value, values, descending, isThenBy));
+        return (IOrderedQueryable<T>)query.WithTail(CreateOrder(query.Tail, value, values, descending, isThenBy));
     }
 
-    private static object? ExecuteScalar<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source, QueryTerminal terminal)
+    private static object? ExecuteScalar<T>(IQueryable<T> source, QueryTerminal terminal)
     {
         var query = ToGrouped(source);
         return QueryRunner.ExecuteScalar(query.Context, query.Tail, terminal);
     }
 
-    private static Task<object?> ExecuteScalarAsync<TKey, TElement>(
-        IQueryable<IGrouping<TKey, TElement>> source, QueryTerminal terminal, CancellationToken cancellationToken)
+    private static Task<object?> ExecuteScalarAsync<T>(IQueryable<T> source, QueryTerminal terminal, CancellationToken cancellationToken)
     {
         var query = ToGrouped(source);
         return QueryRunner.ExecuteScalarAsync(query.Context, query.Tail, terminal, cancellationToken);
     }
 
-    internal static GroupedQueryable<TKey, TElement> ToGrouped<TKey, TElement>(IQueryable<IGrouping<TKey, TElement>> source)
+    private static IGroupedQueryable ToGrouped<T>(IQueryable<T> source)
     {
         ArgumentNullException.ThrowIfNull(source);
 
-        return source as GroupedQueryable<TKey, TElement>
+        return source as IGroupedQueryable
             ?? throw new InvalidOperationException(
                 string.Format(CultureInfo.InvariantCulture, ExceptionMessages.NotAGroupedQuery, source.GetType()));
     }

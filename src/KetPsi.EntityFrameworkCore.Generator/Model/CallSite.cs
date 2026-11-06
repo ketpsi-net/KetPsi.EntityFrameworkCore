@@ -26,6 +26,7 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// For an operator on a projected query, the fully qualified type of the entity query the <c>Select</c> was called on;
 /// the site is kept when that type is an entity.
 /// </param>
+/// <param name="Group">For <c>GroupBy</c> and the operators on its groups, what the interceptor passes to the runtime.</param>
 internal sealed record CallSite(
     string ElementType,
     LocationInfo Location,
@@ -42,7 +43,8 @@ internal sealed record CallSite(
     bool UsesDecimalOperators = false,
     ProjectionModel? Projection = null,
     string? ProjectedFrom = null,
-    AggregateModel? Aggregate = null);
+    AggregateModel? Aggregate = null,
+    GroupCallModel? Group = null);
 
 /// <summary>An aggregate, as the runtime's <c>AggregateFunction</c> and <c>AggregateValueType</c> name it.</summary>
 /// <param name="ValueType">The overload's numeric type, or <c>Column</c> for <c>Min</c> and <c>Max</c>.</param>

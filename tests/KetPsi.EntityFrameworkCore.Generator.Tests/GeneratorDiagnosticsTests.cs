@@ -29,7 +29,7 @@ public sealed class GeneratorDiagnosticsTests
 
     [Theory]
     [InlineData("var r = db.Blogs.Reverse().ToList();", "Reverse")]
-    [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).ToList();", "GroupBy")]
+    [InlineData("var r = db.Blogs.SelectMany(b => b.Posts).ToList();", "SelectMany")]
     [InlineData("var r = db.Blogs.DistinctBy(b => b.Rating).ToList();", "DistinctBy")]
     [InlineData("var r = db.Blogs.Join(db.Posts, b => b.Id, p => p.BlogId, (b, p) => b).ToList();", "Join")]
     [InlineData("var r = db.Blogs.Max();", "Max")]

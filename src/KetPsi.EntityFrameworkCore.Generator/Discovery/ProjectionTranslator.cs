@@ -20,7 +20,7 @@ namespace KetPsi.EntityFrameworkCore.Generator.Discovery;
 /// are called as static methods, constants are written out, and each captured value is read from <c>captures</c>, which
 /// the interceptor fills from the expression tree in source order.
 /// </remarks>
-internal sealed class ProjectionTranslator
+internal sealed partial class ProjectionTranslator
 {
     public const string Reader = "reader";
     public const string Ordinals = "ordinals";
@@ -47,7 +47,10 @@ internal sealed class ProjectionTranslator
     private readonly List<string> _entityPaths = [];
     private readonly Dictionary<string, EntityShape> _shapes = new(StringComparer.Ordinal);
     private readonly List<EntityShape> _entities = [];
-    private int _captureCount;
+
+    // Captured values are numbered in source order, which is the order the runtime reads them from the tree, whatever
+    // order they are translated in: each is written with a placeholder that ResolveCaptures numbers.
+    private readonly SortedSet<int> _captureSpans = [];
     private bool _hasComputedValues;
 
     private ProjectionTranslator(
@@ -98,16 +101,14 @@ internal sealed class ProjectionTranslator
                 code = $"({translator.NameOf(converted, body)})({code})";
             }
 
-            // A reader that uses captured values closes over them; one that doesn't is static.
-            var modifier = translator._captureCount == 0 ? "static " : "";
             return (
                 new ProjectionModel(
                     translator._propertyPaths.ToEquatableArray(),
                     translator._entityPaths.ToEquatableArray(),
-                    $"{modifier}({Reader}, {Ordinals}, {Entities}) => {code}",
+                    translator.ReaderLambda(code),
                     translator._entities.ToEquatableArray(),
                     translator._hasComputedValues,
-                    translator._captureCount),
+                    translator.CaptureCount),
                 null);
         }
         catch (TranslationException exception)
@@ -152,9 +153,35 @@ internal sealed class ProjectionTranslator
         }
     }
 
+    private int CaptureCount => _captureSpans.Count;
+
+    // A reader that uses captured values closes over them; one that doesn't is static.
+    private string ReaderLambda(string body)
+        => $"{(CaptureCount == 0 ? "static " : "")}({Reader}, {Ordinals}, {Entities}) => {ResolveCaptures(body)}";
+
+    /// <summary>Replaces each capture placeholder in <paramref name="code"/> with its index in source order.</summary>
+    private string ResolveCaptures(string code)
+    {
+        var index = 0;
+        foreach (var span in _captureSpans)
+        {
+            code = code.Replace(CapturePlaceholder(span), index.ToString(CultureInfo.InvariantCulture));
+            index++;
+        }
+
+        return code;
+    }
+
+    private static string CapturePlaceholder(int spanStart) => "__kpcapture" + spanStart.ToString(CultureInfo.InvariantCulture) + "_";
+
     private string Translate(IOperation operation)
     {
         _cancellationToken.ThrowIfCancellationRequested();
+
+        if (_group is not null && TryGroupLeaf(operation, out var leaf, out _))
+        {
+            return leaf;
+        }
 
         switch (operation)
         {
@@ -221,12 +248,12 @@ internal sealed class ProjectionTranslator
         return true;
     }
 
-    // The code that reads a captured value, numbered in source order.
+    // The code that reads a captured value, numbered in source order once the translation is done.
     private string Capture(ExpressionSyntax syntax)
     {
         var type = _model.GetTypeInfo(syntax, _cancellationToken).Type ?? throw Fail(syntax, ReasonLambda);
-        var index = _captureCount++;
-        return $"(({NameOf(type, syntax)}){Captures}[{index.ToString(CultureInfo.InvariantCulture)}]!)";
+        _captureSpans.Add(syntax.SpanStart);
+        return $"(({NameOf(type, syntax)}){Captures}[{CapturePlaceholder(syntax.SpanStart)}]!)";
     }
 
     private string Creation(IObjectCreationOperation creation)
@@ -265,7 +292,9 @@ internal sealed class ProjectionTranslator
             throw Fail(owner, $"'{target.Member.Name}' must be settable by generated code in the same assembly");
         }
 
-        return $"{target.Member.Name} = {Translate(assignment.Value)}";
+        var code = $"{target.Member.Name} = {Translate(assignment.Value)}";
+        RecordGroupMember(target.Member.Name, assignment.Value);
+        return code;
     }
 
     private string Arguments(IEnumerable<IArgumentOperation> arguments)
@@ -277,6 +306,12 @@ internal sealed class ProjectionTranslator
     /// </summary>
     private List<IPropertySymbol>? MemberPath(IOperation operation)
     {
+        // A group, or a query projected from groups, has no entity to read members of.
+        if (_group is not null || _readsNoMembers)
+        {
+            return null;
+        }
+
         var properties = new List<IPropertySymbol>();
         while (operation is IPropertyReferenceOperation { Instance: { } instance, Property: var property })
         {
@@ -316,12 +351,25 @@ internal sealed class ProjectionTranslator
 
     private string Column(INamedTypeSymbol entity, IPropertySymbol property, List<IPropertySymbol> path, SyntaxNode syntax, bool asNullable)
     {
-        var shape = Shape(entity).Properties.FirstOrDefault(p => p.Name == property.Name)
+        var shape = PropertyShape(entity, property, syntax);
+        var ordinal = Ordinal(_propertyPaths.Count);
+        _propertyPaths.Add(string.Join(".", path.Select(static p => p.Name)));
+        return ReadColumn(shape, ordinal, throughNavigation: path.Count > 1, asNullable);
+    }
+
+    private PropertyShape PropertyShape(INamedTypeSymbol entity, IPropertySymbol property, SyntaxNode syntax)
+        => Shape(entity).Properties.FirstOrDefault(p => p.Name == property.Name)
             ?? throw Fail(syntax, $"'{property.Name}' is not a mapped property: it has no setter, or it is [NotMapped]");
 
-        var ordinal = $"{Ordinals}[{_propertyPaths.Count.ToString(CultureInfo.InvariantCulture)}]";
-        _propertyPaths.Add(string.Join(".", path.Select(static p => p.Name)));
+    private static string Ordinal(int index) => $"{Ordinals}[{index.ToString(CultureInfo.InvariantCulture)}]";
 
+    /// <summary>The code that reads a property's column at <paramref name="ordinal"/>, as the property's type needs it.</summary>
+    /// <param name="shape">The property.</param>
+    /// <param name="ordinal">The C# of the ordinal.</param>
+    /// <param name="throughNavigation">Whether the column is read through a navigation, which can be missing.</param>
+    /// <param name="asNullable">Whether the value is read as a nullable type, null for a database null.</param>
+    private static string ReadColumn(PropertyShape shape, string ordinal, bool throughNavigation, bool asNullable)
+    {
         var call = shape.Read == ReadMethod.GetFieldValue
             ? $"{Reader}.GetFieldValue<{shape.ValueTypeName}>({ordinal})"
             : $"{Reader}.{shape.Read}({ordinal})";
@@ -348,7 +396,7 @@ internal sealed class ProjectionTranslator
         }
 
         // A value read through an optional navigation is null when there is no related entity, which EF Core reports.
-        return path.Count > 1
+        return throughNavigation
             ? $"({Reader}.IsDBNull({ordinal}) ? throw new global::System.InvalidOperationException(\"{NullableObjectMustHaveAValue}\") : {call})"
             : call;
     }
@@ -493,6 +541,19 @@ internal sealed class ProjectionTranslator
         private string? Replacement(ExpressionSyntax expression)
         {
             var operation = Model.GetOperation(expression, CancellationToken);
+
+            if (translator._group is not null && operation is not null)
+            {
+                if (translator.TryGroupLeaf(operation, out var leaf, out _))
+                {
+                    return leaf;
+                }
+
+                if (operation is IParameterReferenceOperation { Parameter: var parameter } && translator.IsGroupParameter(parameter))
+                {
+                    throw FailGroup(expression, ReasonGroupItself);
+                }
+            }
 
             // A column or entity of the lambda's parameter, read like any projected member.
             if (operation is IParameterReferenceOperation or IPropertyReferenceOperation

@@ -115,7 +115,9 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
     internal static IReadOnlyList<EntityShape> ReadableEntities(EquatableArray<CallSite> sites)
         => Distinct(sites
             .Where(static s => s.Operator is not null)
-            .SelectMany(static s => new[] { s.Entity, s.Include?.Target }.Concat(s.Projection?.Entities ?? [])))
+            .SelectMany(static s => new[] { s.Entity, s.Include?.Target }
+                .Concat(s.Projection?.Entities ?? [])
+                .Concat(s.Group?.GroupBy?.Entities ?? [])))
             .ToList();
 
     /// <summary>
@@ -126,7 +128,9 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
     internal static IReadOnlyList<EntityShape> NavigationEntities(EquatableArray<CallSite> sites)
         => Distinct(sites
             .Where(static s => s.Operator is not null)
-            .SelectMany(static s => (s.Include is { } include ? new[] { include.Source, include.Target } : []).Concat(s.Projection?.Entities ?? [])))
+            .SelectMany(static s => (s.Include is { } include ? new[] { include.Source, include.Target } : [])
+                .Concat(s.Projection?.Entities ?? [])
+                .Concat(s.Group?.GroupBy?.Entities ?? [])))
             .Where(static e => e.Navigations.Count > 0)
             .ToList();
 

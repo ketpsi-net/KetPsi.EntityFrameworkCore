@@ -25,15 +25,23 @@ internal sealed class PredicateTranslator
     private readonly SemanticModel _model;
     private readonly IParameterSymbol _parameter;
     private readonly Func<ExpressionSyntax, string>? _readValue;
+    private readonly Func<ExpressionSyntax, PredicateOperand?>? _operands;
     private readonly CancellationToken _cancellationToken;
-    private readonly List<string> _valuePaths = [];
+    private readonly List<string> _valuePaths;
 
     private PredicateTranslator(
-        SemanticModel model, IParameterSymbol parameter, Func<ExpressionSyntax, string>? readValue, CancellationToken cancellationToken)
+        SemanticModel model,
+        IParameterSymbol parameter,
+        Func<ExpressionSyntax, string>? readValue,
+        Func<ExpressionSyntax, PredicateOperand?>? operands,
+        List<string>? valueSlots,
+        CancellationToken cancellationToken)
     {
         _model = model;
         _parameter = parameter;
         _readValue = readValue;
+        _operands = operands;
+        _valuePaths = valueSlots ?? [];
         _cancellationToken = cancellationToken;
     }
 
@@ -46,11 +54,22 @@ internal sealed class PredicateTranslator
     /// query filters. It throws <see cref="TranslationException"/> for values it cannot read. When omitted, values are
     /// read from the tree and <see cref="PredicateModel.ValuePaths"/> holds tree paths.
     /// </param>
+    /// <param name="operands">
+    /// For predicates over something other than an entity, such as the groups of a <c>GroupBy</c>: resolves an
+    /// expression that uses the lambda's parameter to the operand it compares, or returns <see langword="null"/> when it
+    /// is none. When omitted, the operands are the entity's properties.
+    /// </param>
+    /// <param name="valueSlots">
+    /// A list shared with other predicates whose value slots are passed together; the predicate's slots are appended
+    /// to it and numbered from its end. <see cref="PredicateModel.ValuePaths"/> then lists only this predicate's.
+    /// </param>
     public static (PredicateModel? Predicate, DiagnosticInfo? Diagnostic) Translate(
         LambdaExpressionSyntax lambda,
         SemanticModel model,
         CancellationToken cancellationToken,
-        Func<ExpressionSyntax, string>? readValue = null)
+        Func<ExpressionSyntax, string>? readValue = null,
+        Func<ExpressionSyntax, PredicateOperand?>? operands = null,
+        List<string>? valueSlots = null)
     {
         var parameterSyntax = lambda switch
         {
@@ -66,11 +85,12 @@ internal sealed class PredicateTranslator
             return (null, Diagnostic(DiagnosticDescriptors.ExpressionNotSupported, lambda));
         }
 
-        var translator = new PredicateTranslator(model, parameter, readValue, cancellationToken);
+        var translator = new PredicateTranslator(model, parameter, readValue, operands, valueSlots, cancellationToken);
+        var first = translator._valuePaths.Count;
         try
         {
             var code = translator.TranslatePredicate(body, BodyVariable);
-            return (new PredicateModel(code, translator._valuePaths.ToEquatableArray()), null);
+            return (new PredicateModel(code, translator._valuePaths.Skip(first).ToEquatableArray()), null);
         }
         catch (TranslationException exception)
         {
@@ -108,6 +128,12 @@ internal sealed class PredicateTranslator
                     ? $"new {Templates}.BooleanPropertyTemplate(\"{property.Name}\")"
                     : throw Fail(DiagnosticDescriptors.ExpressionNotSupported, node);
 
+            // An operand that is not a member access, such as the parameter itself or an aggregate.
+            case IdentifierNameSyntax or InvocationExpressionSyntax when _operands is not null && EntityProperty(node) is { } operand:
+                return operand.Type.SpecialType == SpecialType.System_Boolean
+                    ? $"new {Templates}.BooleanPropertyTemplate(\"{operand.Name}\")"
+                    : throw Fail(DiagnosticDescriptors.ExpressionNotSupported, node);
+
             case InvocationExpressionSyntax invocation:
                 return TranslateInvocation(invocation, path);
 
@@ -118,27 +144,43 @@ internal sealed class PredicateTranslator
 
     private string TranslateComparison(BinaryExpressionSyntax binary, string comparison, string path)
     {
+        // Each side is translated in source order, so the value slots and the values they capture are too.
         var leftProperty = EntityProperty(binary.Left);
-        var rightProperty = EntityProperty(binary.Right);
-        if (leftProperty is not null && rightProperty is not null)
+        PredicateOperand property;
+        ExpressionSyntax value;
+        int? slot = null;
+        if (leftProperty is { } left)
         {
-            throw Fail(DiagnosticDescriptors.MemberComparisonNotSupported, binary);
+            if (EntityProperty(binary.Right) is not null)
+            {
+                throw Fail(DiagnosticDescriptors.MemberComparisonNotSupported, binary);
+            }
+
+            (property, value) = (left, binary.Right);
+            if (!IsNullLiteral(value))
+            {
+                slot = AddValue(value, Right(path));
+            }
         }
-
-        var (property, value, valuePath) = (leftProperty, rightProperty) switch
+        else
         {
-            ({ } left, _) => (left, binary.Right, Right(path)),
-            (_, { } right) => (right, binary.Left, Left(path)),
-            _ => throw Fail(DiagnosticDescriptors.ExpressionNotSupported, binary),
-        };
+            if (!ReferencesParameter(binary.Right))
+            {
+                throw Fail(DiagnosticDescriptors.ExpressionNotSupported, binary);
+            }
 
-        // Templates keep the property on the left.
-        if (rightProperty is not null)
-        {
+            value = binary.Left;
+            if (!IsNullLiteral(value))
+            {
+                slot = AddValue(value, Left(path));
+            }
+
+            // Templates keep the property on the left.
+            property = EntityProperty(binary.Right) ?? throw Fail(DiagnosticDescriptors.ExpressionNotSupported, binary);
             comparison = Flip(comparison);
         }
 
-        if (IsNullLiteral(value))
+        if (slot is not { } index)
         {
             return comparison switch
             {
@@ -148,8 +190,7 @@ internal sealed class PredicateTranslator
             };
         }
 
-        var slot = AddValue(value, valuePath);
-        return $"new {Templates}.ComparisonTemplate(\"{property.Name}\", {Templates}.ComparisonOperator.{comparison}, {slot})";
+        return $"new {Templates}.ComparisonTemplate(\"{property.Name}\", {Templates}.ComparisonOperator.{comparison}, {index})";
     }
 
     private string TranslateInvocation(InvocationExpressionSyntax invocation, string path)
@@ -199,7 +240,7 @@ internal sealed class PredicateTranslator
     // list.Contains(x.Prop): the list is the instance for List<T>.Contains, and the first argument for
     // Enumerable.Contains and MemoryExtensions.Contains, whether called as an extension or not.
     private string TranslateContains(
-        InvocationExpressionSyntax invocation, IMethodSymbol method, ExpressionSyntax? receiver, IPropertySymbol item, string path)
+        InvocationExpressionSyntax invocation, IMethodSymbol method, ExpressionSyntax? receiver, PredicateOperand item, string path)
     {
         var arguments = invocation.ArgumentList.Arguments;
         ExpressionSyntax list;
@@ -232,15 +273,20 @@ internal sealed class PredicateTranslator
     }
 
     /// <summary>
-    /// The entity property <paramref name="node"/> reads directly (<c>x.Prop</c>), or null when it does not involve
-    /// the lambda parameter. Other uses of the parameter are diagnostics.
+    /// The entity property <paramref name="node"/> reads directly (<c>x.Prop</c>), or the operand it is; null when it
+    /// does not involve the lambda parameter. Other uses of the parameter are diagnostics.
     /// </summary>
-    private IPropertySymbol? EntityProperty(ExpressionSyntax node)
+    private PredicateOperand? EntityProperty(ExpressionSyntax node)
     {
         node = StripParentheses(node);
         if (!ReferencesParameter(node))
         {
             return null;
+        }
+
+        if (_operands is not null)
+        {
+            return _operands(node) ?? throw Fail(DiagnosticDescriptors.ExpressionNotSupported, node);
         }
 
         if (node is MemberAccessExpressionSyntax member)
@@ -253,7 +299,7 @@ internal sealed class PredicateTranslator
                 }
 
                 return EntityShapeBuilder.IsReadableScalar(property.Type)
-                    ? property
+                    ? new PredicateOperand(property.Name, property.Type)
                     : throw Fail(DiagnosticDescriptors.NavigationNotSupported, node);
             }
 
@@ -361,7 +407,7 @@ internal sealed class PredicateTranslator
         _ => comparison,
     };
 
-    private static string NullCheck(IPropertySymbol property, bool isNull)
+    private static string NullCheck(PredicateOperand property, bool isNull)
         => $"new {Templates}.NullCheckTemplate(\"{property.Name}\", isNull: {(isNull ? "true" : "false")})";
 
     // Parentheses and the null-forgiving operator have no node in the expression tree.
@@ -396,6 +442,9 @@ internal sealed class PredicateTranslator
 
     private static TranslationException Fail(DiagnosticDescriptor descriptor, SyntaxNode node) => new(Diagnostic(descriptor, node));
 }
+
+/// <summary>What a predicate compares: an entity property, or a value such as an aggregate of a group, by its name in the template.</summary>
+internal readonly record struct PredicateOperand(string Name, ITypeSymbol Type);
 
 /// <summary>Ends a translation with the diagnostic that explains why the construct cannot be translated.</summary>
 internal sealed class TranslationException(DiagnosticInfo diagnostic) : Exception(diagnostic.Descriptor.Id)

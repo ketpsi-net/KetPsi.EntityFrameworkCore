@@ -31,6 +31,13 @@ internal static class CallSiteAnalyzer
     private const string ReasonAggregateSelector =
         "an aggregate's selector must read one property, such as x => x.Price, or one through reference navigations";
     private const string ReasonSelectorAfterSelect = "select the aggregated property instead, such as Select(x => x.Price).Sum()";
+    private const string ReasonAfterGroupPaging = "filter and order the groups before Skip, Take and Distinct";
+    private const string ReasonOnGroups =
+        "only Where, OrderBy, ThenBy, Select, Count, LongCount, Any, ToList and ToArray can follow GroupBy; select the key " +
+        "and aggregates with Select, then page them or take the first";
+    private const string ReasonGroupsAfterFilter =
+        "groups filtered or ordered by the database are only read through a Select of their key and aggregates";
+    private const string GroupingType = "System.Linq.IGrouping<TKey, TElement>";
 
     // Names of every method the classification below handles; anything else is not looked at.
     private static readonly HashSet<string> OperatorNames = new(StringComparer.Ordinal)
@@ -128,13 +135,24 @@ internal static class CallSiteAnalyzer
 
         var nameSyntax = ((MemberAccessExpressionSyntax)invocation.Expression).Name;
         var location = LocationInfo.From(nameSyntax.Identifier.GetLocation());
+        if (IsGrouping(elementType))
+        {
+            if (GroupedFrom(GetSource(operation), semanticModel, queryableInterface, location, cancellationToken) is not { } grouped)
+            {
+                return null;
+            }
+
+            var groupSite = new SiteBuilder(elementType, location, method.Name, operation, invocation, semanticModel, grouped.EntityType, cancellationToken);
+            return ClassifyGrouped(groupSite, method, family, grouped);
+        }
+
         var projectedFrom = ProjectedFrom(GetSource(operation), semanticModel, queryableInterface, location, cancellationToken);
         var site = new SiteBuilder(
             elementType, location, method.Name, operation, invocation, semanticModel, projectedFrom?.EntityType, cancellationToken);
 
         if (projectedFrom is { } projection)
         {
-            return ClassifyProjected(site, method, family, projection.Projection);
+            return ClassifyProjected(site, method, family, projection.Projection, projection.IsPaged);
         }
 
         return family switch
@@ -181,6 +199,8 @@ internal static class CallSiteAnalyzer
                     : site.Overload(ReasonIndexedSelector);
             case "Distinct":
                 return parameters.Length == 1 ? site.Supported(OperatorKind.Distinct) : site.Overload(ReasonComparer);
+            case "GroupBy":
+                return parameters.Skip(1).All(static p => IsLambdaParameter(p.Type)) ? site.GroupBy() : site.Overload(ReasonComparer);
             case "Sum" or "Average" or "Min" or "Max" when parameters.Length == 2 && IsSelector(parameters[1].Type):
                 return site.Supported(AggregateKind(method.Name), lambdaOrdinal: 1);
             case "First" or "FirstOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count" or "LongCount":
@@ -232,9 +252,18 @@ internal static class CallSiteAnalyzer
 
     // After Select the query is a projection: paging, Distinct, aggregates and terminals run it, anything else is reported.
     // The projection is null when the Select itself is reported.
-    private static CallSite? ClassifyProjected(SiteBuilder site, IMethodSymbol method, Family family, ProjectionModel? projection)
+    private static CallSite? ClassifyProjected(SiteBuilder site, IMethodSymbol method, Family family, ProjectionModel? projection, bool isPaged)
     {
         var parameters = method.Parameters;
+        if (projection is { IsGrouped: true } grouped && family == Family.Queryable
+            && (method.Name == "Where" && IsPredicate(parameters[1].Type)
+                || method.Name is "OrderBy" or "OrderByDescending" or "ThenBy" or "ThenByDescending" && parameters.Length == 2))
+        {
+            return isPaged
+                ? site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonAfterGroupPaging)
+                : site.AfterGroupSelect(method.Name == "Where" ? OperatorKind.Where : OrderKind(method.Name), grouped);
+        }
+
         switch (family)
         {
             case Family.Queryable when method.Name == "Distinct" && parameters.Length == 1:
@@ -283,6 +312,7 @@ internal static class CallSiteAnalyzer
         IOperation? source, SemanticModel semanticModel, INamedTypeSymbol queryableInterface, LocationInfo location, CancellationToken cancellationToken)
     {
         // A bound guards against a local initialized from itself through other locals.
+        var isPaged = false;
         for (var steps = 0; source is not null && steps < 64; steps++)
         {
             switch (source)
@@ -295,7 +325,8 @@ internal static class CallSiteAnalyzer
                     break;
                 case IInvocationOperation invocation when GetFamily(invocation.TargetMethod.ContainingType) is var family
                     && family is Family.Queryable or Family.EntityFramework or Family.Relational or Family.KetPsi:
-                    if (family == Family.Queryable && invocation.TargetMethod.Name == "Select")
+                    var name = invocation.TargetMethod.Name;
+                    if (family == Family.Queryable && name == "Select")
                     {
                         if (GetSource(invocation)?.Type is not { } selected || GetElementType(selected, queryableInterface) is not { } element)
                         {
@@ -308,12 +339,38 @@ internal static class CallSiteAnalyzer
                             selector = parenthesized.Expression;
                         }
 
+                        if (IsGrouping(element))
+                        {
+                            // A Select on groups: its projection reads the values of the groups.
+                            if (GroupedFrom(GetSource(invocation), semanticModel, queryableInterface, location, cancellationToken) is not { } grouped)
+                            {
+                                return null;
+                            }
+
+                            var groupProjection = grouped.Group is { } group && selector is LambdaExpressionSyntax groupLambda
+                                ? ProjectionTranslator.TranslateGroupSelect(groupLambda, group, semanticModel, location, cancellationToken).Projection
+                                : null;
+                            return new ProjectionSource(grouped.EntityType, groupProjection, isPaged);
+                        }
+
                         var projection = selector is LambdaExpressionSyntax lambda
                             ? ProjectionTranslator.Translate(lambda, element, semanticModel, location, cancellationToken).Projection
                             : null;
-                        return new ProjectionSource(EntityDiscovery.TypeName(element), projection);
+                        return new ProjectionSource(EntityDiscovery.TypeName(element), projection, isPaged);
                     }
 
+                    if (family == Family.Queryable && name == "GroupBy" && HasResultSelector(invocation.TargetMethod))
+                    {
+                        // GroupBy with a result selector is a Select on its groups.
+                        if (GroupOf(invocation, semanticModel, queryableInterface, location, cancellationToken) is not { } grouped)
+                        {
+                            return null;
+                        }
+
+                        return new ProjectionSource(grouped.EntityType, grouped.Group?.ResultProjection, isPaged);
+                    }
+
+                    isPaged |= family == Family.Queryable && name is "Skip" or "Take" or "Distinct";
                     source = GetSource(invocation);
                     break;
                 case ILocalReferenceOperation local:
@@ -331,6 +388,122 @@ internal static class CallSiteAnalyzer
 
         return null;
     }
+
+    /// <summary>
+    /// The <c>GroupBy</c> a grouped query comes from, through the operators on its groups and local variables, with
+    /// the translated group when it translates. <see langword="null"/> when the query isn't grouped by a query operator.
+    /// </summary>
+    private static GroupSource? GroupedFrom(
+        IOperation? source, SemanticModel semanticModel, INamedTypeSymbol queryableInterface, LocationInfo location, CancellationToken cancellationToken)
+    {
+        var isFiltered = false;
+        for (var steps = 0; source is not null && steps < 64; steps++)
+        {
+            switch (source)
+            {
+                case IConversionOperation conversion:
+                    source = conversion.Operand;
+                    break;
+                case IParenthesizedOperation parenthesized:
+                    source = parenthesized.Operand;
+                    break;
+                case IInvocationOperation invocation when GetFamily(invocation.TargetMethod.ContainingType) is Family.Queryable or Family.EntityFramework:
+                    if (invocation.TargetMethod.Name == "GroupBy")
+                    {
+                        return GroupOf(invocation, semanticModel, queryableInterface, location, cancellationToken) is { } grouped
+                            ? grouped with { IsFiltered = isFiltered }
+                            : null;
+                    }
+
+                    isFiltered |= invocation.TargetMethod.Name is "Where" or "OrderBy" or "OrderByDescending" or "ThenBy" or "ThenByDescending";
+                    source = GetSource(invocation);
+                    break;
+                case ILocalReferenceOperation local:
+                    source = local.Local.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax(cancellationToken) is VariableDeclaratorSyntax
+                        {
+                            Initializer.Value: { } value,
+                        } && value.SyntaxTree == semanticModel.SyntaxTree
+                        ? semanticModel.GetOperation(value, cancellationToken)
+                        : null;
+                    break;
+                default:
+                    return null;
+            }
+        }
+
+        return null;
+    }
+
+    // A GroupBy call translated against the entity it groups. A GroupBy of a projection is reported where it is called.
+    private static GroupSource? GroupOf(
+        IInvocationOperation groupBy, SemanticModel semanticModel, INamedTypeSymbol queryableInterface, LocationInfo location, CancellationToken cancellationToken)
+    {
+        if (GetSource(groupBy) is not { Type: { } sourceType } source || GetElementType(sourceType, queryableInterface) is not { } entity)
+        {
+            return null;
+        }
+
+        if (ProjectedFrom(source, semanticModel, queryableInterface, location, cancellationToken) is { } projected)
+        {
+            return new GroupSource(projected.EntityType, Group: null);
+        }
+
+        var (group, _) = ProjectionTranslator.TranslateGroupBy(groupBy, entity, semanticModel, location, cancellationToken);
+        return new GroupSource(EntityDiscovery.TypeName(entity), group);
+    }
+
+    // The operators that can follow GroupBy on its groups; anything else is reported.
+    private static CallSite? ClassifyGrouped(SiteBuilder site, IMethodSymbol method, Family family, GroupSource grouped)
+    {
+        if (grouped.Group is not { } group)
+        {
+            // The GroupBy itself is reported.
+            return site.Silent();
+        }
+
+        var parameters = method.Parameters;
+        var name = family == Family.EntityFramework && method.Name.EndsWith("Async", StringComparison.Ordinal)
+            ? method.Name.Substring(0, method.Name.Length - "Async".Length)
+            : method.Name;
+        var isAsync = family == Family.EntityFramework;
+        switch (family)
+        {
+            case Family.Queryable when name == "Where" && IsPredicate(parameters[1].Type):
+                return site.OnGroups(OperatorKind.Where, group, lambdaOrdinal: 1);
+            case Family.Queryable when name is "OrderBy" or "OrderByDescending" or "ThenBy" or "ThenByDescending" && parameters.Length == 2:
+                return site.OnGroups(OrderKind(name), group, lambdaOrdinal: 1);
+            case Family.Queryable when name == "Select" && IsSelector(parameters[1].Type):
+                return site.OnGroups(OperatorKind.Select, group, lambdaOrdinal: 1);
+            case Family.Queryable or Family.EntityFramework when name is "Count" or "LongCount" or "Any":
+                var predicateArguments = isAsync ? 3 : 2;
+                if (parameters.Length == predicateArguments && IsPredicate(parameters[1].Type))
+                {
+                    return site.OnGroups(TerminalKind(name), group, lambdaOrdinal: 1, isAsync);
+                }
+
+                return parameters.Length == predicateArguments - 1
+                    ? site.OnGroups(TerminalKind(name), group, lambdaOrdinal: null, isAsync)
+                    : site.Overload(ReasonDefaultValue);
+            case Family.EntityFramework when name is "ToList" or "ToArray":
+            case Family.Enumerable when parameters.Length == 1 && name is "ToList" or "ToArray":
+                return grouped.IsFiltered
+                    ? site.Reject(DiagnosticDescriptors.OperatorOnGroupsNotSupported, method.Name, ReasonGroupsAfterFilter)
+                    : site.OnGroups(name == "ToList" ? OperatorKind.ToList : OperatorKind.ToArray, group, lambdaOrdinal: null, isAsync);
+            case Family.Enumerable or Family.DbSet:
+                // Enumerating the groups runs the query.
+                return null;
+            default:
+                return site.Reject(DiagnosticDescriptors.OperatorOnGroupsNotSupported, method.Name, ReasonOnGroups);
+        }
+    }
+
+    // IGrouping<TKey, TElement>, the element of a grouped query.
+    private static bool IsGrouping(ITypeSymbol type) => type.OriginalDefinition.ToDisplayString() == GroupingType;
+
+    // GroupBy's result selector is an Expression<Func<TKey, IEnumerable<TElement>, TResult>>.
+    private static bool HasResultSelector(IMethodSymbol method)
+        => method.Parameters.Skip(1).Any(static p => p.Type is INamedTypeSymbol { TypeArguments.Length: 1 } expression
+            && expression.TypeArguments[0] is INamedTypeSymbol { TypeArguments.Length: 3 });
 
     // Enumerable.ToList and ToArray execute the query, so they are intercepted like terminals. Other Enumerable
     // methods enumerate a KetPsi query, which executes it; called on a DbSet itself they would run EF Core's pipeline.
@@ -429,7 +602,7 @@ internal static class CallSiteAnalyzer
     };
 
     // The runtime's AggregateValueType: the numeric type of a Sum or Average overload; Min and Max read the column as it is.
-    private static string AggregateValueType(OperatorKind kind, ITypeSymbol type)
+    internal static string AggregateValueType(OperatorKind kind, ITypeSymbol type)
     {
         if (kind is OperatorKind.Min or OperatorKind.Max)
         {
@@ -455,6 +628,10 @@ internal static class CallSiteAnalyzer
     // An async terminal's result is the task's type argument.
     private static ITypeSymbol ResultType(IMethodSymbol method, bool isAsync)
         => isAsync && method.ReturnType is INamedTypeSymbol { TypeArguments.Length: 1 } task ? task.TypeArguments[0] : method.ReturnType;
+
+    // Expression<Func<...>>, as opposed to an IEqualityComparer.
+    private static bool IsLambdaParameter(ITypeSymbol type)
+        => type is INamedTypeSymbol { TypeArguments.Length: 1 } expression && expression.TypeArguments[0] is INamedTypeSymbol { TypeKind: TypeKind.Delegate };
 
     // Expression<Func<T, TResult>>, as opposed to the index-taking Expression<Func<T, int, TResult>>.
     private static bool IsSelector(ITypeSymbol type)
@@ -656,6 +833,130 @@ internal static class CallSiteAnalyzer
                 declared.TypeParameters.Select(static t => t.Name).ToEquatableArray());
         }
 
+        /// <summary>A <c>GroupBy</c> of the entity query, with its key, element and result selector translated.</summary>
+        public CallSite GroupBy()
+        {
+            foreach (var argument in operation.Arguments.Where(static a => a.Parameter?.Ordinal > 0))
+            {
+                if (RequireLambda(argument.Parameter!.Ordinal).Diagnostic is { } lambdaDiagnostic)
+                {
+                    return Failed(lambdaDiagnostic);
+                }
+            }
+
+            var (group, diagnostic) = ProjectionTranslator.TranslateGroupBy(operation, elementSymbol, semanticModel, location, cancellationToken);
+            if (diagnostic is not null || group is null)
+            {
+                return diagnostic is null ? Unsupported() : Failed(diagnostic);
+            }
+
+            var signature = GetGenericSignature(operation.TargetMethod);
+            var model = group.Model;
+            var hasElementSelector = signature.Parameters.Count == 4 || (signature.Parameters.Count == 3 && model.Result is null);
+            model = model with
+            {
+                ElementParameter = hasElementSelector && model.ElementCaptureCount > 0 ? signature.Parameters[2].Name : null,
+                Result = model.Result is { } result ? result with { CaptureParameter = signature.Parameters[signature.Parameters.Count - 1].Name } : null,
+            };
+
+            return Group(OperatorKind.GroupBy, new GroupCallModel(GroupCallKind.GroupBy, GroupBy: model), isAsync: false, hasPredicate: false);
+        }
+
+        /// <summary>An operator on the groups of a <c>GroupBy</c>.</summary>
+        public CallSite OnGroups(OperatorKind kind, GroupShape group, int? lambdaOrdinal, bool isAsync = false)
+        {
+            GroupCallModel call;
+            if (lambdaOrdinal is not { } ordinal)
+            {
+                call = new GroupCallModel(GroupCallKind.Terminal);
+            }
+            else
+            {
+                var (lambda, lambdaDiagnostic) = RequireLambda(ordinal);
+                if (lambda is null)
+                {
+                    return lambdaDiagnostic is null ? Unsupported() : Failed(lambdaDiagnostic);
+                }
+
+                GroupCallModel? translated;
+                DiagnosticInfo? diagnostic;
+                if (kind == OperatorKind.Select)
+                {
+                    var (projection, selectDiagnostic) = ProjectionTranslator.TranslateGroupSelect(lambda, group, semanticModel, location, cancellationToken);
+                    (translated, diagnostic) = (projection is null ? null : ProjectionTranslator.SelectCall(projection), selectDiagnostic);
+                }
+                else
+                {
+                    (translated, diagnostic) = IsOrdering(kind)
+                        ? ProjectionTranslator.TranslateGroupOrder(lambda, group, semanticModel, location, cancellationToken)
+                        : ProjectionTranslator.TranslateGroupPredicate(lambda, group, semanticModel, location, cancellationToken);
+                }
+
+                if (diagnostic is not null)
+                {
+                    return Failed(diagnostic);
+                }
+
+                call = translated! with { CaptureParameter = GetGenericSignature(operation.TargetMethod).Parameters[ordinal].Name };
+            }
+
+            return Group(kind, call, isAsync, hasPredicate: lambdaOrdinal is not null && kind is not (OperatorKind.Where or OperatorKind.Select)
+                && !IsOrdering(kind));
+        }
+
+        /// <summary>A <c>Where</c> or an ordering after a <c>Select</c> on groups, over the members that are group values.</summary>
+        public CallSite AfterGroupSelect(OperatorKind kind, ProjectionModel projection)
+        {
+            var (lambda, lambdaDiagnostic) = RequireLambda(1);
+            if (lambda is null)
+            {
+                return lambdaDiagnostic is null ? Unsupported() : Failed(lambdaDiagnostic);
+            }
+
+            var (call, diagnostic) = kind == OperatorKind.Where
+                ? ProjectionTranslator.TranslateProjectedPredicate(lambda, projection, elementSymbol, semanticModel, location, cancellationToken)
+                : ProjectionTranslator.TranslateProjectedOrder(lambda, projection, elementSymbol, semanticModel, location, cancellationToken);
+            if (diagnostic is not null)
+            {
+                return Failed(diagnostic);
+            }
+
+            return Group(kind, call! with { CaptureParameter = GetGenericSignature(operation.TargetMethod).Parameters[1].Name }, isAsync: false, hasPredicate: false);
+        }
+
+        // An intercepted GroupBy or operator on its groups. Its interceptor is generic, since a key can be anonymous.
+        private CallSite Group(OperatorKind kind, GroupCallModel call, bool isAsync, bool hasPredicate)
+        {
+            var entity = kind == OperatorKind.GroupBy ? EntityShapeBuilder.Build(elementSymbol, semanticModel.Compilation, location) : null;
+
+            // The caller builds the lambdas' decimal operators by reflection; the interceptor keeps them for it.
+            var usesDecimalOperators = operation.Arguments
+                .Select(static a => a.Value.Syntax)
+                .OfType<ExpressionSyntax>()
+                .Select(PredicateTranslator.StripParentheses)
+                .OfType<LambdaExpressionSyntax>()
+                .Any(lambda => DecimalOperators.AreUsedIn(lambda, semanticModel, cancellationToken));
+            return new CallSite(
+                _elementType,
+                location,
+                kind,
+                isAsync,
+                hasPredicate,
+                Diagnostic: null,
+                entity,
+                semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax(),
+                Signature: GetGenericSignature(operation.TargetMethod),
+                UsesDecimalOperators: usesDecimalOperators,
+                ProjectedFrom: projectedFrom,
+                Group: call);
+        }
+
+        /// <summary>An operator whose query is reported elsewhere, such as an operator on the groups of a reported GroupBy.</summary>
+        public CallSite Silent() => new(_elementType, location, Operator: null, IsAsync: false, HasPredicate: false, Diagnostic: null, ProjectedFrom: projectedFrom);
+
+        private CallSite Failed(DiagnosticInfo diagnostic)
+            => new(_elementType, location, Operator: null, IsAsync: false, HasPredicate: false, diagnostic, ProjectedFrom: projectedFrom);
+
         public CallSite Unsupported() => Reject(DiagnosticDescriptors.UnsupportedOperator, methodName);
 
         /// <summary>Rejects the call at the argument with <paramref name="ordinal"/>, quoting it in the message.</summary>
@@ -705,5 +1006,14 @@ internal static class CallSiteAnalyzer
     }
 }
 
-/// <summary>The entity query a projection was made from, and its <c>Select</c>'s projection when it translates.</summary>
-internal readonly record struct ProjectionSource(string EntityType, ProjectionModel? Projection);
+/// <summary>
+/// The entity query a projection was made from, its <c>Select</c>'s projection when it translates, and whether
+/// <c>Skip</c>, <c>Take</c> or <c>Distinct</c> came after the <c>Select</c>.
+/// </summary>
+internal readonly record struct ProjectionSource(string EntityType, ProjectionModel? Projection, bool IsPaged = false);
+
+/// <summary>
+/// The entity query a grouped query was grouped from, the translated <c>GroupBy</c> when it translates, and whether a
+/// <c>Where</c> or an ordering came after it.
+/// </summary>
+internal readonly record struct GroupSource(string EntityType, GroupShape? Group, bool IsFiltered = false);

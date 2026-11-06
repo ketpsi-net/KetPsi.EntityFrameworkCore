@@ -51,8 +51,7 @@ Targets `net8.0`, `net9.0` and `net10.0`, each with its own EF Core major versio
 
 Preview. Done: filtering, ordering, paging, terminals, query filters, tracking, identity resolution,
 `Include` / `ThenInclude`, `Select` (properties, reference navigations, entities and computed members), `Distinct`,
-and `Sum` / `Average` / `Min` / `Max`.
-Next: `GroupBy`.
+`Sum` / `Average` / `Min` / `Max`, and `GroupBy` with keys, aggregates, `HAVING` and the groups themselves.
 
 See the [package README](./src/KetPsi.EntityFrameworkCore/README.MD) for the full support list, diagnostics and
 Native AOT notes, and [skills/ketpsi-entityframeworkcore/SKILL.md](./skills/ketpsi-entityframeworkcore/SKILL.md) for a
