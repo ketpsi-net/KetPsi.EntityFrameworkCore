@@ -320,6 +320,20 @@ internal static class QueryRunner
         return (entity, dialect, statement);
     }
 
+    /// <summary>Executes a scalar terminal, such as <c>Count</c> or <c>Any</c>, over the chain ending at <paramref name="tail"/>.</summary>
+    internal static object? ExecuteScalar(DbContext context, QueryNode tail, QueryTerminal terminal)
+    {
+        var (_, dialect, statement) = PrepareStatement(context, tail, terminal, rowLimit: null);
+        return QueryExecutor.ExecuteScalar(context, dialect, statement);
+    }
+
+    /// <summary>Executes the async form of <see cref="ExecuteScalar(DbContext, QueryNode, QueryTerminal)"/>.</summary>
+    internal static Task<object?> ExecuteScalarAsync(DbContext context, QueryNode tail, QueryTerminal terminal, CancellationToken cancellationToken)
+    {
+        var (_, dialect, statement) = PrepareStatement(context, tail, terminal, rowLimit: null);
+        return QueryExecutor.ExecuteScalarAsync(context, dialect, statement, cancellationToken);
+    }
+
     internal static RootNode RootOf(QueryNode tail)
     {
         var node = tail;

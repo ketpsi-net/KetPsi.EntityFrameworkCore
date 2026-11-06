@@ -21,16 +21,19 @@ internal sealed class ProjectedQueryable<T>(DbContext context, QueryNode tail, P
 
     public ProjectionReader<T> Reader { get; } = reader;
 
-    /// <summary>The <c>Select</c> the elements come from; operators after it can follow.</summary>
-    public ProjectionNode Projection
+    /// <summary>
+    /// The <c>Select</c> the elements come from, a <see cref="ProjectionNode"/> or, on groups, a
+    /// <see cref="GroupSelectNode"/>; operators after it can follow.
+    /// </summary>
+    public QueryNode Projection
     {
         get
         {
             for (var node = Tail; node is not null; node = node.Parent)
             {
-                if (node is ProjectionNode projection)
+                if (node is ProjectionNode or GroupSelectNode)
                 {
-                    return projection;
+                    return node;
                 }
             }
 

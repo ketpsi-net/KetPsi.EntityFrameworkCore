@@ -87,6 +87,10 @@ public sealed class SqlDialectsTests
 
         public string Count(bool isLong) => throw new NotSupportedException();
 
+        public string ConditionalCount(string condition, bool isLong) => throw new NotSupportedException();
+
+        public string DistinctCount(string column, bool isLong) => throw new NotSupportedException();
+
         public string Exists(string subquery) => throw new NotSupportedException();
 
         public string Aggregate(AggregateFunction function, string column, AggregateValueType valueType) => throw new NotSupportedException();
