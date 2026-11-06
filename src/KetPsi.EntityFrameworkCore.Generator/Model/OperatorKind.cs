@@ -20,6 +20,7 @@ internal enum OperatorKind
     AsSplitQuery,
     AsSingleQuery,
     Select,
+    GroupBy,
     Distinct,
     Sum,
     Average,

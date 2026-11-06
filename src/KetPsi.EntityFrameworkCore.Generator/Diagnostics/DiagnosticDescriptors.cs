@@ -51,6 +51,11 @@ internal static class DiagnosticDescriptors
         "Operator not supported after Select",
         "'{0}' after Select is not supported yet: {1}");
 
+    public static readonly DiagnosticDescriptor OperatorOnGroupsNotSupported = Error(
+        "KP1008",
+        "Operator not supported on groups",
+        "'{0}' on the groups of GroupBy is not supported yet: {1}");
+
     public static readonly DiagnosticDescriptor ExpressionNotSupported = Error(
         "KP2001",
         "Expression not supported",
@@ -97,6 +102,16 @@ internal static class DiagnosticDescriptors
         "KP2009",
         "Projection not supported",
         "The projection '{0}' is not supported yet: {1}");
+
+    public static readonly DiagnosticDescriptor GroupKeyNotSupported = Error(
+        "KP2010",
+        "GroupBy key not supported",
+        "The GroupBy key '{0}' is not supported yet: {1}");
+
+    public static readonly DiagnosticDescriptor GroupExpressionNotSupported = Error(
+        "KP2011",
+        "Group expression not supported",
+        "'{0}' cannot be translated from the groups yet: {1}");
 
     public static readonly DiagnosticDescriptor PropertyTypeNotSupported = Error(
         "KP3001",

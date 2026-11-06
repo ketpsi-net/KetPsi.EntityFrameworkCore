@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using KetPsi.EntityFrameworkCore.Binding;
 using KetPsi.EntityFrameworkCore.Filters;
+using KetPsi.EntityFrameworkCore.Infrastructure;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.Query;
 
@@ -35,6 +36,9 @@ internal sealed class SqlBuilder
     private const string AlwaysFalse = "0 = 1";
     private const string ExistsProjection = "1";
     private const string RootPath = "";
+
+    // The name of a computed column, such as an aggregate, in a derived table; repeats get a number.
+    private const string GroupValueName = "c";
 
     // An entity query reads its entity, which is the projection of the root path.
     private static readonly Projection EntityProjection = new([], [RootPath]);
@@ -252,6 +256,18 @@ internal sealed class SqlBuilder
                 WrapIf(State.Limit is not null || State.Distinct);
                 State.Limit = AddParameter(take.Count, property: null);
                 break;
+            case ProjectionNode projection when State.Keys is not null:
+                // The groups themselves: EF Core reads each row's key and element ordered by the key, and groups them in
+                // memory. Groups filtered or ordered by an aggregate can only be selected from.
+                if (State.Having.Count > 0 || State.Ordering.Count > 0 || State.Columns is not null)
+                {
+                    throw new NotSupportedException(ExceptionMessages.GroupRowsAfterGroupOperators);
+                }
+
+                State.Ordering.AddRange(State.Keys.Select(static k => new Ordering(k.Column, Descending: false)));
+                State.Keys = null;
+                State.Pending = new Projection(projection.Columns, projection.EntityPaths);
+                break;
             case ProjectionNode projection:
                 // Distinct entity rows are made distinct before they are projected.
                 EnsureNotProjected();
@@ -265,6 +281,34 @@ internal sealed class SqlBuilder
                 State.Ordering.Clear();
                 State.Distinct = true;
                 break;
+            case GroupByNode group:
+                // Grouping works on the rows the operators selected; an ordering before it has no effect, as in EF Core.
+                EnsureNotProjected();
+                WrapIf(State.HasPaging || State.Distinct);
+                State.Ordering.Clear();
+                State.Keys = [.. group.KeyPaths.Select(ResolveKey)];
+                break;
+            case HavingNode having:
+                EnsureGroupsNotPaged();
+                State.Having.Add(RenderHaving(having));
+                break;
+            case GroupOrderNode { IsThenBy: false } order:
+                EnsureGroupsNotPaged();
+                State.Ordering.Clear();
+                State.Ordering.Add(new Ordering(RenderGroupValue(order.Value, order.Values).Column, order.Descending));
+                break;
+            case GroupOrderNode order:
+                EnsureGroupsNotPaged();
+                State.Ordering.Add(new Ordering(RenderGroupValue(order.Value, order.Values).Column, order.Descending));
+                break;
+            case GroupSelectNode select:
+                if (State.Keys is null || State.Columns is not null)
+                {
+                    throw new UnreachableException("A Select on groups follows GroupBy and the operators on its groups.");
+                }
+
+                State.Columns = [.. select.Values.Select(v => RenderGroupValue(v, select.PredicateValues).Column)];
+                break;
             case TrackingNode or IgnoreQueryFiltersNode or IncludeNode:
                 // Tracking doesn't change the SQL, ignored filters were already left out of the resolved filters, and
                 // includes are applied when the rows are read; scalar terminals ignore them, as in EF Core.
@@ -274,13 +318,123 @@ internal sealed class SqlBuilder
         }
     }
 
-    // The generator only lets paging, Distinct and terminals follow Select.
+    // The generator only lets paging, Distinct and terminals follow Select, and only operators on groups follow GroupBy.
     private void EnsureNotProjected()
     {
-        if (State.Pending is not null || State.Columns is not null)
+        if (State.Pending is not null || State.Columns is not null || State.Keys is not null)
         {
             throw new UnreachableException("Only paging, Distinct and terminals can follow a projection.");
         }
+    }
+
+    // The generator lets Where and OrderBy on groups follow GroupBy and its Select, but not paging.
+    private void EnsureGroupsNotPaged()
+    {
+        if (State.Keys is null || State.HasPaging)
+        {
+            throw new UnreachableException("Where and OrderBy on groups follow GroupBy, before any paging.");
+        }
+    }
+
+    /// <summary>The column a key path reads, joining the navigations it goes through.</summary>
+    private GroupKey ResolveKey(string path)
+    {
+        var dot = path.LastIndexOf('.');
+        var target = GetTarget(dot < 0 ? RootPath : path[..dot], entity: null);
+        var property = target.Entity.GetProperty(path[(dot + 1)..]);
+
+        // A key read through a missing optional reference is null.
+        return new GroupKey(RootColumn(property, target.Alias), property with { IsNullable = property.IsNullable || !target.AlwaysExists });
+    }
+
+    /// <summary>
+    /// The SQL of a key part or aggregate at the grouped level, and a property that describes its value: its store type
+    /// types the parameters it is compared with, and its nullability decides how comparisons treat null.
+    /// </summary>
+    private (SqlColumn Column, BoundProperty Value) RenderGroupValue(GroupValue value, IReadOnlyList<object?> values)
+    {
+        var keys = State.Keys ?? throw new UnreachableException("Group values are read after GroupBy.");
+        switch (value.Kind)
+        {
+            case GroupValueKind.Key:
+                if (value.KeyIndex >= keys.Count)
+                {
+                    throw new ArgumentException(string.Format(
+                        CultureInfo.InvariantCulture, ExceptionMessages.GroupKeyIndexOutOfRange, value.KeyIndex, keys.Count));
+                }
+
+                var key = keys[value.KeyIndex];
+                return (key.Column, key.Value);
+
+            case GroupValueKind.Count or GroupValueKind.LongCount:
+                var isLong = value.Kind == GroupValueKind.LongCount;
+                var sql = value.Predicate is { } predicate
+                    ? _dialect.ConditionalCount(RenderPredicate(_entity.BindPredicate(predicate), values, negated: false, State.Alias), isLong)
+                    : _dialect.Count(isLong);
+                return (Computed(sql), CountValue(isLong));
+
+            case GroupValueKind.DistinctCount:
+                var distinctLong = value.ValueType == AggregateValueType.Int64;
+                var distinct = _dialect.DistinctCount(Column(_entity.GetProperty(value.PropertyName!), State.Alias), distinctLong);
+                return (Computed(distinct), CountValue(distinctLong));
+
+            case GroupValueKind.Aggregate:
+                var property = _entity.GetProperty(value.PropertyName!);
+                var aggregate = _dialect.Aggregate(value.Function, Column(property, State.Alias), value.ValueType);
+                return (Computed(aggregate), AggregateValue(value, property));
+
+            default:
+                throw new UnreachableException(value.Kind.ToString());
+        }
+    }
+
+    private static SqlColumn Computed(string sql) => new(sql, GroupValueName, IsComputed: true);
+
+    private static BoundProperty CountValue(bool isLong)
+        => isLong
+            ? new BoundProperty(GroupValueName, GroupValueName, "bigint", IsNullable: false, typeof(long), IsShadow: false)
+            : new BoundProperty(GroupValueName, GroupValueName, "int", IsNullable: false, typeof(int), IsShadow: false);
+
+    // Sum is coalesced to zero; Min, Max and Average of a group are null only when every value is.
+    private static BoundProperty AggregateValue(GroupValue value, BoundProperty property)
+    {
+        (string StoreType, Type ClrType) result = (value.Function, value.ValueType) switch
+        {
+            (AggregateFunction.Min or AggregateFunction.Max, _) => (property.StoreType, property.ClrType),
+            (AggregateFunction.Average, AggregateValueType.Int32 or AggregateValueType.Int64 or AggregateValueType.Double) => ("float", typeof(double)),
+            (_, AggregateValueType.Int32) => ("int", typeof(int)),
+            (_, AggregateValueType.Int64) => ("bigint", typeof(long)),
+            (_, AggregateValueType.Double) => ("float", typeof(double)),
+            (_, AggregateValueType.Single) => ("real", typeof(float)),
+            (_, AggregateValueType.Decimal) => ("decimal", typeof(decimal)),
+            _ => throw new ArgumentOutOfRangeException(nameof(value), value.ValueType, ExceptionMessages.GroupAggregateNeedsNumericType),
+        };
+
+        var nullable = value.Function != AggregateFunction.Sum && property.IsNullable;
+        return new BoundProperty(GroupValueName, GroupValueName, result.StoreType, nullable, result.ClrType, IsShadow: false);
+    }
+
+    /// <summary>A <c>HAVING</c> condition: the predicate with each operand name replaced by that operand's SQL.</summary>
+    private string RenderHaving(HavingNode having)
+    {
+        var operands = having.Operands.Select(o => RenderGroupValue(o, having.Values)).ToArray();
+        var sql = new Dictionary<BoundProperty, string>(ReferenceEqualityComparer.Instance);
+        BoundProperty Resolve(string name)
+        {
+            if (!int.TryParse(name, NumberStyles.None, CultureInfo.InvariantCulture, out var index) || index >= operands.Length)
+            {
+                throw new ArgumentException(string.Format(
+                    CultureInfo.InvariantCulture, ExceptionMessages.HavingOperandOutOfRange, name, operands.Length));
+            }
+
+            // Each use gets its own instance, so the same value read twice maps to its SQL either way.
+            var operand = operands[index].Value with { Name = name };
+            sql[operand] = operands[index].Column.Sql;
+            return operand;
+        }
+
+        var predicate = PredicateBinder.Bind(having.Predicate, Resolve, typeof(IGrouping<,>));
+        return RenderPredicate(predicate, having.Values, negated: false, property => sql[property]);
     }
 
     private void ApplyRoot(RootNode root)
@@ -311,19 +465,24 @@ internal sealed class SqlBuilder
         switch (terminal)
         {
             case QueryTerminal.Rows:
+                if (State.Keys is not null && State.Columns is null)
+                {
+                    throw new NotSupportedException(ExceptionMessages.GroupEnumerationNotSupported);
+                }
+
                 Materialize();
                 ApplyRowLimit(rowLimit);
                 return RenderSelect(State, SelectList(State), includeOrdering: true);
 
             case QueryTerminal.Count or QueryTerminal.LongCount:
                 // A projection that isn't distinct has one row per entity row, so it isn't selected: its navigations
-                // are not joined, as in EF Core.
-                WrapIf(State.HasPaging || State.Distinct);
+                // are not joined, as in EF Core. Groups are counted as the rows of a derived table.
+                WrapIf(State.HasPaging || State.Distinct || State.Keys is not null);
                 return RenderSelect(State, _dialect.Count(terminal == QueryTerminal.LongCount), includeOrdering: false);
 
             case QueryTerminal.Aggregate:
-                // Like Count, an aggregate works on the rows the operators selected.
-                WrapIf(State.HasPaging || State.Distinct);
+                // Like Count, an aggregate works on the rows the operators selected, and over groups on a derived table.
+                WrapIf(State.HasPaging || State.Distinct || State.Keys is not null);
                 var column = AggregatedColumn(aggregate!);
                 return RenderSelect(State, _dialect.Aggregate(aggregate!.Function, column, aggregate.ValueType), includeOrdering: false);
 
@@ -542,7 +701,9 @@ internal sealed class SqlBuilder
         // projection reads, or every entity column; then the ordering columns, which the outer query orders by.
         List<SqlColumn> selected = inner.Columns is { } columns
             ? [.. columns]
-            : [.. RootProperties(inner.Pending).Select(p => RootColumn(p, inner.Alias))];
+            : inner.Keys is { } keys
+                ? [.. keys.Select(static k => k.Column)]
+                : [.. RootProperties(inner.Pending).Select(p => RootColumn(p, inner.Alias))];
         foreach (var ordering in inner.Ordering)
         {
             if (!selected.Exists(c => c.Sql == ordering.Column.Sql))
@@ -553,14 +714,14 @@ internal sealed class SqlBuilder
 
         var names = UniqueNames(selected);
         var selectList = string.Join(
-            ", ", selected.Select((c, i) => names[i] == c.Name ? c.Sql : c.Sql + " AS " + _dialect.QuoteIdentifier(names[i])));
+            ", ", selected.Select((c, i) => names[i] == c.Name && !c.IsComputed ? c.Sql : c.Sql + " AS " + _dialect.QuoteIdentifier(names[i])));
         var source = "(" + RenderSelect(inner, selectList, includeOrdering: true) + ")";
 
         var outer = new SelectState(source, NextAlias()) { Pending = inner.Pending };
         SqlColumn Outer(int index) => new(outer.Alias + "." + _dialect.QuoteIdentifier(names[index]), names[index]);
-        if (inner.Columns is not null)
+        if (inner.Columns is not null || inner.Keys is not null)
         {
-            outer.Columns = [.. Enumerable.Range(0, inner.Columns.Count).Select(Outer)];
+            outer.Columns = [.. Enumerable.Range(0, inner.Columns?.Count ?? inner.Keys!.Count).Select(Outer)];
         }
 
         outer.Ordering.AddRange(inner.Ordering.Select(o => o with { Column = Outer(selected.FindIndex(c => c.Sql == o.Column.Sql)) }));
@@ -637,6 +798,16 @@ internal sealed class SqlBuilder
             sql.Append(" WHERE ").AppendJoin(" AND ", state.Predicates);
         }
 
+        if (state.Keys is { } keys)
+        {
+            sql.Append(" GROUP BY ").AppendJoin(", ", keys.Select(static k => k.Column.Sql));
+        }
+
+        if (state.Having.Count > 0)
+        {
+            sql.Append(" HAVING ").AppendJoin(" AND ", state.Having);
+        }
+
         if (hasOrderBy)
         {
             sql.Append(" ORDER BY ").AppendJoin(", ", state.Ordering.Select(static o => o.Descending ? o.Column.Sql + " DESC" : o.Column.Sql));
@@ -654,24 +825,27 @@ internal sealed class SqlBuilder
         return sql.ToString();
     }
 
-    private string RenderPredicate(BoundPredicate predicate, IReadOnlyList<object?> values, bool negated, string alias) => predicate switch
+    private string RenderPredicate(BoundPredicate predicate, IReadOnlyList<object?> values, bool negated, string alias)
+        => RenderPredicate(predicate, values, negated, ColumnsAt(alias));
+
+    private string RenderPredicate(BoundPredicate predicate, IReadOnlyList<object?> values, bool negated, Func<BoundProperty, string> column) => predicate switch
     {
         BoundAnd and => Combine(
-            negated ? "OR" : "AND", RenderPredicate(and.Left, values, negated, alias), RenderPredicate(and.Right, values, negated, alias)),
+            negated ? "OR" : "AND", RenderPredicate(and.Left, values, negated, column), RenderPredicate(and.Right, values, negated, column)),
         BoundOr or => Combine(
-            negated ? "AND" : "OR", RenderPredicate(or.Left, values, negated, alias), RenderPredicate(or.Right, values, negated, alias)),
-        BoundNot not => RenderPredicate(not.Operand, values, !negated, alias),
-        BoundComparison comparison => RenderComparison(comparison, values[comparison.ValueIndex], negated, alias),
+            negated ? "AND" : "OR", RenderPredicate(or.Left, values, negated, column), RenderPredicate(or.Right, values, negated, column)),
+        BoundNot not => RenderPredicate(not.Operand, values, !negated, column),
+        BoundComparison comparison => RenderComparison(comparison, values[comparison.ValueIndex], negated, column),
         BoundBooleanProperty boolean =>
-            Column(boolean.Property, alias) + " = " + (negated ? _dialect.FalseLiteral : _dialect.TrueLiteral),
-        BoundNullCheck nullCheck => Column(nullCheck.Property, alias) + (nullCheck.IsNull != negated ? " IS NULL" : " IS NOT NULL"),
-        BoundInList inList => RenderInList(inList, values[inList.ValueIndex], negated, alias),
+            column(boolean.Property) + " = " + (negated ? _dialect.FalseLiteral : _dialect.TrueLiteral),
+        BoundNullCheck nullCheck => column(nullCheck.Property) + (nullCheck.IsNull != negated ? " IS NULL" : " IS NOT NULL"),
+        BoundInList inList => RenderInList(inList, values[inList.ValueIndex], negated, column),
         _ => throw new UnreachableException(predicate.GetType().ToString()),
     };
 
-    private string RenderComparison(BoundComparison comparison, object? value, bool negated, string alias)
+    private string RenderComparison(BoundComparison comparison, object? value, bool negated, Func<BoundProperty, string> columnOf)
     {
-        var column = Column(comparison.Property, alias);
+        var column = columnOf(comparison.Property);
         var effective = negated ? Negate(comparison.Comparison) : comparison.Comparison;
 
         if (value is null)
@@ -694,7 +868,7 @@ internal sealed class SqlBuilder
             : sql;
     }
 
-    private string RenderInList(BoundInList inList, object? value, bool negated, string alias)
+    private string RenderInList(BoundInList inList, object? value, bool negated, Func<BoundProperty, string> columnOf)
     {
         if (value is not IEnumerable list)
         {
@@ -717,7 +891,7 @@ internal sealed class SqlBuilder
             }
         }
 
-        var column = Column(inList.Property, alias);
+        var column = columnOf(inList.Property);
         var parameter = AddParameter(_dialect.CreateListParameterValue(nonNullValues), property: null);
         var inSql = _dialect.InList(column, parameter, inList.Property.StoreType);
         var sql = negated ? "NOT (" + inSql + ")" : inSql;
@@ -783,6 +957,8 @@ internal sealed class SqlBuilder
 
     private string Column(BoundProperty property, string alias) => alias + "." + _dialect.QuoteIdentifier(property.ColumnName);
 
+    private Func<BoundProperty, string> ColumnsAt(string alias) => property => Column(property, alias);
+
     private string AddParameter(object value, BoundProperty? property)
     {
         var name = _dialect.ParameterName(_parameters.Count);
@@ -792,8 +968,14 @@ internal sealed class SqlBuilder
 
     private string NextAlias() => _dialect.QuoteIdentifier(AliasPrefix + (_aliasCount++).ToString(CultureInfo.InvariantCulture));
 
-    /// <summary>A selected column: its SQL, and its name in the rows, which is the column name unless renamed.</summary>
-    private readonly record struct SqlColumn(string Sql, string Name);
+    /// <summary>
+    /// A selected column: its SQL, and its name in the rows, which is the column name unless renamed. A computed
+    /// column, such as an aggregate, always needs its name given in a derived table.
+    /// </summary>
+    private readonly record struct SqlColumn(string Sql, string Name, bool IsComputed = false);
+
+    /// <summary>A part of a group's key: its column, and the property it reads, nullable when its navigation can be missing.</summary>
+    private sealed record GroupKey(SqlColumn Column, BoundProperty Value);
 
     private readonly record struct Ordering(SqlColumn Column, bool Descending);
 
@@ -827,6 +1009,12 @@ internal sealed class SqlBuilder
 
         /// <summary>The columns a selected projection reads, or <see langword="null"/> for every entity column.</summary>
         public IReadOnlyList<SqlColumn>? Columns { get; set; }
+
+        /// <summary>The key columns of a grouped level, or <see langword="null"/> when the rows are not grouped.</summary>
+        public IReadOnlyList<GroupKey>? Keys { get; set; }
+
+        /// <summary>The conditions on the groups of a grouped level.</summary>
+        public List<string> Having { get; } = [];
 
         /// <summary>Whether the rows are distinct, which a later operator must not change.</summary>
         public bool Distinct { get; set; }

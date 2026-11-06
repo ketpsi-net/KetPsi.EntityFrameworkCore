@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using KetPsi.EntityFrameworkCore.Execution;
+using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.Query;
 using KetPsi.EntityFrameworkCore.Sql;
 
@@ -42,6 +43,36 @@ public static class SqlProjection
         var query = ToProjected(source);
         return query.WithTail(new DistinctNode(query.Tail));
     }
+
+    /// <summary>
+    /// Appends <c>Where</c> after a <c>Select</c> on groups: the predicate over the key parts and aggregates the
+    /// filtered members read becomes a <c>HAVING</c> condition.
+    /// </summary>
+    /// <param name="source">The query projected from groups.</param>
+    /// <param name="predicate">The predicate over <paramref name="operands"/>: property name <c>"0"</c> is <c>operands[0]</c>.</param>
+    /// <param name="operands">The key parts and aggregates the predicate compares.</param>
+    /// <param name="values">The value slots of the predicate and the operands' count predicates. The query takes ownership of the array.</param>
+    public static IQueryable<T> Where<T>(IQueryable<T> source, PredicateTemplate predicate, IReadOnlyList<GroupValue> operands, object?[] values)
+    {
+        var query = ToProjected(source);
+        return query.WithTail(SqlGrouping.CreateHaving(query.Tail, predicate, operands, values));
+    }
+
+    /// <summary>Appends <c>OrderBy</c> after a <c>Select</c> on groups, on the key part or aggregate the member reads.</summary>
+    public static IOrderedQueryable<T> OrderBy<T>(IQueryable<T> source, GroupValue value, object?[] values)
+        => AppendGroupOrder(source, value, values, descending: false, isThenBy: false);
+
+    /// <summary>Appends <c>OrderByDescending</c> after a <c>Select</c> on groups.</summary>
+    public static IOrderedQueryable<T> OrderByDescending<T>(IQueryable<T> source, GroupValue value, object?[] values)
+        => AppendGroupOrder(source, value, values, descending: true, isThenBy: false);
+
+    /// <summary>Appends <c>ThenBy</c> after a <c>Select</c> on groups.</summary>
+    public static IOrderedQueryable<T> ThenBy<T>(IOrderedQueryable<T> source, GroupValue value, object?[] values)
+        => AppendGroupOrder(source, value, values, descending: false, isThenBy: true);
+
+    /// <summary>Appends <c>ThenByDescending</c> after a <c>Select</c> on groups.</summary>
+    public static IOrderedQueryable<T> ThenByDescending<T>(IOrderedQueryable<T> source, GroupValue value, object?[] values)
+        => AppendGroupOrder(source, value, values, descending: true, isThenBy: true);
 
     /// <summary>
     /// Computes <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c> of a query projected to one property, such as
@@ -124,6 +155,12 @@ public static class SqlProjection
     /// <summary>Whether there is any result: <c>AnyAsync</c>.</summary>
     public static Task<bool> AnyAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
         => ProjectionRunner.AnyAsync(ToProjected(source), cancellationToken);
+
+    private static ProjectedQueryable<T> AppendGroupOrder<T>(IQueryable<T> source, GroupValue value, object?[] values, bool descending, bool isThenBy)
+    {
+        var query = ToProjected(source);
+        return query.WithTail(SqlGrouping.CreateOrder(query.Tail, value, values, descending, isThenBy));
+    }
 
     internal static ProjectedQueryable<T> ToProjected<T>(IQueryable<T> source)
     {

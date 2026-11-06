@@ -14,6 +14,8 @@ internal static class InterceptorEmitter
 
     private const string SqlQuery = "global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery";
     private const string SqlProjection = "global::KetPsi.EntityFrameworkCore.Infrastructure.SqlProjection";
+    private const string SqlGrouping = "global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping";
+    private const string GroupValue = "global::KetPsi.EntityFrameworkCore.Infrastructure.GroupValue";
     private const string ProjectionReader = "global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader";
     private const string Queryable = "global::System.Linq.IQueryable";
     private const string ReaderHelper = "Reader";
@@ -31,7 +33,10 @@ internal static class InterceptorEmitter
     /// <summary>Whether the site has everything its interceptor needs.</summary>
     public static bool CanIntercept(CallSite site)
         => site is { Interception: not null, Signature: not null, Operator: { } kind }
-            && (!TakesPredicate(site) || site.Predicate is not null)
+            && (site.Group is not null || CanInterceptEntityOperator(site, kind));
+
+    private static bool CanInterceptEntityOperator(CallSite site, OperatorKind kind)
+        => (!TakesPredicate(site) || site.Predicate is not null)
             && (!IsOrdering(kind) || site.OrderProperty is not null)
             && (kind is not (OperatorKind.Include or OperatorKind.ThenInclude) || site.Include is not null)
             && (kind != OperatorKind.Select || site.Projection is not null)
@@ -62,7 +67,7 @@ internal static class InterceptorEmitter
             WriteInterceptor(writer, sites[i], i);
         }
 
-        if (sites.Any(static s => s.Operator == OperatorKind.Select))
+        if (sites.Any(static s => s.Operator == OperatorKind.Select || s.Group is not null))
         {
             // Converts a reader lambda to its delegate type, inferring the projected type, which can be anonymous.
             writer
@@ -102,6 +107,16 @@ internal static class InterceptorEmitter
             writer.Line($"private static readonly {PredicateTemplate} {template} = {site.Predicate.TemplateCode};").Line();
         }
 
+        if (site.Group?.TemplateCode is { } groupTemplate)
+        {
+            writer.Line($"private static readonly {PredicateTemplate} {template} = {groupTemplate};").Line();
+        }
+
+        if (site.Group is { } groupCall && GroupValues(groupCall) is { Count: > 0 } groupValues)
+        {
+            writer.Line($"private static readonly {GroupValue}[] Values{number} = new {GroupValue}[] {{ {string.Join(", ", groupValues)} }};").Line();
+        }
+
         writer.Line(site.Interception!);
         if (site.UsesDecimalOperators)
         {
@@ -111,6 +126,12 @@ internal static class InterceptorEmitter
 
         var typeParameters = signature.TypeParameters.Count == 0 ? "" : "<" + string.Join(", ", signature.TypeParameters) + ">";
         writer.Open($"public static {signature.ReturnType} {signature.Name}{number}{typeParameters}({declaration})");
+
+        if (site.Group is { } group)
+        {
+            WriteGroup(writer, site, group, source, fallback, template, "Values" + number);
+            return;
+        }
 
         if (site.ProjectedFrom is not null)
         {
@@ -211,6 +232,136 @@ internal static class InterceptorEmitter
             .Line($"return {fallback};")
             .Close();
     }
+
+    // The group values a call passes: a result selector's, or the call's own.
+    private static EquatableArray<string> GroupValues(GroupCallModel call)
+        => call.Kind == GroupCallKind.GroupBy ? call.GroupBy?.Result?.Values ?? default : call.Values;
+
+    // GroupBy, and the operators on its groups and after a Select of them. The interceptors are generic: the key, and
+    // so the grouping type, can be anonymous.
+    private static void WriteGroup(CodeWriter writer, CallSite site, GroupCallModel group, string source, string fallback, string template, string values)
+    {
+        var signature = site.Signature!;
+        var typeParameters = signature.TypeParameters;
+        var slots = Slots(group.PredicateValues);
+        var guard = $"if (!{SqlGrouping}.IsInterceptable({source}))";
+        switch (group.Kind)
+        {
+            case GroupCallKind.GroupBy:
+                WriteGroupBy(writer, group.GroupBy!, source, fallback, values, typeParameters);
+                return;
+
+            case GroupCallKind.ProjectedWhere or GroupCallKind.ProjectedOrder:
+                writer.Open($"if ({source} is var query && {SqlProjection}.IsInterceptable(query))");
+                WriteCaptures(writer, group.CaptureCount, group.CaptureParameter);
+                writer
+                    .Line(group.Kind == GroupCallKind.ProjectedWhere
+                        ? $"return {SqlProjection}.Where(query, {template}, {values}, {slots});"
+                        : $"return {SqlProjection}.{site.Operator}(query, {values}[0], {slots});")
+                    .Close()
+                    .Line()
+                    .Line($"return {fallback};")
+                    .Close();
+                return;
+
+            case GroupCallKind.Terminal or GroupCallKind.Where when site.Operator is OperatorKind.ToList or OperatorKind.ToArray && signature.ContainingType == Enumerable:
+                // Enumerable.ToList and ToArray accept any sequence; only grouped KetPsi queries run here.
+                writer
+                    .Open($"if ({source} is {Queryable}<{typeParameters[0]}> query && {SqlGrouping}.IsInterceptable(query))")
+                    .Line($"return {SqlGrouping}.{site.Operator}(query);")
+                    .Close()
+                    .Line()
+                    .Line($"return {fallback};")
+                    .Close();
+                return;
+        }
+
+        writer
+            .Open(guard)
+            .Line($"return {fallback};")
+            .Close()
+            .Line();
+        WriteCaptures(writer, group.CaptureCount, group.CaptureParameter);
+
+        var call = group.Kind switch
+        {
+            GroupCallKind.Where when site.Operator == OperatorKind.Where => $"{SqlGrouping}.Where({source}, {template}, {values}, {slots})",
+            GroupCallKind.Order => $"{SqlGrouping}.{site.Operator}({source}, {values}[0], {slots})",
+            GroupCallKind.Select =>
+                $"({Queryable}<{typeParameters[typeParameters.Count - 1]}>)(object){SqlGrouping}.Select({source}, {values}, {slots}, {ReaderHelper}({group.ReaderCode}))",
+            _ => Terminal(site, group.Kind == GroupCallKind.Where ? $"{SqlGrouping}.Where({source}, {template}, {values}, {slots})" : source),
+        };
+        writer.Line($"return {call};").Close();
+    }
+
+    private static string Terminal(CallSite site, string query)
+    {
+        var parameters = site.Signature!.Parameters;
+        return site.IsAsync
+            ? $"{SqlGrouping}.{site.Operator}{AsyncSuffix}({query}, {parameters[parameters.Count - 1].Name})"
+            : $"{SqlGrouping}.{site.Operator}({query})";
+    }
+
+    private static void WriteGroupBy(
+        CodeWriter writer, GroupByModel groupBy, string source, string fallback, string values, EquatableArray<string> typeParameters)
+    {
+        var entity = groupBy.EntityType;
+        var key = typeParameters[1];
+        var element = typeParameters.Contains("TElement") ? "TElement" : typeParameters[0];
+        writer
+            .Line($"var query = ({Queryable}<{entity}>)(object){source};")
+            .Open($"if (!{SqlQuery}.IsInterceptable(query))")
+            .Line($"return {fallback};")
+            .Close()
+            .Line();
+
+        // A result selector returns its own results, never the groups, so it reads no element.
+        var result = groupBy.Result;
+        string elementPaths, elementEntityPaths, elementReader;
+        if (result is null)
+        {
+            WriteCaptures(writer, groupBy.ElementCaptureCount, groupBy.ElementParameter);
+            (elementPaths, elementEntityPaths) = (Strings(groupBy.ElementPaths), Strings(groupBy.ElementEntityPaths));
+            elementReader = $"({ProjectionReader}<{element}>)(object){ReaderHelper}({groupBy.ElementReaderCode})";
+        }
+        else
+        {
+            (elementPaths, elementEntityPaths) = (Strings(default), Strings(default));
+            elementReader = $"({ProjectionReader}<{element}>)(static ({ProjectionTranslator.Reader}, {ProjectionTranslator.Ordinals}, {ProjectionTranslator.Entities}) => default!)";
+        }
+
+        writer
+            .Line($"var groups = {SqlGrouping}.GroupBy<{entity}, {key}, {element}>(")
+            .Line("    query,")
+            .Line($"    {Strings(groupBy.KeyPaths)},")
+            .Line($"    ({ProjectionReader}<{key}>)(object){ReaderHelper}({groupBy.KeyReaderCode}),")
+            .Line($"    {elementPaths},")
+            .Line($"    {elementEntityPaths},")
+            .Line($"    {elementReader});");
+
+        if (result is null)
+        {
+            writer.Line("return groups;").Close();
+            return;
+        }
+
+        WriteCaptures(writer, result.CaptureCount, result.CaptureParameter);
+        writer
+            .Line($"return ({Queryable}<{typeParameters[typeParameters.Count - 1]}>)(object){SqlGrouping}.Select(groups, {values}, {Slots(result.PredicateValues)}, {ReaderHelper}({result.ReaderCode}));")
+            .Close();
+    }
+
+    // Captured values are read once per call, in source order, from the lambda the caller built.
+    private static void WriteCaptures(CodeWriter writer, int count, string? parameter)
+    {
+        if (count > 0 && parameter is not null)
+        {
+            writer.Line($"var {ProjectionTranslator.Captures} = {CapturedValues}.ReadAll({parameter});");
+        }
+    }
+
+    private static string Slots(EquatableArray<string> values)
+        => values.Count == 0 ? NoValues : $"new object?[] {{ {string.Join(", ", values)} }}";
 
     // SqlQuery.Aggregate over an entity property, or SqlProjection.Aggregate over a one-column projection.
     private static string Aggregate(string type, CallSite site, string element, string source, string? propertyPath, AggregateModel aggregate)

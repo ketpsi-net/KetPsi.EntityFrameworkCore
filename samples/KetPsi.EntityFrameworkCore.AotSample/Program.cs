@@ -191,6 +191,69 @@ await CheckAsync(
     },
     "throws");
 
+await CheckAsync(
+    "GroupBy a key with aggregates",
+    async db => string.Join(",", (await db.Products.GroupBy(p => p.Category)
+            .Select(g => new { g.Key, Count = g.Count(), Total = g.Sum(p => p.Price), MaxStock = g.Max(p => p.Stock) })
+            .ToListAsync(cancellationToken))
+        .OrderBy(x => x.Key)
+        .Select(x => Invariant($"{x.Key}:{x.Count}:{x.Total:0.00}:{x.MaxStock}"))),
+    "Books:3:25.99:40,Games:3:66.49:8,Music:2:27.00:3");
+
+var cheap = 10m;
+await CheckAsync(
+    "GroupBy a composite key, with HAVING and a counted predicate",
+    db => Task.FromResult(string.Join(",", db.Products.GroupBy(p => new { p.Category, p.IsActive })
+            .Where(g => g.Count() > 1)
+            .Select(g => new { g.Key.Category, g.Key.IsActive, Cheap = g.Count(p => p.Price < cheap) })
+            .ToList()
+        .OrderBy(x => x.Category)
+        .Select(x => $"{x.Category}:{x.IsActive}:{x.Cheap}"))),
+    "Books:True:3,Games:True:0");
+
+await CheckAsync(
+    "GroupBy through a navigation, with a distinct count",
+    db => Task.FromResult(string.Join(",", db.Reviews.GroupBy(r => r.Product.Name)
+            .Select(g => new { g.Key, Stars = g.Select(r => r.Stars).Distinct().Count(), Average = g.Average(r => r.Stars) })
+            .OrderBy(x => x.Key)
+            .ToList()
+        .Select(x => Invariant($"{x.Key}:{x.Stars}:{x.Average}")))),
+    "Dune:2:4.5,Hades:1:3,Kind of Blue:1:5");
+
+await CheckAsync(
+    "Where, OrderBy and Take after a Select on groups",
+    db => Task.FromResult(string.Join(",", db.Products.GroupBy(p => p.Category)
+        .Select(g => new { g.Key, Count = g.Count() })
+        .Where(x => x.Count >= 3)
+        .OrderByDescending(x => x.Key)
+        .Take(1)
+        .ToList()
+        .Select(x => $"{x.Key}:{x.Count}"))),
+    "Games:3");
+
+await CheckAsync(
+    "GroupBy with a result selector, and Count and Any of groups",
+    async db =>
+    {
+        var maxima = db.Products.GroupBy(p => p.Category, p => p.Price, (key, prices) => new { key, Max = prices.Max() }).ToList();
+        var count = db.Products.GroupBy(p => p.Category).Count();
+        var any = await db.Products.GroupBy(p => p.Category).AnyAsync(g => g.Count() > 3, cancellationToken);
+        return string.Join(",", maxima.OrderBy(x => x.key).Select(x => Invariant($"{x.key}:{x.Max:0.00}"))) + $"|{count}|{any}";
+    },
+    "Books:9.99,Games:24.50,Music:15.00|3|False");
+
+await CheckAsync(
+    "GroupBy returns the groups themselves",
+    db =>
+    {
+        var groups = db.Products.AsNoTracking().GroupBy(p => p.Category).ToList();
+        var names = db.Products.GroupBy(p => p.Category, p => p.Name).ToList();
+        return Task.FromResult(
+            string.Join(",", groups.Select(g => $"{g.Key}:{string.Join(" ", g.Select(p => p.Id).Order())}"))
+            + "|" + string.Join(",", names.Select(g => $"{g.Key}:{g.Count()}")));
+    },
+    "Books:1 5 8,Games:2 4 7,Music:3 6|Books:3,Games:3,Music:2");
+
 #if NET8_0
 // EF Core 8 cannot track entities under Native AOT: tracking queries fail with a clear error instead of EF Core's
 // "model building is not supported". Add AsNoTracking(), or move to EF Core 9 or later to track.
@@ -261,6 +324,15 @@ await CheckAsync(
         return $"{loaded}|{saved}|{stars}";
     },
     "True|1|1");
+
+await CheckAsync(
+    "Tracked groups attach their entities",
+    db =>
+    {
+        var groups = db.Products.GroupBy(p => p.Category).ToList();
+        return Task.FromResult($"{groups.Count}|{db.ChangeTracker.Entries().Count()}");
+    },
+    "3|8");
 
 await CheckAsync(
     "Tracked projection attaches its entities and connects them",

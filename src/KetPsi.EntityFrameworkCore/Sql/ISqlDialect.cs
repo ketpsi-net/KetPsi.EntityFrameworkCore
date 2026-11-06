@@ -29,6 +29,18 @@ public interface ISqlDialect
     /// <summary>Returns the row-count aggregate: <c>Count</c> or, when <paramref name="isLong"/>, <c>LongCount</c>.</summary>
     string Count(bool isLong);
 
+    /// <summary>
+    /// Returns the aggregate that counts the rows of a group where <paramref name="condition"/> is true:
+    /// <c>g.Count(predicate)</c>, or <c>LongCount</c> when <paramref name="isLong"/>.
+    /// </summary>
+    string ConditionalCount(string condition, bool isLong);
+
+    /// <summary>
+    /// Returns the aggregate that counts the distinct non-null values of <paramref name="column"/>:
+    /// <c>g.Select(x =&gt; x.Property).Distinct().Count()</c>, or <c>LongCount</c> when <paramref name="isLong"/>.
+    /// </summary>
+    string DistinctCount(string column, bool isLong);
+
     /// <summary>Wraps <paramref name="subquery"/> in a statement that returns one boolean: whether it has any row.</summary>
     string Exists(string subquery);
 

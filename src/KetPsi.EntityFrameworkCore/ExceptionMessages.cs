@@ -99,6 +99,34 @@ internal static class ExceptionMessages
     public const string NotAProjectedQuery =
         "KetPsi.EntityFrameworkCore can only continue a query projected by an intercepted Select, but the source is of type '{0}'.";
 
+    public const string NotAGroupedQuery =
+        "KetPsi.EntityFrameworkCore can only continue a query grouped by an intercepted GroupBy, but the source is of type '{0}'.";
+
+    public const string GroupEnumerationNotSupported =
+        "The groups of a GroupBy are read through their key and element readers; a statement for grouped rows needs a Select.";
+
+    public const string GroupRowsAfterGroupOperators =
+        "KetPsi.EntityFrameworkCore can only return the groups of a GroupBy directly; after Where or OrderBy on the " +
+        "groups, select their keys and aggregates with Select.";
+
+    public const string GroupAggregateThroughNavigation =
+        "An aggregate of a group must read a property of the grouped entity itself, not one through a navigation.";
+
+    public const string GroupAggregateNeedsNumericType =
+        "Sum and Average of a group need the numeric type of their overload.";
+
+    public const string GroupKeyRequired =
+        "A GroupBy needs at least one key path.";
+
+    public const string GroupKeyIndexOutOfRange =
+        "The group value reads key part {0}, but the GroupBy has {1} key part(s).";
+
+    public const string GroupValuesRequired =
+        "A Select on groups needs at least one value.";
+
+    public const string HavingOperandOutOfRange =
+        "The group predicate reads operand '{0}', but there are {1} operand(s).";
+
     // EF Core's own message, so no-tracking queries with a cycle fail the same way.
     public const string IncludeWithCycle =
         "The Include path '{0}->{1}' results in a cycle. Cycles are not allowed in no-tracking queries; either use a " +

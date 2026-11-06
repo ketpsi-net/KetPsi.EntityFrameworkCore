@@ -88,6 +88,22 @@ public sealed class SqlServerDialect : ISqlDialect
     public string Count(bool isLong) => isLong ? "COUNT_BIG(*)" : "COUNT(*)";
 
     /// <inheritdoc/>
+    public string ConditionalCount(string condition, bool isLong)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(condition);
+
+        return (isLong ? "COUNT_BIG" : "COUNT") + $"(CASE WHEN {condition} THEN 1 END)";
+    }
+
+    /// <inheritdoc/>
+    public string DistinctCount(string column, bool isLong)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(column);
+
+        return (isLong ? "COUNT_BIG" : "COUNT") + $"(DISTINCT ({column}))";
+    }
+
+    /// <inheritdoc/>
     /// <remarks>The same SQL as EF Core's SQL Server provider, so results have the same types and precision.</remarks>
     public string Aggregate(AggregateFunction function, string column, AggregateValueType valueType)
     {

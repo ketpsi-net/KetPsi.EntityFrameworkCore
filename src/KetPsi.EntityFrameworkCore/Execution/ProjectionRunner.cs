@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using KetPsi.EntityFrameworkCore.Infrastructure;
@@ -145,16 +146,10 @@ internal static class ProjectionRunner
     }
 
     private static object? ExecuteScalar<T>(ProjectedQueryable<T> query, QueryTerminal terminal)
-    {
-        var (_, dialect, statement) = QueryRunner.PrepareStatement(query.Context, query.Tail, terminal, rowLimit: null);
-        return QueryExecutor.ExecuteScalar(query.Context, dialect, statement);
-    }
+        => QueryRunner.ExecuteScalar(query.Context, query.Tail, terminal);
 
     private static Task<object?> ExecuteScalarAsync<T>(ProjectedQueryable<T> query, QueryTerminal terminal, CancellationToken cancellationToken)
-    {
-        var (_, dialect, statement) = QueryRunner.PrepareStatement(query.Context, query.Tail, terminal, rowLimit: null);
-        return QueryExecutor.ExecuteScalarAsync(query.Context, dialect, statement, cancellationToken);
-    }
+        => QueryRunner.ExecuteScalarAsync(query.Context, query.Tail, terminal, cancellationToken);
 
     private static PreparedRows<T> Prepare<T>(ProjectedQueryable<T> query, int? rowLimit)
     {
@@ -163,6 +158,18 @@ internal static class ProjectionRunner
         var reader = query.Reader;
         return new PreparedRows<T>(dialect, statement, row => reader(row, ordinals, []));
     }
+
+    /// <summary>
+    /// For each value of a grouped <c>Select</c>, its ordinal in the statement, which selects the values in order.
+    /// </summary>
+    internal static int[] Ordinals(GroupSelectNode projection) => [.. Enumerable.Range(0, projection.Values.Count)];
+
+    private static int[] Ordinals(QueryNode projection) => projection switch
+    {
+        ProjectionNode entityProjection => Ordinals(entityProjection),
+        GroupSelectNode groupProjection => Ordinals(groupProjection),
+        _ => throw new UnreachableException(projection.GetType().ToString()),
+    };
 
     // Included collections load with the keys of every entity read, so every row is read before any is returned.
     private static IEnumerable<T> LoadEntities<T>(ProjectedEntities<T> entities)
@@ -185,8 +192,8 @@ internal static class ProjectionRunner
     /// <summary>The statement and loader for a projection that selects entities, or <see langword="null"/> without.</summary>
     private static ProjectedEntities<T>? PrepareEntities<T>(ProjectedQueryable<T> query, int? rowLimit)
     {
-        var projection = query.Projection;
-        if (projection.EntityPaths.Count == 0)
+        // Groups have no entities: their values are keys and aggregates.
+        if (query.Projection is not ProjectionNode { EntityPaths.Count: > 0 } projection)
         {
             return null;
         }

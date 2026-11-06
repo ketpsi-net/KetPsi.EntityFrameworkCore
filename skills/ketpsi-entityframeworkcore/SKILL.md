@@ -44,6 +44,8 @@ var page = await db.Blogs
 - `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below without a predicate (see
   Projections below).
 - `Distinct()` on the entities or on a projection.
+- `GroupBy(x => key)`, with an element or result selector too, then `Where`, `OrderBy`/`ThenBy`, `Select` of keys and
+  aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups (see GroupBy below).
 - Terminals: `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`,
   their `Async` versions and predicate overloads, plus `foreach` / `await foreach` over the query.
 - Aggregates: `Sum`, `Average`, `Min`, `Max` and their `Async` versions, with a selector that reads one property
@@ -51,7 +53,7 @@ var page = await db.Blogs
   The SQL and the empty-set behavior are EF Core's: `Sum` of no rows is 0, a nullable or reference result is null, and
   `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
-**Not supported yet** (build error): `GroupBy`, `Join`, `Last`,
+**Not supported yet** (build error): `Join`, `Last`,
 `FromSql*` (KP1004), `TagWith`, `Find`, `ExecuteUpdate`/`ExecuteDelete`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
@@ -153,6 +155,45 @@ var rows = await db.Posts
   selectors that compute (`Sum(o => o.Price * o.Quantity)`).
 - The indexed overload `Select((x, i) => ...)` is not supported (KP1006).
 
+## GroupBy
+
+```csharp
+var stats = await db.Posts
+    .Where(p => p.IsPublished)
+    .GroupBy(p => new { p.BlogId, p.Blog.Name })
+    .Where(g => g.Count() > 1)
+    .Select(g => new { g.Key.Name, Posts = g.Count(), Likes = g.Sum(p => p.Likes), Recent = g.Count(p => p.Year >= year) })
+    .OrderByDescending(x => x.Likes)
+    .Take(10)
+    .ToListAsync(ct);
+```
+
+- Keys: a property, one through reference navigations (`p => p.Blog.Name`, joined like an included reference), or an
+  anonymous type of them. Computed, constant and entity keys are KP2010, and so are `ValueTuple.Create` keys, which EF
+  Core cannot translate either.
+- Group values: `g.Key` and its members, `g.Count()`, `g.LongCount()`, `g.Count(predicate)` and
+  `g.Where(predicate).Count()` (`COUNT(CASE WHEN ...)`), `g.Sum/Average/Min/Max(x => x.Property)`, and
+  `g.Select(x => x.Property).Distinct().Count()` (`COUNT(DISTINCT ...)`). With an element selector that reads one
+  property, `g.Sum()`, `g.Max()` and the rest work without a selector. The SQL is EF Core's.
+- A `Select` on the groups can compute in C# from those values (`g.Key + "!"`, `g.Count() * 2`), as projections do.
+  EF Core 10 computes some of these in SQL instead: `g.Key + "!"` on an enum key gives `"0!"` there and `"Draft!"`
+  in KetPsi, EF Core 8 and EF Core 9.
+- `Where` on the groups, before or after the `Select`, becomes `HAVING`; `OrderBy`/`ThenBy` on keys and aggregates,
+  before or after it, becomes `ORDER BY`. After the `Select` they read members that are a key part or an aggregate as
+  they are. Then page, `Distinct`, aggregate (`Select(g => g.Count()).Max()`) and take the first, as after any `Select`.
+- `Count()`, `LongCount()` and `Any(predicate)` of the groups count them through a derived table or `EXISTS`.
+- An ordering before `GroupBy` is dropped, as in EF Core; `Skip`/`Take` before it group the page.
+- `GroupBy(...).ToList()` and `foreach` return the groups themselves: the rows are read ordered by the key and grouped
+  where the key changes, so the order inside a group is the database's, as in EF Core. Elements are tracked and
+  identity-resolved like any queried entity, and get the includes before the `GroupBy`. After `Where` or `OrderBy` on
+  the groups, they can only be selected from (KP1008). As in EF Core, a null in a nullable value-type key (`int?`)
+  throws "Nullable object must have a value." when the groups are returned directly; a `Select` on the groups reads
+  the null key.
+- Not supported yet (KP2011): `g.First()`, `g.ToList()`, `g.Select(...).ToList()` and other uses of the group's rows,
+  aggregates through navigations (`g.Max(p => p.Blog.Rating)`, a correlated subquery in EF Core), aggregate selectors
+  that compute (`g.Sum(p => p.Likes * 2)`), and count predicates that compare with the key. Operators other than the
+  ones above on the groups are KP1008, and `GroupBy` after `Select` is KP1007.
+
 ## Tracking
 
 Same behavior as EF Core:
@@ -188,11 +229,11 @@ Same behavior as EF Core:
 5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor; KetPsi itself adds none.
 6. Decimal comparisons in predicates (`p.Price < 20m`) are safe: the compiler builds them by reflection, and the
    generated interceptor keeps decimal's operator methods for it. Nothing to configure.
-7. A `Select` to an anonymous type or an object initializer warns IL2026 in your code (`Expression.New` with members,
-   `Expression.Bind`): the compiler builds the lambda's expression tree with reflection over the result type's
-   properties. KetPsi never reads that tree, so the warning is harmless and the query runs under Native AOT. Records,
-   other constructors, single members and `ValueTuple.Create` don't warn; use one of them where trim warnings must
-   stay at zero.
+7. A `Select` or `GroupBy` key to an anonymous type, or a `Select` to an object initializer, warns IL2026 in your code
+   (`Expression.New` with members, `Expression.Bind`): the compiler builds the lambda's expression tree with
+   reflection over the result type's properties. KetPsi never reads that tree, so the warning is harmless and the
+   query runs under Native AOT. Records, other constructors, single members and `ValueTuple.Create` don't warn; use one
+   of them where trim warnings must stay at zero.
 
 ## Fixing KP diagnostics
 
@@ -203,11 +244,14 @@ Same behavior as EF Core:
 | KP1002 | Include one navigation per lambda, chain with `ThenInclude`, filter collections in a separate query |
 | KP1005 | Write the lambda inline at the call |
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
-| KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate |
+| KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate (after a `Select` on groups, also `Where` and `OrderBy` before any paging); group the entities, not a projection |
+| KP1008 | On groups use `Where`, `OrderBy`/`ThenBy`, `Select`, `Count`, `LongCount`, `Any`, `ToList`, `ToArray`; select the key and aggregates to page or take the first |
 | KP2001–KP2005 | Simplify the predicate to property-vs-value comparisons |
 | KP2006 | Compare a property with a value, not with another property |
 | KP2007 | Move the value into a local variable before the query |
 | KP2008 | Order by a direct property |
 | KP2009 | Avoid collection navigations and instance methods in projections; aggregate one property; make projected types accessible |
+| KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
+| KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
 | KP3001–KP3004 | Change the mapping to a supported type and shape |
 | KP3005 | Make the query filter a translatable predicate |
