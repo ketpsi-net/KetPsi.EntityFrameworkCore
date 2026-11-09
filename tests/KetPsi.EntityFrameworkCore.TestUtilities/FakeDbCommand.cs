@@ -37,7 +37,7 @@ public sealed class FakeDbCommand(FakeDbConnection connection) : DbCommand
     {
     }
 
-    public override int ExecuteNonQuery() => throw new NotSupportedException();
+    public override int ExecuteNonQuery() => connection.RowsAffected;
 
     public override object? ExecuteScalar() => connection.Scalar;
 

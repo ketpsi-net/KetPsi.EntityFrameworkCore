@@ -134,6 +134,16 @@ public sealed class SqlServerDialect : ISqlDialect
     }
 
     /// <inheritdoc/>
+    /// <remarks>SQL Server's <c>DELETE FROM [alias] FROM ...</c>, as EF Core writes it.</remarks>
+    public string Delete(string alias, string from)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(alias);
+        ArgumentException.ThrowIfNullOrEmpty(from);
+
+        return "DELETE FROM " + alias + " FROM " + from;
+    }
+
+    /// <inheritdoc/>
     public string Exists(string subquery)
     {
         ArgumentException.ThrowIfNullOrEmpty(subquery);

@@ -211,6 +211,43 @@ internal sealed class SqlBuilder
         return builder.ToIncludeStatement(commandText);
     }
 
+    /// <summary>
+    /// Builds the <c>ExecuteDelete</c> statement for the chain ending at <paramref name="tail"/>, as EF Core does: the
+    /// rows the chain selects are deleted from the queried table. A chain without paging deletes from its own
+    /// <c>FROM</c>, joins included; one with paging deletes the rows whose keys a subquery selects.
+    /// </summary>
+    /// <param name="entity">The queried entity, bound to the model.</param>
+    /// <param name="tail">The last node of the chain: entity operators only, no projection or grouping.</param>
+    /// <param name="dialect">The database dialect.</param>
+    /// <param name="includes">
+    /// The navigations included from the queried entity, or <see langword="null"/>. Included references are joined, as in
+    /// EF Core, so a required one whose target is filtered out keeps its rows.
+    /// </param>
+    /// <param name="filtersFor">The query filters to apply to an entity, already resolved against the context.</param>
+    /// <param name="bindEntity">Binds the target entity of a navigation the chain reads through.</param>
+    /// <exception cref="NotSupportedException">The chain pages a keyless entity, whose rows the subquery cannot name.</exception>
+    public static SqlStatement BuildDelete(
+        BoundEntity entity,
+        QueryNode tail,
+        ISqlDialect dialect,
+        IncludeTree? includes,
+        Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> filtersFor,
+        Func<Type, BoundEntity>? bindEntity = null)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(tail);
+        ArgumentNullException.ThrowIfNull(dialect);
+        ArgumentNullException.ThrowIfNull(filtersFor);
+
+        var builder = new SqlBuilder(entity, dialect, filtersFor(entity), filtersFor, bindEntity, includes);
+        foreach (var node in Chain(tail))
+        {
+            builder.Apply(node);
+        }
+
+        return new SqlStatement(builder.FinishDelete(), builder._parameters);
+    }
+
     private static IReadOnlyList<ResolvedQueryFilter> NoFilters(BoundEntity entity) => [];
 
     private static List<QueryNode> Chain(QueryNode tail)
@@ -533,6 +570,47 @@ internal sealed class SqlBuilder
         Materialize();
         ApplyRowLimit(rowLimit);
         return RenderSelect(State, SelectList(State), includeOrdering: true);
+    }
+
+    private string FinishDelete()
+    {
+        EnsureNotProjected();
+        JoinIncludedReferences(_includes, RootPath);
+
+        // Without paging the rows are the ones the statement's FROM selects; distinct entity rows are the same rows.
+        if (!State.IsDerived && !State.HasPaging)
+        {
+            return _dialect.Delete(State.Alias, RenderFrom(State));
+        }
+
+        var key = _entity.PrimaryKey ?? throw new NotSupportedException(string.Format(
+            CultureInfo.InvariantCulture, ExceptionMessages.DeletePagedKeyless, _entity.ClrType));
+        var selected = RenderSelect(State, string.Join(", ", key.Select(k => Column(k, State.Alias))), includeOrdering: State.HasPaging);
+
+        var alias = NextAlias();
+        var table = _dialect.QualifyTable(_entity.Table, _entity.Schema) + " AS " + alias;
+        if (key is [var single])
+        {
+            return _dialect.Delete(alias, table + " WHERE " + Column(single, alias) + " IN (" + selected + ")");
+        }
+
+        var keys = NextAlias();
+        var matches = string.Join(" AND ", key.Select(k => keys + "." + _dialect.QuoteIdentifier(k.ColumnName) + " = " + Column(k, alias)));
+        return _dialect.Delete(alias, table + " WHERE EXISTS (SELECT 1 FROM (" + selected + ") AS " + keys + " WHERE " + matches + ")");
+    }
+
+    // EF Core joins the references included on the deleted entity, which a required one with a filtered target can narrow.
+    private void JoinIncludedReferences(IncludeTree? includes, string path)
+    {
+        foreach (var branch in includes?.Branches ?? [])
+        {
+            if (!branch.Navigation.IsCollection)
+            {
+                var branchPath = Append(path, branch.Navigation.Name);
+                GetTarget(branchPath, branch.Target.Entity);
+                JoinIncludedReferences(branch.Target, branchPath);
+            }
+        }
     }
 
     private IncludeStatement ToIncludeStatement(string commandText)
@@ -861,7 +939,7 @@ internal sealed class SqlBuilder
             ", ", selected.Select((c, i) => names[i] == c.Name && !c.IsComputed ? c.Sql : c.Sql + " AS " + _dialect.QuoteIdentifier(names[i])));
         var source = "(" + RenderSelect(inner, selectList, includeOrdering: true) + ")";
 
-        var outer = new SelectState(source, NextAlias()) { Pending = inner.Pending };
+        var outer = new SelectState(source, NextAlias(), isDerived: true) { Pending = inner.Pending };
         SqlColumn Outer(int index) => new(outer.Alias + "." + _dialect.QuoteIdentifier(names[index]), names[index]);
         if (inner.Columns is not null || inner.Keys is not null)
         {
@@ -915,6 +993,23 @@ internal sealed class SqlBuilder
         return names;
     }
 
+    /// <summary>The level's source with its alias, its joins and its <c>WHERE</c> clause.</summary>
+    private static string RenderFrom(SelectState state)
+    {
+        var sql = new StringBuilder(state.Source).Append(" AS ").Append(state.Alias);
+        foreach (var join in state.Joins)
+        {
+            sql.Append(' ').Append(join);
+        }
+
+        if (state.Predicates.Count > 0)
+        {
+            sql.Append(" WHERE ").AppendJoin(" AND ", state.Predicates);
+        }
+
+        return sql.ToString();
+    }
+
     private string RenderSelect(SelectState state, string projection, bool includeOrdering)
     {
         var hasOrderBy = includeOrdering && state.Ordering.Count > 0;
@@ -931,16 +1026,7 @@ internal sealed class SqlBuilder
             sql.Append(paging.SelectPrefix).Append(' ');
         }
 
-        sql.Append(projection).Append(" FROM ").Append(state.Source).Append(" AS ").Append(state.Alias);
-        foreach (var join in state.Joins)
-        {
-            sql.Append(' ').Append(join);
-        }
-
-        if (state.Predicates.Count > 0)
-        {
-            sql.Append(" WHERE ").AppendJoin(" AND ", state.Predicates);
-        }
+        sql.Append(projection).Append(" FROM ").Append(RenderFrom(state));
 
         if (state.Keys is { } keys)
         {
@@ -1130,9 +1216,12 @@ internal sealed class SqlBuilder
     private sealed record JoinTarget(string Alias, BoundEntity Entity, bool AlwaysExists);
 
     /// <summary>One SELECT level: a table or derived table, and the clauses applied to it so far.</summary>
-    private sealed class SelectState(string source, string alias)
+    private sealed class SelectState(string source, string alias, bool isDerived = false)
     {
         public string Source { get; } = source;
+
+        /// <summary>Whether the source is a derived table, the statement of the levels before this one.</summary>
+        public bool IsDerived { get; } = isDerived;
 
         public string Alias { get; } = alias;
 

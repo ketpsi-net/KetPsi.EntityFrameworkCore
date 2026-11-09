@@ -55,6 +55,12 @@ var page = await db.Blogs
   context returns an untracked entity). Key values with a `null` return `null`; the wrong number or type of key values
   throws EF Core's `ArgumentException` when `Find` or `FindAsync` is called. Composite keys take their values in key
   order.
+- `ExecuteDelete()` and `ExecuteDeleteAsync(ct)` delete the rows the query selects and return how many, as in EF Core:
+  `DELETE FROM [t0] FROM [Posts] AS [t0] ... WHERE ...` with the query filters, joined navigations and included
+  references. After `Skip` or `Take` the rows are the ones whose keys a subquery selects (`WHERE [Id] IN (SELECT ...)`),
+  which a keyless entity doesn't have (`NotSupportedException`); an ordering without paging, `Distinct` and tracking
+  don't change what is deleted. Nothing is loaded and the change tracker is left alone, so a tracked entity that was
+  deleted stays `Unchanged`. Not after `Select` (KP1007) or `GroupBy` (KP1008).
 - `Last` and `LastOrDefault` need an `OrderBy` before them, on the entities or before a `Select`, as in EF Core: they
   read the query in reverse order and take the first row (`TOP(1) ... ORDER BY ... DESC`). Without an ordering they
   throw EF Core's `InvalidOperationException` ("must have a deterministic sort order") when they run; an ordering before
@@ -65,7 +71,7 @@ var page = await db.Blogs
   `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
 **Not supported yet** (build error): `Join`,
-`FromSql*` (KP1004), `TagWith`, `ExecuteUpdate`/`ExecuteDelete`, `AsAsyncEnumerable`.
+`FromSql*` (KP1004), `TagWith`, `ExecuteUpdate`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
 on a `DbSet`, but after any KetPsi operator they run the query and finish in memory:

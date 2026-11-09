@@ -180,6 +180,21 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
+    public async Task ExecuteDelete_SendsADeleteAndReturnsTheRowsDeleted()
+    {
+        _connection.RowsAffected = 4;
+
+        Assert.Equal(4, Invoke("DeleteBelow", 3));
+        Assert.Equal("DELETE FROM [t0] FROM " + Table + " WHERE [t0].[Rating] < @p0", _connection.LastCommand.CommandText);
+        Assert.Equal([3], Parameters());
+
+        Assert.Equal(4, await InvokeAsync("DeletePageAsync", Token));
+        Assert.Equal(
+            "DELETE FROM [t1] FROM [Blogs] AS [t1] WHERE [t1].[Id] IN (SELECT TOP(@p0) [t0].[Id] FROM " + Table + " ORDER BY [t0].[Id])",
+            _connection.LastCommand.CommandText);
+    }
+
+    [Fact]
     public void Single_TwoRows_ThrowsLikeLinq()
     {
         var exception = Assert.Throws<TargetInvocationException>(() => Invoke("Single"));

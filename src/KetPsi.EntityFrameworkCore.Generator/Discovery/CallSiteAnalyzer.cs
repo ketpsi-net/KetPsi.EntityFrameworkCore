@@ -163,6 +163,10 @@ internal static class CallSiteAnalyzer
             {
                 "AsSplitQuery" => site.Supported(OperatorKind.AsSplitQuery),
                 "AsSingleQuery" => site.Supported(OperatorKind.AsSingleQuery),
+
+                // EF Core 8 declares ExecuteDelete with the relational extensions, EF Core 9 and later with the others.
+                "ExecuteDelete" => site.Supported(OperatorKind.ExecuteDelete),
+                "ExecuteDeleteAsync" => site.Supported(OperatorKind.ExecuteDelete, isAsync: true),
                 _ when method.Name.StartsWith("FromSql", StringComparison.Ordinal) => site.Reject(DiagnosticDescriptors.RawSqlNotSupported, method.Name),
                 _ => site.Unsupported(),
             },
@@ -244,6 +248,10 @@ internal static class CallSiteAnalyzer
                     : site.Supported(include, lambdaOrdinal: 1);
             case "ToListAsync" or "ToArrayAsync":
                 return site.Supported(method.Name == "ToListAsync" ? OperatorKind.ToList : OperatorKind.ToArray, isAsync: true);
+            case "ExecuteDelete":
+                return site.Supported(OperatorKind.ExecuteDelete);
+            case "ExecuteDeleteAsync":
+                return site.Supported(OperatorKind.ExecuteDelete, isAsync: true);
             case "SumAsync" or "AverageAsync" or "MinAsync" or "MaxAsync" when parameters.Length == 3 && IsSelector(parameters[1].Type):
                 return site.Supported(AggregateKind(method.Name.Substring(0, method.Name.Length - "Async".Length)), lambdaOrdinal: 1, isAsync: true);
             case "FirstAsync" or "FirstOrDefaultAsync" or "LastAsync" or "LastOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync"

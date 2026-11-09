@@ -164,6 +164,9 @@ internal static class ExceptionMessages
     public const string FindValueTypeMismatch =
         "The key value at position {0} of the call to 'DbSet<{1}>.Find' was of type '{2}', which does not match the property type of '{3}'.";
 
+    public const string DeletePagedKeyless =
+        "ExecuteDelete after Skip, Take or another operator that pages '{0}' needs a primary key, which the entity type doesn't have.";
+
     public const string LastWithoutOrdering =
         "Queries performing '{0}' operation must have a deterministic sort order. Rewrite the query to apply an 'OrderBy' operation on the sequence before calling '{0}'.";
 

@@ -75,6 +75,10 @@ internal static class QuerySources
 
             public Blog? Find(int id) => db.Blogs.Find(id);
 
+            public int DeleteBelow(int rating) => db.Blogs.Where(b => b.Rating < rating).ExecuteDelete();
+
+            public Task<int> DeletePageAsync(CancellationToken ct) => db.Blogs.OrderBy(b => b.Id).Take(2).ExecuteDeleteAsync(ct);
+
             public ValueTask<Blog?> FindAsync(int id) => db.Blogs.FindAsync(id);
 
             public ValueTask<Blog?> FindWithTokenAsync(object?[] keyValues, CancellationToken ct) => db.Blogs.FindAsync(keyValues, ct);

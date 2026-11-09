@@ -75,6 +75,18 @@ public sealed class SqlServerDialectTests
     public void Exists_MissingSubquery_Throws(string? subquery)
         => Assert.ThrowsAny<ArgumentException>(() => Dialect.Exists(subquery!));
 
+    [Fact]
+    public void Delete_DeletesFromTheAliasedTable()
+        => Assert.Equal(
+            "DELETE FROM [b] FROM [Blogs] AS [b] WHERE [b].[Id] = @p0",
+            Dialect.Delete("[b]", "[Blogs] AS [b] WHERE [b].[Id] = @p0"));
+
+    [Theory]
+    [InlineData(null, "[Blogs] AS [b]")]
+    [InlineData("[b]", "")]
+    public void Delete_MissingPart_Throws(string? alias, string from)
+        => Assert.ThrowsAny<ArgumentException>(() => Dialect.Delete(alias!, from));
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

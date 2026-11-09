@@ -148,6 +148,22 @@ internal static class QueryRunner
         where T : class
         => Convert.ToBoolean(await ExecuteScalarAsync(query, QueryTerminal.Any, cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
+    /// <summary>Deletes the rows the query selects, without loading or tracking them, and returns how many were deleted.</summary>
+    public static int ExecuteDelete<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
+        where T : class
+    {
+        var (dialect, statement) = PrepareDelete(query);
+        return QueryExecutor.ExecuteNonQuery(query.Context, dialect, statement);
+    }
+
+    public static Task<int> ExecuteDeleteAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query, CancellationToken cancellationToken)
+        where T : class
+    {
+        var (dialect, statement) = PrepareDelete(query);
+        return QueryExecutor.ExecuteNonQueryAsync(query.Context, dialect, statement, cancellationToken);
+    }
+
     /// <summary>The tracking behavior of a query: the last <c>AsTracking</c> or <c>AsNoTracking</c>, else the context default.</summary>
     internal static QueryTrackingBehavior ResolveTracking(QueryNode tail, QueryTrackingBehavior contextDefault)
     {
@@ -269,6 +285,20 @@ internal static class QueryRunner
 
         var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, filtersFor, rowLimit, bind);
         return new IncludedQuery(statement, new IncludeLoader(context, dialect, tracking, filtersFor, bind));
+    }
+
+    // Tracking doesn't matter to a delete, which never reads rows; the change tracker is left as it is, as in EF Core.
+    private static (ISqlDialect Dialect, SqlStatement Statement) PrepareDelete<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query)
+        where T : class
+    {
+        var context = query.Context;
+        var bind = Binder(context);
+        var entity = bind(query.Root.EntityType);
+        var dialect = SqlDialects.Resolve(context.Database.ProviderName);
+        var statement = SqlBuilder.BuildDelete(
+            entity, query.Tail, dialect, IncludeTree.FromChain(entity, query.Tail, bind), FiltersFor(context, query.Tail), bind);
+        return (dialect, statement);
     }
 
     /// <summary>Binds entity types against the context's model.</summary>

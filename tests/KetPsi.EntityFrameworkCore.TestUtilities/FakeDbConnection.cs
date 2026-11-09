@@ -24,6 +24,9 @@ public sealed class FakeDbConnection : DbConnection
     /// <summary>The value every scalar command returns.</summary>
     public object? Scalar { get; set; }
 
+    /// <summary>The number of rows every non-query command reports it changed.</summary>
+    public int RowsAffected { get; set; }
+
     public int OpenCount { get; private set; }
 
     public int CloseCount { get; private set; }

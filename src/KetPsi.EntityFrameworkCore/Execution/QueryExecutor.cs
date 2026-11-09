@@ -96,6 +96,42 @@ internal static class QueryExecutor
         }
     }
 
+    /// <summary>Executes a statement that changes rows, such as <c>ExecuteDelete</c>, and returns how many it changed.</summary>
+    public static int ExecuteNonQuery(DbContext context, ISqlDialect dialect, SqlStatement statement)
+    {
+        var database = context.Database;
+        database.OpenConnection();
+        try
+        {
+            using var command = CreateCommand(database, dialect, statement);
+            return command.ExecuteNonQuery();
+        }
+        finally
+        {
+            database.CloseConnection();
+        }
+    }
+
+    /// <summary>Executes the async form of <see cref="ExecuteNonQuery"/>.</summary>
+    public static async Task<int> ExecuteNonQueryAsync(
+        DbContext context, ISqlDialect dialect, SqlStatement statement, CancellationToken cancellationToken)
+    {
+        var database = context.Database;
+        await database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var command = CreateCommand(database, dialect, statement);
+            await using (command.ConfigureAwait(false))
+            {
+                return await command.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await database.CloseConnectionAsync().ConfigureAwait(false);
+        }
+    }
+
     internal static DbCommand CreateCommand(
         Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade database, ISqlDialect dialect, SqlStatement statement)
     {

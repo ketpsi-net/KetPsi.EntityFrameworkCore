@@ -63,6 +63,7 @@ public sealed class GroupDiagnosticsTests
     [InlineData("var r = db.Blogs.Select(b => new { b.Status }).GroupBy(x => x.Status).Select(g => g.Count()).ToList();", "KP1007", "GroupBy")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).Skip(1).ToList();", "KP1008", "Skip")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).First();", "KP1008", "First")]
+    [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).ExecuteDelete();", "KP1008", "ExecuteDelete")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).Where(g => g.Count() > 1).ToList();", "KP1008", "ToList")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Name, StringComparer.Ordinal).ToList();", "KP1006", "GroupBy")]
     [InlineData("Expression<Func<Blog, int>> key = b => b.Rating; var r = db.Blogs.GroupBy(key).ToList();", "KP1005", "key")]

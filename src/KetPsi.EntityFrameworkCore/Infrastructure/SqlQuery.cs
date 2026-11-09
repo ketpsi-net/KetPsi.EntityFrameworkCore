@@ -377,6 +377,16 @@ public static class SqlQuery
         where T : class
         => QueryRunner.AnyAsync(ToSqlQueryable(source), cancellationToken);
 
+    /// <summary>Deletes the rows the query selects and returns how many were deleted: <c>ExecuteDelete</c>.</summary>
+    public static int ExecuteDelete<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
+        where T : class
+        => QueryRunner.ExecuteDelete(ToSqlQueryable(source));
+
+    /// <summary>Deletes the rows the query selects and returns how many were deleted: <c>ExecuteDeleteAsync</c>.</summary>
+    public static Task<int> ExecuteDeleteAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        where T : class
+        => QueryRunner.ExecuteDeleteAsync(ToSqlQueryable(source), cancellationToken);
+
     /// <summary>Finds an entity by its primary key: <c>DbSet.Find</c>.</summary>
     /// <param name="set">The set the entity belongs to.</param>
     /// <param name="keyValues">The key values in key order; with a <see langword="null"/> the result is <see langword="null"/>.</param>

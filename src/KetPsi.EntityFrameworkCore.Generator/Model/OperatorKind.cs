@@ -38,4 +38,5 @@ internal enum OperatorKind
     LongCount,
     Any,
     Find,
+    ExecuteDelete,
 }

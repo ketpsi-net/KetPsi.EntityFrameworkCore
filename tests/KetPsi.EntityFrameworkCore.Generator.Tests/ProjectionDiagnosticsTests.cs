@@ -98,6 +98,7 @@ public sealed class ProjectionDiagnosticsTests
     [InlineData("var r = db.Blogs.Select(b => b.Author).Max();", "Max")]
     [InlineData("var r = db.Blogs.Select(b => b.Author).Select(a => a!.Id).ToList();", "Select")]
     [InlineData("var r = db.Blogs.Select(b => new { b.Id }).AsNoTracking().ToList();", "AsNoTracking")]
+    [InlineData("var r = db.Blogs.Select(b => b.Author).ExecuteDelete();", "ExecuteDelete")]
     [InlineData("var q = db.Blogs.Select(b => b.Id); var r = q.Where(i => i > 0).ToList();", "Where")]
     public void OperatorAfterSelect_ReportsKP1007AtOperatorName(string body, string operatorName)
     {
