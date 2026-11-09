@@ -289,6 +289,74 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "GroupsAfterOrderBy", [] },
             { "GroupsWithInclude", [] },
             { "GroupsEnumerated", [] },
+
+            // Last.
+            { "LastByName", [] },
+            { "LastOrDefaultBelow", [4] },
+            { "LastOrDefaultBelow", [0] },
+            { "LastOfPage", [] },
+            { "LastAsyncAfterSkip", [] },
+            { "LastProjected", [] },
+            { "LastOrDefaultAsyncNone", [] },
+            { "LastWithoutOrdering", [] },
+            { "LastAfterDistinct", [] },
+
+            // Reference navigations in predicates and orderings.
+            { "PostsOfBlogNamed", ["alpha"] },
+            { "PostsOfBlogNamed", ["theta"] },
+            { "PostsOrderedByBlog", [3] },
+            { "BlogsByAuthor", ["Ann"] },
+            { "BlogsByAuthor", [null] },
+            { "BlogsNotByAuthor", ["Ann"] },
+            { "BlogsNotByAuthor", [null] },
+            { "BlogsWithoutAuthor", [] },
+            { "BlogsWithAuthor", [] },
+            { "PostsWithBlog", [] },
+            { "PostsOfBlogId", [1] },
+            { "PostsOfBlogId", [9] },
+            { "CountPostsOfActiveBlogs", [] },
+            { "AnyCommentOnRatedBlog", [5] },
+            { "AnyCommentOnRatedBlog", [6] },
+            { "BlogsOrderedByAuthor", [] },
+            { "PostsOfBlogNamedWithInclude", ["alpha"] },
+
+            // Find.
+            { "FindBlog", [1] },
+            { "FindBlog", [9] },
+            { "FindBlog", [999] },
+            { "FindPostAsync", [101] },
+            { "FindPostAsync", [104] },
+            { "FindTrackedTwice", [3] },
+            { "FindNull", [] },
+            { "FindWrongType", [] },
+            { "FindTwoValues", [] },
+
+            // ExecuteDelete.
+            { "DeleteCommentsOfPost", [101] },
+            { "DeleteCommentsOfPost", [104] },
+            { "DeleteCommentsThroughNavigation", ["alpha"] },
+            { "DeleteCommentsThroughNavigation", ["theta"] },
+            { "DeleteCommentsPaged", [] },
+            { "DeleteFilteredPosts", [] },
+            { "DeleteBlogsWithPosts", [] },
+            { "DeleteTrackedComment", [] },
+
+            // Join.
+            { "JoinColumns", [] },
+            { "JoinEntities", [] },
+            { "JoinInnerFiltered", [4] },
+            { "JoinThroughThePair", [3] },
+            { "JoinTwice", [] },
+            { "JoinCompositeKey", [] },
+            { "JoinNullableKey", [] },
+            { "JoinOuterKeyThroughNavigation", [] },
+            { "JoinAfterPaging", [] },
+            { "JoinPagedAfter", ["!"] },
+            { "JoinCount", [] },
+            { "JoinFirstAsync", [] },
+            { "JoinIgnoringInnerFilters", [] },
+            { "SelectEntitiesThenWhere", [2] },
+            { "SelectColumnThenWhere", [3] },
         };
 
 #if NET10_0_OR_GREATER
@@ -337,6 +405,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "IncludeBlogThenPosts()", "IncludeFirst()", "IncludeSingleAsync(1)", "IncludeSingleAsync(2)", "IncludeAfterTrackingBlog()",
         "LoadGraphModifySave()", "SelectEntityAndColumn()", "SelectAuthors()", "SelectBlogAndAuthor()", "SelectPostAndBlog()",
         "SelectNavigationWithInclude()", "SelectEntityFirst()", "Groups()",
+        "FindBlog(1)", "FindPostAsync(101)", "FindTrackedTwice(3)", "DeleteTrackedComment()", "JoinEntities()",
     };
 
 #if NET8_0
@@ -359,6 +428,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "SelectAnonymous", "SelectPaged", "SelectTakeAfterSelect", "SelectToArrayAsync", "SelectAuthors", "SelectAuthorsNoTracking",
         "SelectAuthorsIdentityResolution", "SelectAuthorTwiceNoTracking", "SelectNavigationWithInclude", "SelectEntityPaged",
         "GroupOrderByKey", "GroupOrderByAggregate", "GroupOrderAfterSelect", "GroupPaged", "GroupElementAndResultSelector",
+        "PostsOrderedByBlog", "BlogsOrderedByAuthor", "JoinThroughThePair", "JoinAfterPaging", "JoinPagedAfter", "SelectEntitiesThenWhere",
     };
 
     private static string Key(string query, object?[] arguments)

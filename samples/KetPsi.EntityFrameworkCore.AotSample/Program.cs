@@ -254,6 +254,65 @@ await CheckAsync(
     },
     "Books:1 5 8,Games:2 4 7,Music:3 6|Books:3,Games:3,Music:2");
 
+await CheckAsync(
+    "Last and LastOrDefault read the ordering in reverse",
+    async db =>
+    {
+        var last = db.Products.AsNoTracking().OrderBy(p => p.Price).Last();
+        var lastBook = await db.Products.AsNoTracking().OrderBy(p => p.Price).LastOrDefaultAsync(p => p.Category == Category.Books, cancellationToken);
+        return $"{last.Name}|{lastBook?.Name}";
+    },
+    "Hades|Dune");
+
+await CheckAsync(
+    "Predicates and orderings through a navigation",
+    db => Task.FromResult(string.Join(",", db.Reviews.AsNoTracking()
+        .Where(r => r.Product.IsActive && r.Product.Price < 20m)
+        .OrderByDescending(r => r.Product.Name)
+        .ThenBy(r => r.Id)
+        .Select(r => r.Id)
+        .ToList())),
+    "61,11,12");
+
+await CheckAsync(
+    "Find and FindAsync on a no-tracking context",
+    async db =>
+    {
+        db.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+        var found = db.Products.Find(4);
+        var missing = await db.Products.FindAsync([99], cancellationToken);
+        return $"{found?.Name}|{missing?.Name ?? "none"}|{db.ChangeTracker.Entries().Count()}";
+    },
+    "Celeste|none|0");
+
+await CheckAsync(
+    "ExecuteDelete through a navigation, rolled back",
+    async db =>
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var deleted = await db.Reviews.Where(r => r.Product.Category == Category.Books && r.Stars < 5).ExecuteDeleteAsync(cancellationToken);
+        var left = await db.Reviews.CountAsync(cancellationToken);
+        await transaction.RollbackAsync(cancellationToken);
+        return $"{deleted}|{left}|{await db.Reviews.CountAsync(cancellationToken)}";
+    },
+    "1|3|4");
+
+await CheckAsync(
+    "Join, then Where, OrderBy and Select through the pair",
+    db =>
+    {
+        var rows = db.Reviews.AsNoTracking()
+            .Join(db.Products.Where(p => p.IsActive), r => r.ProductId, p => p.Id, (r, p) => new { r, p })
+            .Where(x => x.r.Stars >= 4)
+            .OrderBy(x => x.p.Name)
+            .ThenBy(x => x.r.Id)
+            .Select(x => x.p.Name + ":" + x.r.Stars)
+            .ToList();
+        var count = db.Reviews.Join(db.Products, r => r.ProductId, p => p.Id, (r, p) => p.Category).Count();
+        return Task.FromResult(string.Join(",", rows) + "|" + count);
+    },
+    "Dune:4,Dune:5,Kind of Blue:5|4");
+
 #if NET8_0
 // EF Core 8 cannot track entities under Native AOT: tracking queries fail with a clear error instead of EF Core's
 // "model building is not supported". Add AsNoTracking(), or move to EF Core 9 or later to track.
@@ -324,6 +383,16 @@ await CheckAsync(
         return $"{loaded}|{saved}|{stars}";
     },
     "True|1|1");
+
+await CheckAsync(
+    "Find returns the tracked instance without a second query",
+    db =>
+    {
+        var first = db.Products.Find(3);
+        var second = db.Products.Find(3);
+        return Task.FromResult($"{ReferenceEquals(first, second)}|{db.Entry(first!).State}");
+    },
+    "True|Unchanged");
 
 await CheckAsync(
     "Tracked groups attach their entities",
