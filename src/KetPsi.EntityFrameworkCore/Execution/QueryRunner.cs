@@ -23,6 +23,11 @@ internal static class QueryRunner
     // Two rows are enough to tell "exactly one" from "more than one".
     internal const int SingleRowLimit = 2;
 
+    // EF Core names the synchronous operator in its message for both forms, as these do.
+    internal const string LastMethod = "Last";
+
+    internal const string LastOrDefaultMethod = "LastOrDefault";
+
     // EF Core 9 is the first version that can track entities under Native AOT, with a --nativeaot compiled model.
     private const int MinimumEfCoreMajorForAotTracking = 9;
 
@@ -79,6 +84,24 @@ internal static class QueryRunner
         SqlQueryable<T> query, CancellationToken cancellationToken)
         where T : class
         => FirstOrDefaultOf(await ReadRowsAsync(query, FirstRowLimit, cancellationToken).ConfigureAwait(false));
+
+    public static T Last<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
+        where T : class
+        => FirstOf(ReadRows(Reversed(query, LastMethod), FirstRowLimit), isAsync: false);
+
+    public static async Task<T> LastAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query, CancellationToken cancellationToken)
+        where T : class
+        => FirstOf(await ReadRowsAsync(Reversed(query, LastMethod), FirstRowLimit, cancellationToken).ConfigureAwait(false), isAsync: true);
+
+    public static T? LastOrDefault<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
+        where T : class
+        => FirstOrDefaultOf(ReadRows(Reversed(query, LastOrDefaultMethod), FirstRowLimit));
+
+    public static async Task<T?> LastOrDefaultAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query, CancellationToken cancellationToken)
+        where T : class
+        => FirstOrDefaultOf(await ReadRowsAsync(Reversed(query, LastOrDefaultMethod), FirstRowLimit, cancellationToken).ConfigureAwait(false));
 
     public static T Single<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
         where T : class
@@ -147,6 +170,11 @@ internal static class QueryRunner
             throw new InvalidOperationException(ExceptionMessages.TrackingRequiresEfCore9UnderAot);
         }
     }
+
+    // Last is the first row of the query read in reverse.
+    private static SqlQueryable<T> Reversed<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, string method)
+        where T : class
+        => query.WithTail(new ReverseOrderNode(query.Tail, method));
 
     private static List<T> ReadRows<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, int? rowLimit)
         where T : class

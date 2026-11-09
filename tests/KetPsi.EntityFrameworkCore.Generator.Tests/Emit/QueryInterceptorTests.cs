@@ -117,6 +117,30 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
+    public void Last_WithPredicate_ReversesTheOrdering()
+    {
+        var blog = Invoke("Last", 2);
+
+        Assert.Equal(
+            "SELECT TOP(1) " + Columns + " FROM " + Table + " WHERE [t0].[Rating] > @p0 ORDER BY [t0].[Name] DESC",
+            _connection.LastCommand.CommandText);
+        Assert.Equal([2], Parameters());
+        Assert.Equal("alpha", Get(blog!, "Name"));
+    }
+
+    [Fact]
+    public async Task LastOrDefaultAsync_AfterTake_ReadsThePageFromItsEnd()
+    {
+        var blog = await InvokeAsync("LastOrDefaultAsync", Token);
+
+        Assert.Equal(
+            "SELECT TOP(1) " + Columns.Replace("[t0]", "[t1]", StringComparison.Ordinal) + " FROM (SELECT TOP(@p0) " + Columns + " FROM " + Table +
+            " ORDER BY [t0].[Id]) AS [t1] ORDER BY [t1].[Id] DESC",
+            _connection.LastCommand.CommandText);
+        Assert.NotNull(blog);
+    }
+
+    [Fact]
     public void Single_TwoRows_ThrowsLikeLinq()
     {
         var exception = Assert.Throws<TargetInvocationException>(() => Invoke("Single"));

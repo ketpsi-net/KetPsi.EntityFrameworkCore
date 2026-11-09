@@ -30,6 +30,8 @@ internal enum OperatorKind
     ToArray,
     First,
     FirstOrDefault,
+    Last,
+    LastOrDefault,
     Single,
     SingleOrDefault,
     Count,

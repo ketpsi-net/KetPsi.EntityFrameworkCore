@@ -67,6 +67,10 @@ internal static class QuerySources
             public Task<Blog?> FirstOrDefaultAsync(string name, CancellationToken ct)
                 => db.Blogs.AsNoTracking().FirstOrDefaultAsync(b => b.Name == name, ct);
 
+            public Blog Last(int rating) => db.Blogs.AsNoTracking().OrderBy(b => b.Name).Last(b => b.Rating > rating);
+
+            public Task<Blog?> LastOrDefaultAsync(CancellationToken ct) => db.Blogs.AsNoTracking().OrderBy(b => b.Id).Take(5).LastOrDefaultAsync(ct);
+
             public Blog Single() => db.Blogs.AsNoTracking().Single();
 
             public Task<Blog> SingleAsync(int id, CancellationToken ct) => db.Blogs.AsNoTracking().SingleAsync(b => b.Id == id, ct);

@@ -137,6 +137,58 @@ public sealed class TerminalTests : IDisposable
     }
 
     [Fact]
+    public void Last_ReadsTheReversedOrderingWithTopOne()
+    {
+        _connection.Rows = FakeItemContext.Table(Beta);
+
+        Assert.Equivalent(Beta, SqlQuery.Last(SqlQuery.OrderBy(Items, nameof(Item.Name))), strict: true);
+        Assert.Equal("SELECT TOP(1) " + Columns + " FROM " + Table + " ORDER BY [t0].[Name] DESC", _connection.LastCommand.CommandText);
+    }
+
+    [Fact]
+    public void Last_NoRows_ThrowsLikeLinq()
+    {
+        _connection.Rows = FakeItemContext.Table();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => SqlQuery.Last(SqlQuery.OrderBy(Items, nameof(Item.Name))));
+        Assert.Equal(LinqMessage(() => Array.Empty<int>().Last()), exception.Message);
+    }
+
+    [Fact]
+    public async Task LastAsync_ReturnsRowOrThrowsWithEfCoreMessage()
+    {
+        var ordered = SqlQuery.OrderBy(Items, nameof(Item.Id));
+        _connection.Rows = FakeItemContext.Table(Beta);
+        Assert.Equivalent(Beta, await SqlQuery.LastAsync(ordered, Token), strict: true);
+
+        _connection.Rows = FakeItemContext.Table();
+        var none = await Assert.ThrowsAsync<InvalidOperationException>(() => SqlQuery.LastAsync(ordered, Token));
+        Assert.Equal("Sequence contains no elements.", none.Message);
+    }
+
+    [Fact]
+    public async Task LastOrDefault_ReturnsRowOrNull()
+    {
+        var ordered = SqlQuery.OrderByDescending(Items, nameof(Item.Score));
+        _connection.Rows = FakeItemContext.Table();
+        Assert.Null(SqlQuery.LastOrDefault(ordered));
+        Assert.Null(await SqlQuery.LastOrDefaultAsync(ordered, Token));
+
+        _connection.Rows = FakeItemContext.Table(Alpha);
+        Assert.Equivalent(Alpha, await SqlQuery.LastOrDefaultAsync(ordered, Token), strict: true);
+        Assert.EndsWith(" ORDER BY [t0].[Score]", _connection.LastCommand.CommandText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Last_WithoutOrdering_ThrowsBeforeQuerying()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() => SqlQuery.LastOrDefault(Items));
+
+        Assert.StartsWith("Queries performing 'LastOrDefault' operation must have a deterministic sort order.", exception.Message, StringComparison.Ordinal);
+        Assert.Empty(_connection.Commands);
+    }
+
+    [Fact]
     public void FirstOrDefault_NoRows_ReturnsNull()
     {
         _connection.Rows = FakeItemContext.Table();

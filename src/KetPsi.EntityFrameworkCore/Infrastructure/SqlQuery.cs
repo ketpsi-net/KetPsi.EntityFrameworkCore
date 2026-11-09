@@ -299,6 +299,30 @@ public static class SqlQuery
         where T : class
         => QueryRunner.FirstOrDefaultAsync(ToSqlQueryable(source), cancellationToken);
 
+    /// <summary>Returns the last entity in the query's ordering: <c>Last</c>.</summary>
+    /// <exception cref="InvalidOperationException">The query has no ordering, or returns no rows.</exception>
+    public static T Last<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
+        where T : class
+        => QueryRunner.Last(ToSqlQueryable(source));
+
+    /// <summary>Returns the last entity in the query's ordering: <c>LastAsync</c>.</summary>
+    /// <exception cref="InvalidOperationException">The query has no ordering, or returns no rows.</exception>
+    public static Task<T> LastAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        where T : class
+        => QueryRunner.LastAsync(ToSqlQueryable(source), cancellationToken);
+
+    /// <summary>Returns the last entity in the query's ordering, or <see langword="null"/>: <c>LastOrDefault</c>.</summary>
+    /// <exception cref="InvalidOperationException">The query has no ordering.</exception>
+    public static T? LastOrDefault<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
+        where T : class
+        => QueryRunner.LastOrDefault(ToSqlQueryable(source));
+
+    /// <summary>Returns the last entity in the query's ordering, or <see langword="null"/>: <c>LastOrDefaultAsync</c>.</summary>
+    /// <exception cref="InvalidOperationException">The query has no ordering.</exception>
+    public static Task<T?> LastOrDefaultAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        where T : class
+        => QueryRunner.LastOrDefaultAsync(ToSqlQueryable(source), cancellationToken);
+
     /// <summary>Returns the only entity: <c>Single</c>.</summary>
     /// <exception cref="InvalidOperationException">The query returns no rows, or more than one.</exception>
     public static T Single<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)

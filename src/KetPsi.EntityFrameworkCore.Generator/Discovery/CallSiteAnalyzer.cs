@@ -203,7 +203,8 @@ internal static class CallSiteAnalyzer
                 return parameters.Skip(1).All(static p => IsLambdaParameter(p.Type)) ? site.GroupBy() : site.Overload(ReasonComparer);
             case "Sum" or "Average" or "Min" or "Max" when parameters.Length == 2 && IsSelector(parameters[1].Type):
                 return site.Supported(AggregateKind(method.Name), lambdaOrdinal: 1);
-            case "First" or "FirstOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count" or "LongCount":
+            case "First" or "FirstOrDefault" or "Last" or "LastOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count"
+                or "LongCount":
                 if (parameters.Length == 1)
                 {
                     return site.Supported(TerminalKind(method.Name));
@@ -239,8 +240,8 @@ internal static class CallSiteAnalyzer
                 return site.Supported(method.Name == "ToListAsync" ? OperatorKind.ToList : OperatorKind.ToArray, isAsync: true);
             case "SumAsync" or "AverageAsync" or "MinAsync" or "MaxAsync" when parameters.Length == 3 && IsSelector(parameters[1].Type):
                 return site.Supported(AggregateKind(method.Name.Substring(0, method.Name.Length - "Async".Length)), lambdaOrdinal: 1, isAsync: true);
-            case "FirstAsync" or "FirstOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync" or "AnyAsync" or "CountAsync"
-                or "LongCountAsync":
+            case "FirstAsync" or "FirstOrDefaultAsync" or "LastAsync" or "LastOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync"
+                or "AnyAsync" or "CountAsync" or "LongCountAsync":
                 var kind = TerminalKind(method.Name.Substring(0, method.Name.Length - "Async".Length));
                 return parameters.Length == 3 && IsPredicate(parameters[1].Type)
                     ? site.Supported(kind, lambdaOrdinal: 1, hasPredicate: true, isAsync: true)
@@ -283,13 +284,14 @@ internal static class CallSiteAnalyzer
             case Family.Queryable when method.Name is "Skip" or "Take" && parameters[1].Type.SpecialType == SpecialType.System_Int32:
                 return site.SupportedAfterSelect(method.Name == "Skip" ? OperatorKind.Skip : OperatorKind.Take);
             case Family.Queryable when parameters.Length == 1
-                && method.Name is "First" or "FirstOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count" or "LongCount":
+                && method.Name is "First" or "FirstOrDefault" or "Last" or "LastOrDefault" or "Single" or "SingleOrDefault" or "Any"
+                    or "Count" or "LongCount":
                 return site.SupportedAfterSelect(TerminalKind(method.Name));
             case Family.EntityFramework when method.Name is "ToListAsync" or "ToArrayAsync":
                 return site.SupportedAfterSelect(method.Name == "ToListAsync" ? OperatorKind.ToList : OperatorKind.ToArray, isAsync: true);
             case Family.EntityFramework when parameters.Length == 2
-                && method.Name is "FirstAsync" or "FirstOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync" or "AnyAsync"
-                    or "CountAsync" or "LongCountAsync":
+                && method.Name is "FirstAsync" or "FirstOrDefaultAsync" or "LastAsync" or "LastOrDefaultAsync" or "SingleAsync"
+                    or "SingleOrDefaultAsync" or "AnyAsync" or "CountAsync" or "LongCountAsync":
                 return site.SupportedAfterSelect(TerminalKind(method.Name.Substring(0, method.Name.Length - "Async".Length)), isAsync: true);
             case Family.Enumerable:
                 // Enumerating a projected query runs it, so only the terminals that would otherwise copy it are intercepted.
@@ -650,6 +652,8 @@ internal static class CallSiteAnalyzer
     {
         "First" => OperatorKind.First,
         "FirstOrDefault" => OperatorKind.FirstOrDefault,
+        "Last" => OperatorKind.Last,
+        "LastOrDefault" => OperatorKind.LastOrDefault,
         "Single" => OperatorKind.Single,
         "SingleOrDefault" => OperatorKind.SingleOrDefault,
         "Any" => OperatorKind.Any,

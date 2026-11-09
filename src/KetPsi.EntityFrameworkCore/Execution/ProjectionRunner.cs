@@ -56,6 +56,21 @@ internal static class ProjectionRunner
     public static async Task<T?> FirstOrDefaultAsync<T>(ProjectedQueryable<T> query, CancellationToken cancellationToken)
         => QueryRunner.FirstOrDefaultOf(await ReadRowsAsync(query, QueryRunner.FirstRowLimit, cancellationToken).ConfigureAwait(false));
 
+    public static T Last<T>(ProjectedQueryable<T> query)
+        => QueryRunner.FirstOf(ReadRows(Reversed(query, QueryRunner.LastMethod), QueryRunner.FirstRowLimit), isAsync: false);
+
+    public static async Task<T> LastAsync<T>(ProjectedQueryable<T> query, CancellationToken cancellationToken)
+        => QueryRunner.FirstOf(
+            await ReadRowsAsync(Reversed(query, QueryRunner.LastMethod), QueryRunner.FirstRowLimit, cancellationToken).ConfigureAwait(false),
+            isAsync: true);
+
+    public static T? LastOrDefault<T>(ProjectedQueryable<T> query)
+        => QueryRunner.FirstOrDefaultOf(ReadRows(Reversed(query, QueryRunner.LastOrDefaultMethod), QueryRunner.FirstRowLimit));
+
+    public static async Task<T?> LastOrDefaultAsync<T>(ProjectedQueryable<T> query, CancellationToken cancellationToken)
+        => QueryRunner.FirstOrDefaultOf(
+            await ReadRowsAsync(Reversed(query, QueryRunner.LastOrDefaultMethod), QueryRunner.FirstRowLimit, cancellationToken).ConfigureAwait(false));
+
     public static T Single<T>(ProjectedQueryable<T> query)
         => QueryRunner.SingleOf(ReadRows(query, QueryRunner.SingleRowLimit), isAsync: false);
 
@@ -114,6 +129,10 @@ internal static class ProjectionRunner
 
         throw new ArgumentException(name, nameof(name));
     }
+
+    // Last is the first row of the query read in reverse.
+    private static ProjectedQueryable<T> Reversed<T>(ProjectedQueryable<T> query, string method)
+        => query.WithTail(new ReverseOrderNode(query.Tail, method));
 
     private static List<T> ReadRows<T>(ProjectedQueryable<T> query, int? rowLimit)
     {

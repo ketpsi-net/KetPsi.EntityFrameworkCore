@@ -149,6 +149,10 @@ internal static class ProjectionSources
 
             public Task<string?> FirstOrDefaultAsync(CancellationToken ct) => db.Blogs.Select(b => b.Name).FirstOrDefaultAsync(ct);
 
+            public string Last() => db.Blogs.OrderBy(b => b.Id).Select(b => b.Name).Last();
+
+            public Task<string?> LastOrDefaultAsync(CancellationToken ct) => db.Blogs.OrderBy(b => b.Id).Select(b => b.Name).LastOrDefaultAsync(ct);
+
             public BlogRow Single() => db.Blogs.Select(b => new BlogRow(b.Id, b.Name)).Single();
 
             public Task<BlogRow?> SingleOrDefaultAsync(CancellationToken ct) => db.Blogs.Select(b => new BlogRow(b.Id, b.Name)).SingleOrDefaultAsync(ct);

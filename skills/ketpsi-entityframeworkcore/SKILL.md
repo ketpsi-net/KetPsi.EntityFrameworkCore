@@ -46,14 +46,19 @@ var page = await db.Blogs
 - `Distinct()` on the entities or on a projection.
 - `GroupBy(x => key)`, with an element or result selector too, then `Where`, `OrderBy`/`ThenBy`, `Select` of keys and
   aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups (see GroupBy below).
-- Terminals: `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`,
-  their `Async` versions and predicate overloads, plus `foreach` / `await foreach` over the query.
+- Terminals: `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault`,
+  `Count`, `LongCount`, `Any`, their `Async` versions and predicate overloads, plus `foreach` / `await foreach` over the
+  query.
+- `Last` and `LastOrDefault` need an `OrderBy` before them, on the entities or before a `Select`, as in EF Core: they
+  read the query in reverse order and take the first row (`TOP(1) ... ORDER BY ... DESC`). Without an ordering they
+  throw EF Core's `InvalidOperationException` ("must have a deterministic sort order") when they run; an ordering before
+  `Distinct` doesn't count, because distinct rows have no order.
 - Aggregates: `Sum`, `Average`, `Min`, `Max` and their `Async` versions, with a selector that reads one property
   (`Sum(o => o.Total)`, `Max(p => p.Blog.Name)`) or after a `Select` of one property (`Select(o => o.Total).Sum()`).
   The SQL and the empty-set behavior are EF Core's: `Sum` of no rows is 0, a nullable or reference result is null, and
   `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
-**Not supported yet** (build error): `Join`, `Last`,
+**Not supported yet** (build error): `Join`,
 `FromSql*` (KP1004), `TagWith`, `Find`, `ExecuteUpdate`/`ExecuteDelete`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly

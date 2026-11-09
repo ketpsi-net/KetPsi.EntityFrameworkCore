@@ -151,6 +151,9 @@ internal static class ExceptionMessages
 
     public const string SequenceContainsMoreThanOneElement = "Sequence contains more than one element";
 
+    public const string LastWithoutOrdering =
+        "Queries performing '{0}' operation must have a deterministic sort order. Rewrite the query to apply an 'OrderBy' operation on the sequence before calling '{0}'.";
+
     // EF Core's async terminals throw their own messages, which end with a period.
     public const string SequenceContainsNoElementsAsync = "Sequence contains no elements.";
 

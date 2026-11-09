@@ -102,6 +102,30 @@ public sealed class ProjectionTests : IDisposable
     }
 
     [Fact]
+    public async Task Last_ReadsTheReversedEntityOrdering()
+    {
+        IQueryable<int> OrderedIds() => SqlQuery.Select(SqlQuery.OrderBy(_db.Items, nameof(Item.Name)), [nameof(Item.Id)], [], ReadId);
+        _connection.Rows = IdTable(8);
+
+        Assert.Equal(8, SqlProjection.Last(OrderedIds()));
+        Assert.Equal("SELECT TOP(1) [t0].[Id] FROM [shop].[Items] AS [t0] ORDER BY [t0].[Name] DESC", _connection.LastCommand.CommandText);
+        Assert.Equal(8, await SqlProjection.LastAsync(OrderedIds(), Token));
+        Assert.Equal(8, await SqlProjection.LastOrDefaultAsync(OrderedIds(), Token));
+
+        _connection.Rows = IdTable();
+        Assert.Equal(0, SqlProjection.LastOrDefault(OrderedIds()));
+        var none = await Assert.ThrowsAsync<InvalidOperationException>(() => SqlProjection.LastAsync(OrderedIds(), Token));
+        Assert.Equal("Sequence contains no elements.", none.Message);
+    }
+
+    [Fact]
+    public void Last_WithoutOrdering_Throws()
+        => Assert.StartsWith(
+            "Queries performing 'Last' operation must have a deterministic sort order.",
+            Assert.Throws<InvalidOperationException>(() => SqlProjection.Last(Ids())).Message,
+            StringComparison.Ordinal);
+
+    [Fact]
     public void Single_TwoRows_Throws()
     {
         _connection.Rows = IdTable(1, 2);

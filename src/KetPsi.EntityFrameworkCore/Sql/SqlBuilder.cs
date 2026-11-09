@@ -309,6 +309,21 @@ internal sealed class SqlBuilder
 
                 State.Columns = [.. select.Values.Select(v => RenderGroupValue(v, select.PredicateValues).Column)];
                 break;
+            case ReverseOrderNode reverse:
+                // Last reads the rows the operators selected from the end, so paging moves into a derived table first.
+                if (State.Ordering.Count == 0)
+                {
+                    throw new InvalidOperationException(string.Format(
+                        CultureInfo.InvariantCulture, ExceptionMessages.LastWithoutOrdering, reverse.Method));
+                }
+
+                WrapIf(State.HasPaging);
+                for (var i = 0; i < State.Ordering.Count; i++)
+                {
+                    State.Ordering[i] = State.Ordering[i] with { Descending = !State.Ordering[i].Descending };
+                }
+
+                break;
             case TrackingNode or IgnoreQueryFiltersNode or IncludeNode:
                 // Tracking doesn't change the SQL, ignored filters were already left out of the resolved filters, and
                 // includes are applied when the rows are read; scalar terminals ignore them, as in EF Core.

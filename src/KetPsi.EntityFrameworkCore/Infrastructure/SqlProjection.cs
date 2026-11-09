@@ -121,6 +121,20 @@ public static class SqlProjection
     public static Task<T?> FirstOrDefaultAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
         => ProjectionRunner.FirstOrDefaultAsync(ToProjected(source), cancellationToken);
 
+    /// <summary>Returns the last result in the query's ordering: <c>Last</c>.</summary>
+    public static T Last<T>(IQueryable<T> source) => ProjectionRunner.Last(ToProjected(source));
+
+    /// <summary>Returns the last result in the query's ordering: <c>LastAsync</c>.</summary>
+    public static Task<T> LastAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        => ProjectionRunner.LastAsync(ToProjected(source), cancellationToken);
+
+    /// <summary>Returns the last result in the query's ordering, or the default: <c>LastOrDefault</c>.</summary>
+    public static T? LastOrDefault<T>(IQueryable<T> source) => ProjectionRunner.LastOrDefault(ToProjected(source));
+
+    /// <summary>Returns the last result in the query's ordering, or the default: <c>LastOrDefaultAsync</c>.</summary>
+    public static Task<T?> LastOrDefaultAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        => ProjectionRunner.LastOrDefaultAsync(ToProjected(source), cancellationToken);
+
     /// <summary>Returns the only result: <c>Single</c>.</summary>
     public static T Single<T>(IQueryable<T> source) => ProjectionRunner.Single(ToProjected(source));
 
