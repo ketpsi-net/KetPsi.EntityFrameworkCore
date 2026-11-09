@@ -49,7 +49,7 @@ Targets `net8.0`, `net9.0` and `net10.0`, each with its own EF Core major versio
 
 ## Status
 
-Preview. Done: filtering and ordering (through reference navigations too), paging, terminals, query filters,
+Preview. Done: filtering and ordering (through reference navigations too), paging, terminals, `Find`, query filters,
 tracking, identity resolution, `Include` / `ThenInclude`, `Select` (properties, reference navigations, entities and
 computed members), `Distinct`, `Sum` / `Average` / `Min` / `Max`, and `GroupBy` with keys, aggregates, `HAVING` and
 the groups themselves.

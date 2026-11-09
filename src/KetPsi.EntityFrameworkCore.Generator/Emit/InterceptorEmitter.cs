@@ -145,6 +145,13 @@ internal static class InterceptorEmitter
             return;
         }
 
+        if (site.Operator == OperatorKind.Find)
+        {
+            // Find is a method of the set, so there is no other source to fall back for.
+            writer.Line($"return {SqlQuery}.{signature.Name}({arguments});").Close();
+            return;
+        }
+
         if (signature.ContainingType == Enumerable)
         {
             // Enumerable.ToList and ToArray accept any sequence; only KetPsi queries and DbSets run here.

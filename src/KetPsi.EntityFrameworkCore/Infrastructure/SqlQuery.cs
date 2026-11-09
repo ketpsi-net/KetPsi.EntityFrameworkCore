@@ -377,6 +377,32 @@ public static class SqlQuery
         where T : class
         => QueryRunner.AnyAsync(ToSqlQueryable(source), cancellationToken);
 
+    /// <summary>Finds an entity by its primary key: <c>DbSet.Find</c>.</summary>
+    /// <param name="set">The set the entity belongs to.</param>
+    /// <param name="keyValues">The key values in key order; with a <see langword="null"/> the result is <see langword="null"/>.</param>
+    /// <exception cref="ArgumentException">The number or the types of the key values don't match the key.</exception>
+    public static T? Find<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(DbSet<T> set, object?[]? keyValues)
+        where T : class
+        => EntityFinder.Find(set, keyValues);
+
+    /// <summary>Finds an entity by its primary key: <c>DbSet.FindAsync</c>.</summary>
+    /// <param name="set">The set the entity belongs to.</param>
+    /// <param name="keyValues">The key values in key order; with a <see langword="null"/> the result is <see langword="null"/>.</param>
+    /// <exception cref="ArgumentException">The number or the types of the key values don't match the key.</exception>
+    public static ValueTask<T?> FindAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(DbSet<T> set, object?[]? keyValues)
+        where T : class
+        => EntityFinder.FindAsync(set, keyValues, CancellationToken.None);
+
+    /// <summary>Finds an entity by its primary key: <c>DbSet.FindAsync</c> with a cancellation token.</summary>
+    /// <param name="set">The set the entity belongs to.</param>
+    /// <param name="keyValues">The key values in key order; with a <see langword="null"/> the result is <see langword="null"/>.</param>
+    /// <param name="cancellationToken">Cancels the query.</param>
+    /// <exception cref="ArgumentException">The number or the types of the key values don't match the key.</exception>
+    public static ValueTask<T?> FindAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        DbSet<T> set, object?[]? keyValues, CancellationToken cancellationToken)
+        where T : class
+        => EntityFinder.FindAsync(set, keyValues, cancellationToken);
+
     internal static SqlQueryable<T> ToSqlQueryable<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
         where T : class
     {

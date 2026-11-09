@@ -171,7 +171,13 @@ internal static class CallSiteAnalyzer
             Family.SqlServer => site.Unsupported(),
 
             // Of DbSet's own methods, only these query the database through EF Core's pipeline.
-            Family.DbSet => method.Name is "Find" or "FindAsync" or "AsAsyncEnumerable" ? site.Unsupported() : null,
+            Family.DbSet => method.Name switch
+            {
+                "Find" => site.Find(isAsync: false),
+                "FindAsync" => site.Find(isAsync: true),
+                "AsAsyncEnumerable" => site.Unsupported(),
+                _ => null,
+            },
             _ => null,
         };
     }
@@ -697,6 +703,29 @@ internal static class CallSiteAnalyzer
                 Signature: GetGenericSignature(operation.TargetMethod),
                 ProjectedFrom: projectedFrom,
                 Aggregate: aggregate);
+        }
+
+        /// <summary>
+        /// <c>Find</c> or <c>FindAsync</c>, which are methods of the set itself: the interceptor takes the set as its
+        /// <see langword="this"/> parameter, followed by the method's parameters.
+        /// </summary>
+        public CallSite Find(bool isAsync)
+        {
+            var method = operation.TargetMethod;
+            var set = new ParameterSignature(method.ContainingType.ToDisplayString(SignatureFormat), "set");
+            var parameters = new[] { set }
+                .Concat(method.Parameters.Select(static p => new ParameterSignature(p.Type.ToDisplayString(SignatureFormat), p.Name)))
+                .ToEquatableArray();
+            return new(
+                _elementType,
+                location,
+                OperatorKind.Find,
+                isAsync,
+                HasPredicate: false,
+                Diagnostic: null,
+                Interception: semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax(),
+                Signature: new InterceptorSignature(
+                    method.Name, EntityDiscovery.TypeName(method.ContainingType), method.ReturnType.ToDisplayString(SignatureFormat), parameters));
         }
 
         /// <param name="kind">The operator.</param>

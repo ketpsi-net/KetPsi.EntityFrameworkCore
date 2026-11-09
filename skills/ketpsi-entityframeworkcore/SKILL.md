@@ -49,6 +49,12 @@ var page = await db.Blogs
 - Terminals: `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault`, `Single`, `SingleOrDefault`,
   `Count`, `LongCount`, `Any`, their `Async` versions and predicate overloads, plus `foreach` / `await foreach` over the
   query.
+- `db.Blogs.Find(id)`, `FindAsync(id)` and `FindAsync([id], ct)` work as in EF Core: an entity the context already
+  tracks under the key (even added or deleted) is returned without a query; otherwise it is read with
+  `SELECT TOP(1) ... WHERE [Id] = @p0`, with query filters and the context's default tracking (`Find` on a no-tracking
+  context returns an untracked entity). Key values with a `null` return `null`; the wrong number or type of key values
+  throws EF Core's `ArgumentException` when `Find` or `FindAsync` is called. Composite keys take their values in key
+  order.
 - `Last` and `LastOrDefault` need an `OrderBy` before them, on the entities or before a `Select`, as in EF Core: they
   read the query in reverse order and take the first row (`TOP(1) ... ORDER BY ... DESC`). Without an ordering they
   throw EF Core's `InvalidOperationException` ("must have a deterministic sort order") when they run; an ordering before
@@ -59,7 +65,7 @@ var page = await db.Blogs
   `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
 **Not supported yet** (build error): `Join`,
-`FromSql*` (KP1004), `TagWith`, `Find`, `ExecuteUpdate`/`ExecuteDelete`, `AsAsyncEnumerable`.
+`FromSql*` (KP1004), `TagWith`, `ExecuteUpdate`/`ExecuteDelete`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
 on a `DbSet`, but after any KetPsi operator they run the query and finish in memory:

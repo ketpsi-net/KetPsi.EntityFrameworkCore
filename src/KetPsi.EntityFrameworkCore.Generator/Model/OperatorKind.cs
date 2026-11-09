@@ -37,4 +37,5 @@ internal enum OperatorKind
     Count,
     LongCount,
     Any,
+    Find,
 }

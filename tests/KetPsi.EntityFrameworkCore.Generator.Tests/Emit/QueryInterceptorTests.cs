@@ -156,6 +156,30 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
+    public void Find_QueriesByKeyThenReturnsTheTrackedEntity()
+    {
+        var blog = Invoke("Find", 1);
+
+        Assert.Equal("SELECT TOP(1) " + Columns + " FROM " + Table + " WHERE [t0].[Id] = @p0", _connection.LastCommand.CommandText);
+        Assert.Equal([1], Parameters());
+        Assert.Same(blog, Invoke("Find", 1));
+        Assert.Single(_connection.Commands);
+    }
+
+    [Fact]
+    public async Task FindAsync_BothOverloads_QueryByKey()
+    {
+        Assert.Equal("alpha", Get((await InvokeValueTask("FindAsync", 1))!, "Name"));
+        Assert.Null(await InvokeValueTask("FindWithTokenAsync", new object?[] { null }, Token));
+        Assert.Single(_connection.Commands);
+
+        var exception = Assert.Throws<TargetInvocationException>(() => Invoke("FindWithTokenAsync", new object?[] { 1L }, Token));
+        Assert.Equal(
+            "The key value at position 0 of the call to 'DbSet<Blog>.Find' was of type 'long', which does not match the property type of 'int'.",
+            Assert.IsType<ArgumentException>(exception.InnerException).Message);
+    }
+
+    [Fact]
     public void Single_TwoRows_ThrowsLikeLinq()
     {
         var exception = Assert.Throws<TargetInvocationException>(() => Invoke("Single"));
@@ -378,6 +402,14 @@ public sealed class QueryInterceptorTests : IDisposable
     private async Task<object?> InvokeAsync(string method, params object?[] arguments)
     {
         var task = (Task)Invoke(method, arguments)!;
+        await task;
+        return task.GetType().GetProperty("Result")!.GetValue(task);
+    }
+
+    private async Task<object?> InvokeValueTask(string method, params object?[] arguments)
+    {
+        var valueTask = Invoke(method, arguments)!;
+        var task = (Task)valueTask.GetType().GetMethod("AsTask")!.Invoke(valueTask, null)!;
         await task;
         return task.GetType().GetProperty("Result")!.GetValue(task);
     }

@@ -73,6 +73,12 @@ internal static class QuerySources
 
             public Blog Single() => db.Blogs.AsNoTracking().Single();
 
+            public Blog? Find(int id) => db.Blogs.Find(id);
+
+            public ValueTask<Blog?> FindAsync(int id) => db.Blogs.FindAsync(id);
+
+            public ValueTask<Blog?> FindWithTokenAsync(object?[] keyValues, CancellationToken ct) => db.Blogs.FindAsync(keyValues, ct);
+
             public List<Post> ByBlog(string name, int min) => db.Posts.AsNoTracking()
                 .Where(p => p.Blog.Name == name && p.Blog != null && p.Blog.Id > min)
                 .OrderByDescending(p => p.Blog.Rating)

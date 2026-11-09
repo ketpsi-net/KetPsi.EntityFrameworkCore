@@ -151,6 +151,19 @@ internal static class ExceptionMessages
 
     public const string SequenceContainsMoreThanOneElement = "Sequence contains more than one element";
 
+    // EF Core's messages for Find, with its parameter names in order.
+    public const string FindKeyless =
+        "The invoked method cannot be used for the entity type '{0}' because it does not have a primary key. For more information on keyless entity types, see https://go.microsoft.com/fwlink/?linkid=2141943.";
+
+    public const string FindNotCompositeKey =
+        "Entity type '{0}' is defined with a single key property, but {1} values were passed to the 'Find' method.";
+
+    public const string FindValueCountMismatch =
+        "Entity type '{0}' is defined with a {1}-part composite key, but {2} values were passed to the 'Find' method.";
+
+    public const string FindValueTypeMismatch =
+        "The key value at position {0} of the call to 'DbSet<{1}>.Find' was of type '{2}', which does not match the property type of '{3}'.";
+
     public const string LastWithoutOrdering =
         "Queries performing '{0}' operation must have a deterministic sort order. Rewrite the query to apply an 'OrderBy' operation on the sequence before calling '{0}'.";
 
