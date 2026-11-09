@@ -267,7 +267,7 @@ internal static class QueryRunner
             includes.EnsureNoCycle();
         }
 
-        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, filtersFor, rowLimit);
+        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, filtersFor, rowLimit, bind);
         return new IncludedQuery(statement, new IncludeLoader(context, dialect, tracking, filtersFor, bind));
     }
 

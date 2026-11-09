@@ -26,6 +26,7 @@ internal sealed class PredicateTranslator
     private readonly IParameterSymbol _parameter;
     private readonly Func<ExpressionSyntax, string>? _readValue;
     private readonly Func<ExpressionSyntax, PredicateOperand?>? _operands;
+    private readonly bool _allowNavigations;
     private readonly CancellationToken _cancellationToken;
     private readonly List<string> _valuePaths;
 
@@ -35,12 +36,14 @@ internal sealed class PredicateTranslator
         Func<ExpressionSyntax, string>? readValue,
         Func<ExpressionSyntax, PredicateOperand?>? operands,
         List<string>? valueSlots,
+        bool allowNavigations,
         CancellationToken cancellationToken)
     {
         _model = model;
         _parameter = parameter;
         _readValue = readValue;
         _operands = operands;
+        _allowNavigations = allowNavigations;
         _valuePaths = valueSlots ?? [];
         _cancellationToken = cancellationToken;
     }
@@ -63,13 +66,18 @@ internal sealed class PredicateTranslator
     /// A list shared with other predicates whose value slots are passed together; the predicate's slots are appended
     /// to it and numbered from its end. <see cref="PredicateModel.ValuePaths"/> then lists only this predicate's.
     /// </param>
+    /// <param name="allowNavigations">
+    /// Whether the predicate can read through reference navigations, such as <c>x.Blog.Name</c> or
+    /// <c>x.Blog == null</c>; the operand names are then property paths.
+    /// </param>
     public static (PredicateModel? Predicate, DiagnosticInfo? Diagnostic) Translate(
         LambdaExpressionSyntax lambda,
         SemanticModel model,
         CancellationToken cancellationToken,
         Func<ExpressionSyntax, string>? readValue = null,
         Func<ExpressionSyntax, PredicateOperand?>? operands = null,
-        List<string>? valueSlots = null)
+        List<string>? valueSlots = null,
+        bool allowNavigations = false)
     {
         var parameterSyntax = lambda switch
         {
@@ -85,7 +93,7 @@ internal sealed class PredicateTranslator
             return (null, Diagnostic(DiagnosticDescriptors.ExpressionNotSupported, lambda));
         }
 
-        var translator = new PredicateTranslator(model, parameter, readValue, operands, valueSlots, cancellationToken);
+        var translator = new PredicateTranslator(model, parameter, readValue, operands, valueSlots, allowNavigations, cancellationToken);
         var first = translator._valuePaths.Count;
         try
         {
@@ -144,6 +152,14 @@ internal sealed class PredicateTranslator
 
     private string TranslateComparison(BinaryExpressionSyntax binary, string comparison, string path)
     {
+        // x.Navigation == null, either way round.
+        if (comparison is "Equal" or "NotEqual"
+            && (IsNullLiteral(binary.Right) ? NavigationPath(binary.Left) : IsNullLiteral(binary.Left) ? NavigationPath(binary.Right) : null)
+                is { } navigation)
+        {
+            return NullCheck(navigation, isNull: comparison == "Equal");
+        }
+
         // Each side is translated in source order, so the value slots and the values they capture are too.
         var leftProperty = EntityProperty(binary.Left);
         PredicateOperand property;
@@ -291,6 +307,11 @@ internal sealed class PredicateTranslator
 
         if (node is MemberAccessExpressionSyntax member)
         {
+            if (_allowNavigations && PropertyPath(member) is { } chain)
+            {
+                return ThroughNavigations(chain, node);
+            }
+
             if (IsParameter(member.Expression))
             {
                 if (_model.GetSymbolInfo(member, _cancellationToken).Symbol is not IPropertySymbol property)
@@ -320,6 +341,68 @@ internal sealed class PredicateTranslator
         throw Fail(
             node is InvocationExpressionSyntax ? DiagnosticDescriptors.MethodNotSupported : DiagnosticDescriptors.ExpressionNotSupported,
             node);
+    }
+
+    /// <summary>
+    /// The property path a chain of reference navigations ends with, such as <c>Blog.Name</c> for <c>x.Blog.Name</c>.
+    /// A collection on the way, a member of a scalar, or a chain that ends with a navigation is a diagnostic.
+    /// </summary>
+    private PredicateOperand ThroughNavigations(IReadOnlyList<IPropertySymbol> chain, ExpressionSyntax node)
+    {
+        for (var i = 0; i < chain.Count - 1; i++)
+        {
+            var type = chain[i].Type;
+            if (EntityShapeBuilder.IsReadableScalar(type))
+            {
+                // x.Name.Length, or x.Blog.Name.Length: a member of a scalar.
+                throw Fail(DiagnosticDescriptors.MethodNotSupported, node);
+            }
+
+            if (EntityShapeBuilder.IsCollectionNavigation(type) || EntityShapeBuilder.NavigationTarget(type) is null)
+            {
+                throw Fail(DiagnosticDescriptors.CollectionNotSupported, node);
+            }
+        }
+
+        var last = chain[chain.Count - 1];
+        return EntityShapeBuilder.IsReadableScalar(last.Type)
+            ? new PredicateOperand(string.Join(".", chain.Select(static p => p.Name)), last.Type)
+            : throw Fail(
+                EntityShapeBuilder.IsCollectionNavigation(last.Type) ? DiagnosticDescriptors.CollectionNotSupported : DiagnosticDescriptors.NavigationNotSupported,
+                node);
+    }
+
+    /// <summary>The path of a chain of reference navigations from the parameter, such as <c>Blog</c> for <c>x.Blog</c>; otherwise null.</summary>
+    private string? NavigationPath(ExpressionSyntax node)
+    {
+        if (!_allowNavigations || _operands is not null || StripParentheses(node) is not MemberAccessExpressionSyntax member
+            || PropertyPath(member) is not { } chain)
+        {
+            return null;
+        }
+
+        return chain.All(static p => !EntityShapeBuilder.IsCollectionNavigation(p.Type) && EntityShapeBuilder.NavigationTarget(p.Type) is not null)
+            ? string.Join(".", chain.Select(static p => p.Name))
+            : null;
+    }
+
+    /// <summary>The properties a member chain reads from the lambda parameter, outermost first; null for anything else.</summary>
+    private List<IPropertySymbol>? PropertyPath(MemberAccessExpressionSyntax member)
+    {
+        var chain = new List<IPropertySymbol>();
+        ExpressionSyntax current = member;
+        while (StripParentheses(current) is MemberAccessExpressionSyntax access)
+        {
+            if (_model.GetSymbolInfo(access, _cancellationToken).Symbol is not IPropertySymbol property)
+            {
+                return null;
+            }
+
+            chain.Insert(0, property);
+            current = access.Expression;
+        }
+
+        return IsParameter(current) ? chain : null;
     }
 
     /// <summary>Records a value slot, after checking the value is something the runtime can read from the tree.</summary>
@@ -407,8 +490,10 @@ internal sealed class PredicateTranslator
         _ => comparison,
     };
 
-    private static string NullCheck(PredicateOperand property, bool isNull)
-        => $"new {Templates}.NullCheckTemplate(\"{property.Name}\", isNull: {(isNull ? "true" : "false")})";
+    private static string NullCheck(PredicateOperand property, bool isNull) => NullCheck(property.Name, isNull);
+
+    private static string NullCheck(string name, bool isNull)
+        => $"new {Templates}.NullCheckTemplate(\"{name}\", isNull: {(isNull ? "true" : "false")})";
 
     // Parentheses and the null-forgiving operator have no node in the expression tree.
     internal static ExpressionSyntax StripParentheses(ExpressionSyntax node)

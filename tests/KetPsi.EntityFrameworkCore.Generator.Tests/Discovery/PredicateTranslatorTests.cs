@@ -110,6 +110,36 @@ public sealed class PredicateTranslatorTests
         Assert.Equal(text, diagnostic.MessageArgs[0]);
     }
 
+    [Theory]
+    [InlineData("b => b.Author!.Id == min", "new T.ComparisonTemplate(\"Author.Id\", T.ComparisonOperator.Equal, 0)")]
+    [InlineData("b => b.Author == null", "new T.NullCheckTemplate(\"Author\", isNull: true)")]
+    [InlineData("b => null != b.Author", "new T.NullCheckTemplate(\"Author\", isNull: false)")]
+    [InlineData("b => !(b.Author != null) || ids.Contains(b.Author!.Id)", "new T.OrTemplate(new T.NotTemplate(new T.NullCheckTemplate(\"Author\", isNull: false)), new T.InListTemplate(\"Author.Id\", 0))")]
+    [InlineData("b => b.Rating > 1", "new T.ComparisonTemplate(\"Rating\", T.ComparisonOperator.GreaterThan, 0)")]
+    public void Translate_WithNavigations_NamesPropertyPaths(string lambda, string template)
+    {
+        var (predicate, diagnostic) = Translate(lambda, allowNavigations: true);
+
+        Assert.Null(diagnostic);
+        Assert.Equal(template, Shorten(predicate!.TemplateCode));
+    }
+
+    [Theory]
+    [InlineData("b => b.Author == b.Author", "KP2002", "b.Author")]
+    [InlineData("b => b.Author!.Id > b.Id", "KP2006", "b.Author!.Id > b.Id")]
+    [InlineData("b => b.Posts.Any()", "KP2005", "b.Posts.Any()")]
+    [InlineData("b => b.Posts.Count > 1", "KP2005", "b.Posts.Count")]
+    [InlineData("b => b.Posts == null", "KP2005", "b.Posts")]
+    [InlineData("b => b.Name.Length > 3", "KP2003", "b.Name.Length")]
+    public void Translate_WithNavigations_StillReportsTheRest(string lambda, string id, string text)
+    {
+        var (predicate, diagnostic) = Translate(lambda, allowNavigations: true);
+
+        Assert.Null(predicate);
+        Assert.Equal(id, diagnostic!.Descriptor.Id);
+        Assert.Equal(text, diagnostic.MessageArgs[0]);
+    }
+
     [Fact]
     public void Generator_ReportsTranslationDiagnosticAtConstruct()
     {
@@ -135,7 +165,7 @@ public sealed class PredicateTranslatorTests
         return Assert.IsType<PredicateModel>(predicate);
     }
 
-    private static (PredicateModel? Predicate, DiagnosticInfo? Diagnostic) Translate(string lambda)
+    private static (PredicateModel? Predicate, DiagnosticInfo? Diagnostic) Translate(string lambda, bool allowNavigations = false)
     {
         var compilation = GeneratorHost.Compile(TestSources.WithBody(Locals + $"\nvar q = db.Blogs.Where({lambda});"));
         var tree = compilation.SyntaxTrees.Single();
@@ -143,7 +173,8 @@ public sealed class PredicateTranslatorTests
             .Single(i => i.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Where" });
         var syntax = where.ArgumentList.Arguments[0].Expression;
 
-        return PredicateTranslator.Translate((LambdaExpressionSyntax)syntax, compilation.GetSemanticModel(tree), TestContext.Current.CancellationToken);
+        return PredicateTranslator.Translate(
+            (LambdaExpressionSyntax)syntax, compilation.GetSemanticModel(tree), TestContext.Current.CancellationToken, allowNavigations: allowNavigations);
     }
 
     private static string Shorten(string code)

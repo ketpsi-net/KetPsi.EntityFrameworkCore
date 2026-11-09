@@ -155,22 +155,22 @@ public static class SqlQuery
         return query.WithTail(new IgnoreQueryFiltersNode(query.Tail, [.. filterKeys]));
     }
 
-    /// <summary>Appends <c>OrderBy</c> on the entity property <paramref name="propertyName"/>.</summary>
+    /// <summary>Appends <c>OrderBy</c> on the entity property <paramref name="propertyName"/>, or a path to one through reference navigations.</summary>
     public static IOrderedQueryable<T> OrderBy<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, string propertyName)
         where T : class
         => AppendOrder(source, propertyName, descending: false, isThenBy: false);
 
-    /// <summary>Appends <c>OrderByDescending</c> on the entity property <paramref name="propertyName"/>.</summary>
+    /// <summary>Appends <c>OrderByDescending</c> on the entity property <paramref name="propertyName"/>, or a path to one through reference navigations.</summary>
     public static IOrderedQueryable<T> OrderByDescending<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, string propertyName)
         where T : class
         => AppendOrder(source, propertyName, descending: true, isThenBy: false);
 
-    /// <summary>Appends <c>ThenBy</c> on the entity property <paramref name="propertyName"/>.</summary>
+    /// <summary>Appends <c>ThenBy</c> on the entity property <paramref name="propertyName"/>, or a path to one through reference navigations.</summary>
     public static IOrderedQueryable<T> ThenBy<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IOrderedQueryable<T> source, string propertyName)
         where T : class
         => AppendOrder(source, propertyName, descending: false, isThenBy: true);
 
-    /// <summary>Appends <c>ThenByDescending</c> on the entity property <paramref name="propertyName"/>.</summary>
+    /// <summary>Appends <c>ThenByDescending</c> on the entity property <paramref name="propertyName"/>, or a path to one through reference navigations.</summary>
     public static IOrderedQueryable<T> ThenByDescending<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IOrderedQueryable<T> source, string propertyName)
         where T : class
         => AppendOrder(source, propertyName, descending: true, isThenBy: true);

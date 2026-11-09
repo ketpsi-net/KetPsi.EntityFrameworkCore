@@ -39,8 +39,8 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Area | Supported |
 |------|-----------|
 | Sources | `db.Blogs`, `db.Set<Blog>()`, and queries composed across statements (`IQueryable<Blog> q = db.Blogs; ...`) |
-| Filtering | `Where`, `WhereIf(condition, predicate)` |
-| Ordering | `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending` on a property of the entity |
+| Filtering | `Where`, `WhereIf(condition, predicate)`, on properties of the entity and of reference navigations (`p => p.Blog.Name == name`, `p => p.Blog != null`) |
+| Ordering | `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending` on a property of the entity or of a reference navigation |
 | Paging | `Skip`, `Take`, in any order and combination, as EF Core translates them |
 | Tracking | `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`, and the context's `QueryTrackingBehavior` |
 | Query filters | Model query filters always apply; `IgnoreQueryFilters()` (and, on EF Core 10, `IgnoreQueryFilters(["name"])`) |
@@ -57,6 +57,8 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 - `&&`, `||`, `!`, boolean properties, `== null`, `!= null` and `.HasValue`.
 - `string.Equals(value)`, enums, nullable properties.
 - `list.Contains(b.Property)` over arrays and lists, sent as one JSON parameter through `OPENJSON`.
+- Properties through reference navigations, such as `p.Blog.Name == name`, joined like an included reference
+  (`INNER JOIN` when required, `LEFT JOIN` when optional), and `p.Blog == null`, which checks the foreign key.
 - Values: constants, locals, parameters, fields and properties of them, static members. Every value is sent as a
   `DbParameter`; nothing is concatenated into SQL.
 
@@ -77,7 +79,8 @@ query and tracks nothing.
 accessible parameterless constructor. Private setters and constructors are fine. Shadow properties are supported.
 
 Not supported yet: value converters, owned and complex types, JSON columns, inheritance, many-to-many navigations
-without a join entity, and navigations inside predicates.
+without a join entity, collection navigations inside predicates (`b.Posts.Any()`), and navigations inside query
+filters.
 
 ### Include
 

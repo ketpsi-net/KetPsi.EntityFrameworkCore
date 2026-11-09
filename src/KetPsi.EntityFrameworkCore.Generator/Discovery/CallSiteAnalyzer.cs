@@ -723,7 +723,8 @@ internal static class CallSiteAnalyzer
 
                 if (lambda is not null && IsPredicate(kind, hasPredicate))
                 {
-                    var (translated, translationDiagnostic) = PredicateTranslator.Translate(lambda, semanticModel, cancellationToken);
+                    var (translated, translationDiagnostic) = PredicateTranslator.Translate(
+                        lambda, semanticModel, cancellationToken, allowNavigations: true);
                     if (translationDiagnostic is not null)
                     {
                         return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, translationDiagnostic);

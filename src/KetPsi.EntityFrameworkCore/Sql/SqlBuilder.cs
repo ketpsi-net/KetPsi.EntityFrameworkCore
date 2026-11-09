@@ -83,7 +83,7 @@ internal sealed class SqlBuilder
     /// <param name="filters">The model query filters to apply to the root table, already resolved against the context.</param>
     /// <param name="aggregate">For <see cref="QueryTerminal.Aggregate"/>, what to compute.</param>
     /// <param name="filtersFor">The query filters to apply to an entity joined through a navigation.</param>
-    /// <param name="bindEntity">Binds the target entity of a navigation that a projection or aggregate reads through.</param>
+    /// <param name="bindEntity">Binds the target entity of a navigation that a predicate, ordering, projection or aggregate reads through.</param>
     public static SqlStatement Build(
         BoundEntity entity,
         QueryNode tail,
@@ -136,7 +136,7 @@ internal sealed class SqlBuilder
     /// </param>
     /// <param name="filtersFor">The query filters to apply to an entity, already resolved against the context.</param>
     /// <param name="rowLimit">A limit applied after every operator, such as 1 for <c>First</c>.</param>
-    /// <param name="bindEntity">Binds the target entity of a navigation that a projection reads through.</param>
+    /// <param name="bindEntity">Binds the target entity of a navigation that a predicate, ordering or projection reads through.</param>
     public static IncludeStatement BuildRows(
         BoundEntity entity,
         QueryNode tail,
@@ -235,18 +235,17 @@ internal sealed class SqlBuilder
             case WhereNode where:
                 EnsureNotProjected();
                 WrapIf(State.HasPaging || State.Distinct);
-                var predicate = _entity.BindPredicate(where.Predicate);
-                State.Predicates.Add(RenderPredicate(predicate, where.Values, negated: false, State.Alias));
+                State.Predicates.Add(RenderEntityPredicate(where.Predicate, where.Values));
                 break;
             case OrderNode { IsThenBy: false } order:
                 EnsureNotProjected();
                 WrapIf(State.HasPaging);
                 State.Ordering.Clear();
-                State.Ordering.Add(new Ordering(RootColumn(_entity.GetProperty(order.PropertyName), State.Alias), order.Descending));
+                State.Ordering.Add(new Ordering(ResolvePath(order.PropertyName).Column, order.Descending));
                 break;
             case OrderNode order:
                 EnsureNotProjected();
-                State.Ordering.Add(new Ordering(RootColumn(_entity.GetProperty(order.PropertyName), State.Alias), order.Descending));
+                State.Ordering.Add(new Ordering(ResolvePath(order.PropertyName).Column, order.Descending));
                 break;
             case SkipNode skip:
                 WrapIf(State.HasPaging || State.Distinct);
@@ -619,6 +618,137 @@ internal sealed class SqlBuilder
         return segment;
     }
 
+    /// <summary>
+    /// A predicate on the queried entity at the current level. Its names are property paths, which join the reference
+    /// navigations they go through, and a null check can name a navigation itself.
+    /// </summary>
+    private string RenderEntityPredicate(PredicateTemplate template, IReadOnlyList<object?> values)
+    {
+        if (TemplateNames(template).All(_entity.HasProperty))
+        {
+            return RenderPredicate(_entity.BindPredicate(template), values, negated: false, State.Alias);
+        }
+
+        // Each use gets its own instance, so the same path read twice maps to its column either way.
+        var columns = new Dictionary<BoundProperty, string>(ReferenceEqualityComparer.Instance);
+        BoundProperty Resolve(string path)
+        {
+            var (column, property) = ResolvePath(path);
+            var operand = property with { };
+            columns[operand] = column.Sql;
+            return operand;
+        }
+
+        var predicate = PredicateBinder.Bind(ExpandNavigationChecks(template), Resolve, _entity.ClrType);
+        return RenderPredicate(predicate, values, negated: false, property => columns[property]);
+    }
+
+    private static IEnumerable<string> TemplateNames(PredicateTemplate template) => template switch
+    {
+        ComparisonTemplate comparison => [comparison.PropertyName],
+        BooleanPropertyTemplate boolean => [boolean.PropertyName],
+        NullCheckTemplate nullCheck => [nullCheck.PropertyName],
+        InListTemplate inList => [inList.PropertyName],
+        NotTemplate not => TemplateNames(not.Operand),
+        AndTemplate and => TemplateNames(and.Left).Concat(TemplateNames(and.Right)),
+        OrTemplate or => TemplateNames(or.Left).Concat(TemplateNames(or.Right)),
+        _ => throw new UnreachableException(template.GetType().ToString()),
+    };
+
+    /// <summary>
+    /// Replaces each null check of a reference navigation (<c>x.Blog == null</c>) with null checks of the key that joins
+    /// it, as EF Core does: the foreign key when this side holds it, otherwise the joined target's.
+    /// </summary>
+    private PredicateTemplate ExpandNavigationChecks(PredicateTemplate template)
+    {
+        switch (template)
+        {
+            case NullCheckTemplate nullCheck when NavigationAt(nullCheck.PropertyName) is var (parentPath, navigation):
+                var keys = navigation.IsOnDependent
+                    ? navigation.SourceKey.Select(key => Append(parentPath, key.Name))
+                    : navigation.TargetKey.Select(key => nullCheck.PropertyName + "." + key);
+                return keys
+                    .Select(PredicateTemplate (key) => new NullCheckTemplate(key, nullCheck.IsNull))
+                    .Aggregate((left, right) => nullCheck.IsNull ? new OrTemplate(left, right) : new AndTemplate(left, right));
+            case NotTemplate not:
+                var operand = ExpandNavigationChecks(not.Operand);
+                return ReferenceEquals(operand, not.Operand) ? not : new NotTemplate(operand);
+            case AndTemplate and:
+                var (andLeft, andRight) = (ExpandNavigationChecks(and.Left), ExpandNavigationChecks(and.Right));
+                return ReferenceEquals(andLeft, and.Left) && ReferenceEquals(andRight, and.Right) ? and : new AndTemplate(andLeft, andRight);
+            case OrTemplate or:
+                var (orLeft, orRight) = (ExpandNavigationChecks(or.Left), ExpandNavigationChecks(or.Right));
+                return ReferenceEquals(orLeft, or.Left) && ReferenceEquals(orRight, or.Right) ? or : new OrTemplate(orLeft, orRight);
+            default:
+                return template;
+        }
+    }
+
+    /// <summary>The navigation a path ends with and the path of the entity that has it, or null when it ends with a property.</summary>
+    private (string ParentPath, BoundNavigation Navigation)? NavigationAt(string path)
+    {
+        var dot = path.LastIndexOf('.');
+        var parentPath = dot < 0 ? RootPath : path[..dot];
+        var parent = EntityAt(parentPath);
+        var name = path[(dot + 1)..];
+        return parent.HasProperty(name) ? null : (parentPath, parent.GetNavigation(name));
+    }
+
+    /// <summary>The entity a navigation path reaches, without joining it.</summary>
+    private BoundEntity EntityAt(string path)
+    {
+        var entity = _entity;
+        foreach (var name in path.Length == 0 ? [] : path.Split('.'))
+        {
+            entity = Bind(entity.GetNavigation(name).TargetClrType);
+        }
+
+        return entity;
+    }
+
+    /// <summary>
+    /// The column a property path of a predicate or an ordering reads, and its property, nullable when a navigation on
+    /// the way can be missing. A key of a navigation's target is read from the foreign key that joins it, without
+    /// joining the target, as in EF Core.
+    /// </summary>
+    private (SqlColumn Column, BoundProperty Property) ResolvePath(string path)
+    {
+        var dot = path.LastIndexOf('.');
+        if (dot < 0)
+        {
+            var property = _entity.GetProperty(path);
+            return (RootColumn(property, State.Alias), property);
+        }
+
+        var navigationPath = path[..dot];
+        var name = path[(dot + 1)..];
+        if (NavigationAt(navigationPath) is var (parentPath, navigation)
+            && navigation is { IsOnDependent: true, IsCollection: false }
+            && IndexOf(navigation.TargetKey, name) is >= 0 and var index)
+        {
+            var parent = GetTarget(parentPath, entity: null);
+            var key = navigation.SourceKey[index];
+            return (RootColumn(key, parent.Alias), key with { IsNullable = key.IsNullable || !parent.AlwaysExists });
+        }
+
+        var target = GetTarget(navigationPath, entity: null);
+        var read = target.Entity.GetProperty(name);
+        return (RootColumn(read, target.Alias), read with { IsNullable = read.IsNullable || !target.AlwaysExists });
+    }
+
+    private static int IndexOf(IReadOnlyList<string> names, string name)
+    {
+        for (var i = 0; i < names.Count; i++)
+        {
+            if (string.Equals(names[i], name, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     /// <summary>The column a property path reads, joining the navigations it goes through.</summary>
     private SqlColumn ResolveColumn(string path)
     {
@@ -686,7 +816,7 @@ internal sealed class SqlBuilder
     }
 
     private BoundEntity Bind(Type entityType)
-        => _bindEntity?.Invoke(entityType) ?? throw new UnreachableException("A projection through a navigation needs an entity binder.");
+        => _bindEntity?.Invoke(entityType) ?? throw new UnreachableException("A query that reads through a navigation needs an entity binder.");
 
     private static string Append(string path, string name) => path.Length == 0 ? name : path + "." + name;
 

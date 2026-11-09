@@ -54,6 +54,7 @@ public sealed class GroupDiagnosticsTests
     [InlineData("var r = db.Blogs.GroupBy(b => b.Status).Select(g => g).ToList();", "KP2011", "g")]
     [InlineData("var r = db.Posts.GroupBy(p => p.BlogId).Select(g => g.Max(p => p.Blog.Rating)).ToList();", "KP2011", "p => p.Blog.Rating")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Status).Select(g => g.Sum(b => b.Rating * 2)).ToList();", "KP2011", "b => b.Rating * 2")]
+    [InlineData("var r = db.Posts.GroupBy(p => p.BlogId).Select(g => g.Count(p => p.Blog.IsActive)).ToList();", "KP2002", "p.Blog.IsActive")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Status, b => b.Rating).Select(g => g.Count(r => r > 1)).ToList();", "KP2011", "g.Count(r => r > 1)")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).Select(g => g.Count(b => b.Rating > g.Key)).ToList();", "KP2011", "g.Key")]
     [InlineData("var r = db.Blogs.GroupBy(b => new { b.Status, b.Rating }).OrderBy(g => g.Key).Select(g => g.Count()).ToList();", "KP2011", "g.Key")]

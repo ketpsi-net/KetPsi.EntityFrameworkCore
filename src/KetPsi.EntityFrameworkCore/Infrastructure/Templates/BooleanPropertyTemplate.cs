@@ -15,6 +15,6 @@ public sealed class BooleanPropertyTemplate : PredicateTemplate
         PropertyName = propertyName;
     }
 
-    /// <summary>The boolean entity property.</summary>
+    /// <summary>The boolean property, or a path to one through reference navigations.</summary>
     public string PropertyName { get; }
 }

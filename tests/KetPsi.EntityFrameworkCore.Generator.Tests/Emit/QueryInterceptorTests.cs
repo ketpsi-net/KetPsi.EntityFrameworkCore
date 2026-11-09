@@ -141,6 +141,21 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
+    public void Navigations_InPredicatesAndOrderings_AreJoined()
+    {
+        _connection.Rows = PostRows((10, 1, "first"));
+
+        var posts = AsList(Invoke("ByBlog", "alpha", 0));
+
+        Assert.Equal(
+            "SELECT [t0].[Id], [t0].[BlogId], [t0].[Title] FROM [Posts] AS [t0] INNER JOIN [Blogs] AS [t1] ON [t0].[BlogId] = [t1].[Id] " +
+            "WHERE (([t1].[Name] = @p0 AND [t0].[BlogId] IS NOT NULL) AND [t0].[BlogId] > @p1) ORDER BY [t1].[Rating] DESC",
+            _connection.LastCommand.CommandText);
+        Assert.Equal(["alpha", 0], Parameters());
+        Assert.Single(posts);
+    }
+
+    [Fact]
     public void Single_TwoRows_ThrowsLikeLinq()
     {
         var exception = Assert.Throws<TargetInvocationException>(() => Invoke("Single"));

@@ -96,7 +96,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor OrderKeyNotSupported = Error(
         "KP2008",
         "Order key not supported",
-        "The order key '{0}' must be a property of the entity itself, such as x => x.Name");
+        "The order key '{0}' must be a property of the entity or of a reference navigation, such as x => x.Name or x => x.Blog.Name");
 
     public static readonly DiagnosticDescriptor ProjectionNotSupported = Error(
         "KP2009",

@@ -73,6 +73,11 @@ internal static class QuerySources
 
             public Blog Single() => db.Blogs.AsNoTracking().Single();
 
+            public List<Post> ByBlog(string name, int min) => db.Posts.AsNoTracking()
+                .Where(p => p.Blog.Name == name && p.Blog != null && p.Blog.Id > min)
+                .OrderByDescending(p => p.Blog.Rating)
+                .ToList();
+
             public Task<Blog> SingleAsync(int id, CancellationToken ct) => db.Blogs.AsNoTracking().SingleAsync(b => b.Id == id, ct);
 
             public Blog? SingleOrDefault(int id) => db.Blogs.AsNoTracking().SingleOrDefault(b => b.Id == id);
