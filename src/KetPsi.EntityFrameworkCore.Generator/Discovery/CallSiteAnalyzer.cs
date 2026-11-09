@@ -152,7 +152,7 @@ internal static partial class CallSiteAnalyzer
 
         if (projectedFrom is { } projection)
         {
-            return ClassifyProjected(site, method, family, projection.Projection, projection.IsPaged);
+            return ClassifyProjected(site, method, family, projection);
         }
 
         return family switch
@@ -211,6 +211,8 @@ internal static partial class CallSiteAnalyzer
                 return parameters.Length == 1 ? site.Supported(OperatorKind.Distinct) : site.Overload(ReasonComparer);
             case "GroupBy":
                 return parameters.Skip(1).All(static p => IsLambdaParameter(p.Type)) ? site.GroupBy() : site.Overload(ReasonComparer);
+            case "Join":
+                return parameters.Length == 5 ? site.JoinOnEntity() : site.Overload(ReasonComparer);
             case "Sum" or "Average" or "Min" or "Max" when parameters.Length == 2 && IsSelector(parameters[1].Type):
                 return site.Supported(AggregateKind(method.Name), lambdaOrdinal: 1);
             case "First" or "FirstOrDefault" or "Last" or "LastOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count"
@@ -267,8 +269,9 @@ internal static partial class CallSiteAnalyzer
 
     // After Select the query is a projection: paging, Distinct, aggregates and terminals run it, anything else is reported.
     // The projection is null when the Select itself is reported.
-    private static CallSite? ClassifyProjected(SiteBuilder site, IMethodSymbol method, Family family, ProjectionModel? projection, bool isPaged)
+    private static CallSite? ClassifyProjected(SiteBuilder site, IMethodSymbol method, Family family, ProjectionSource source)
     {
+        var (projection, isPaged) = (source.Projection, source.IsPaged);
         var parameters = method.Parameters;
         if (projection is { IsGrouped: true } grouped && family == Family.Queryable
             && (method.Name == "Where" && IsPredicate(parameters[1].Type)
@@ -277,6 +280,17 @@ internal static partial class CallSiteAnalyzer
             return isPaged
                 ? site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonAfterGroupPaging)
                 : site.AfterGroupSelect(method.Name == "Where" ? OperatorKind.Where : OrderKind(method.Name), grouped);
+        }
+
+        // Operators that read through the projection's members, such as the pair of a query-syntax join.
+        if (family == Family.Queryable && source.Aliases is { Count: > 0 } aliases && AliasOperator(method) is { } aliasKind)
+        {
+            if (isPaged)
+            {
+                return site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonAliasAfterPaging);
+            }
+
+            return aliasKind == OperatorKind.Join ? site.JoinOn(aliases, source.JoinCount) : site.OnAliases(aliasKind, aliases);
         }
 
         switch (family)
@@ -369,10 +383,55 @@ internal static partial class CallSiteAnalyzer
                             return new ProjectionSource(grouped.EntityType, groupProjection, isPaged);
                         }
 
-                        var projection = selector is LambdaExpressionSyntax lambda
-                            ? ProjectionTranslator.Translate(lambda, element, semanticModel, location, cancellationToken).Projection
-                            : null;
-                        return new ProjectionSource(EntityDiscovery.TypeName(element), projection, isPaged);
+                        // A Select after a projection reads through the members of that projection.
+                        if (ProjectedFrom(GetSource(invocation), semanticModel, queryableInterface, location, cancellationToken) is { } upstream)
+                        {
+                            if (upstream.Aliases is not { Count: > 0 } upstreamAliases || upstream.IsPaged || selector is not LambdaExpressionSyntax aliased)
+                            {
+                                return new ProjectionSource(upstream.EntityType, null, isPaged);
+                            }
+
+                            var (reselected, reselectedAliases, _) = ProjectionTranslator.Translate(
+                                aliased, [upstreamAliases], semanticModel, location, cancellationToken);
+                            return new ProjectionSource(upstream.EntityType, reselected, isPaged, reselectedAliases, upstream.JoinCount);
+                        }
+
+                        if (selector is not LambdaExpressionSyntax lambda)
+                        {
+                            return new ProjectionSource(EntityDiscovery.TypeName(element), null, isPaged);
+                        }
+
+                        var (projection, aliases, _) = ProjectionTranslator.Translate(lambda, [Alias.At("", element)], semanticModel, location, cancellationToken);
+                        return new ProjectionSource(EntityDiscovery.TypeName(element), projection, isPaged, aliases);
+                    }
+
+                    if (family == Family.Queryable && name == "Join" && invocation.TargetMethod.Parameters.Length == 5)
+                    {
+                        // A join of the entity query, or of a projection whose members the outer key and result read through.
+                        var outerSource = GetSource(invocation);
+                        IReadOnlyList<Alias> outer;
+                        int index;
+                        string entityType;
+                        if (ProjectedFrom(outerSource, semanticModel, queryableInterface, location, cancellationToken) is { } projectedOuter)
+                        {
+                            if (projectedOuter.Aliases is not { Count: > 0 } outerAliases || projectedOuter.IsPaged)
+                            {
+                                return new ProjectionSource(projectedOuter.EntityType, null, isPaged);
+                            }
+
+                            (outer, index, entityType) = (outerAliases, projectedOuter.JoinCount, projectedOuter.EntityType);
+                        }
+                        else if (outerSource?.Type is { } outerType && GetElementType(outerType, queryableInterface) is { } outerElement)
+                        {
+                            (outer, index, entityType) = (Alias.At("", outerElement), 0, EntityDiscovery.TypeName(outerElement));
+                        }
+                        else
+                        {
+                            return null;
+                        }
+
+                        var (join, _) = TranslateJoin(invocation, outer, index, semanticModel, location, cancellationToken);
+                        return new ProjectionSource(entityType, join?.Projection, isPaged, join?.Aliases, index + 1);
                     }
 
                     if (family == Family.Queryable && name == "GroupBy" && HasResultSelector(invocation.TargetMethod))
@@ -675,7 +734,7 @@ internal static partial class CallSiteAnalyzer
         _ => OperatorKind.LongCount,
     };
 
-    private sealed class SiteBuilder(
+    private sealed partial class SiteBuilder(
         INamedTypeSymbol elementSymbol,
         LocationInfo location,
         string methodName,
@@ -1052,7 +1111,13 @@ internal static partial class CallSiteAnalyzer
 /// The entity query a projection was made from, its <c>Select</c>'s projection when it translates, and whether
 /// <c>Skip</c>, <c>Take</c> or <c>Distinct</c> came after the <c>Select</c>.
 /// </summary>
-internal readonly record struct ProjectionSource(string EntityType, ProjectionModel? Projection, bool IsPaged = false);
+/// <param name="EntityType">The queried entity of the chain.</param>
+/// <param name="Projection">The projection, when it translates.</param>
+/// <param name="IsPaged">Whether <c>Skip</c>, <c>Take</c> or <c>Distinct</c> came after it.</param>
+/// <param name="Aliases">What the projection's members stand for, which the operators after it read through.</param>
+/// <param name="JoinCount">How many joins the chain has made, which numbers the next one's join path.</param>
+internal readonly record struct ProjectionSource(
+    string EntityType, ProjectionModel? Projection, bool IsPaged = false, IReadOnlyList<Alias>? Aliases = null, int JoinCount = 0);
 
 /// <summary>
 /// The entity query a grouped query was grouped from, the translated <c>GroupBy</c> when it translates, and whether a

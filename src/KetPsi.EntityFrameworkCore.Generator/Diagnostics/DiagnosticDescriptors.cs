@@ -118,6 +118,11 @@ internal static class DiagnosticDescriptors
         "Group expression not supported",
         "'{0}' cannot be translated from the groups yet: {1}");
 
+    public static readonly DiagnosticDescriptor JoinNotSupported = Error(
+        "KP2012",
+        "Join not supported",
+        "'{0}' cannot be joined yet: {1}");
+
     public static readonly DiagnosticDescriptor PropertyTypeNotSupported = Error(
         "KP3001",
         "Property type not supported",

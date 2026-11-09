@@ -40,6 +40,7 @@ internal static class InterceptorEmitter
             && (!IsOrdering(kind) || site.OrderProperty is not null)
             && (kind is not (OperatorKind.Include or OperatorKind.ThenInclude) || site.Include is not null)
             && (kind != OperatorKind.Select || site.Projection is not null)
+            && (kind != OperatorKind.Join || site.Join is not null && site.Projection is not null)
             && (!IsAggregate(kind) || site.Aggregate is not null);
 
     public static string Emit(IReadOnlyList<CallSite> sites)
@@ -67,7 +68,7 @@ internal static class InterceptorEmitter
             WriteInterceptor(writer, sites[i], i);
         }
 
-        if (sites.Any(static s => s.Operator == OperatorKind.Select || s.Group is not null))
+        if (sites.Any(static s => s.Operator is OperatorKind.Select or OperatorKind.Join || s.Group is not null))
         {
             // Converts a reader lambda to its delegate type, inferring the projected type, which can be anonymous.
             writer
@@ -133,9 +134,15 @@ internal static class InterceptorEmitter
             return;
         }
 
+        if (site.Operator == OperatorKind.Join)
+        {
+            WriteJoin(writer, site, source, fallback);
+            return;
+        }
+
         if (site.ProjectedFrom is not null)
         {
-            WriteProjected(writer, site, source, fallback);
+            WriteProjected(writer, site, source, fallback, template);
             return;
         }
 
@@ -209,13 +216,98 @@ internal static class InterceptorEmitter
             .Close();
     }
 
-    private static void WriteProjected(CodeWriter writer, CallSite site, string source, string fallback)
+    // Join of the entity query or of a projection: the interceptor is generic, since the key and the result can be
+    // anonymous, and the result selector's captured values are read like a Select's.
+    private static void WriteJoin(CodeWriter writer, CallSite site, string source, string fallback)
+    {
+        var signature = site.Signature!;
+        var parameters = signature.Parameters;
+        var join = site.Join!;
+        var projection = site.Projection!;
+        var result = signature.TypeParameters[signature.TypeParameters.Count - 1];
+        string type;
+        if (site.ProjectedFrom is null)
+        {
+            type = SqlQuery;
+            writer
+                .Line($"var query = ({Queryable}<{site.ElementType}>)(object){source};")
+                .Open($"if (!{SqlQuery}.IsInterceptable(query))");
+        }
+        else
+        {
+            type = SqlProjection;
+            writer
+                .Line($"var query = {source};")
+                .Open($"if (!{SqlProjection}.IsInterceptable(query))");
+        }
+
+        writer
+            .Line($"return {fallback};")
+            .Close()
+            .Line();
+
+        if (projection.CaptureCount > 0)
+        {
+            writer.Line($"var {ProjectionTranslator.Captures} = {CapturedValues}.ReadAll({parameters[4].Name});");
+        }
+
+        writer
+            .Line($"return ({Queryable}<{result}>)(object){type}.Join(")
+            .Line($"    query,")
+            .Line($"    (global::System.Collections.Generic.IEnumerable<{join.InnerType}>)(object){parameters[1].Name},")
+            .Line($"    {Strings(join.OuterKeys)},")
+            .Line($"    {Strings(join.InnerKeys)},")
+            .Line($"    {Strings(projection.PropertyPaths)},")
+            .Line($"    {Strings(projection.EntityPaths)},")
+            .Line($"    {ReaderHelper}({projection.ReaderCode}));")
+            .Close();
+    }
+
+    private static void WriteProjected(CodeWriter writer, CallSite site, string source, string fallback, string template)
     {
         var parameters = site.Signature!.Parameters;
         var element = site.Signature.TypeParameters.Count > 0 ? site.Signature.TypeParameters[0] : site.ElementType;
+        if (site.Operator == OperatorKind.Select && site.Projection is { } projection)
+        {
+            // A Select after one the operators read through: its paths are the queried entity's and the joined ones'.
+            var result = site.Signature.TypeParameters[site.Signature.TypeParameters.Count - 1];
+            writer.Open($"if ({source} is var query && {SqlProjection}.IsInterceptable(query))");
+            WriteCaptures(writer, projection.CaptureCount, parameters[1].Name);
+            writer
+                .Line($"return ({Queryable}<{result}>)(object){SqlProjection}.Select(")
+                .Line($"    query,")
+                .Line($"    {Strings(projection.PropertyPaths)},")
+                .Line($"    {Strings(projection.EntityPaths)},")
+                .Line($"    {ReaderHelper}({projection.ReaderCode}));")
+                .Close()
+                .Line()
+                .Line($"return {fallback};")
+                .Close();
+            return;
+        }
+
+        if (site.Operator == OperatorKind.Where && site.Predicate is { } predicate)
+        {
+            writer.Open($"if ({source} is var query && {SqlProjection}.IsInterceptable(query))");
+            if (predicate.ValuePaths.Count > 0)
+            {
+                writer.Line($"var {PredicateTranslator.BodyVariable} = {parameters[1].Name}.Body;");
+            }
+
+            writer
+                .Line($"return {SqlProjection}.Where(query, {template}, {Values(predicate)});")
+                .Close()
+                .Line()
+                .Line($"return {fallback};")
+                .Close();
+            return;
+        }
+
         var call = site.Operator switch
         {
             OperatorKind.Skip or OperatorKind.Take => $"{SqlProjection}.{site.Operator}(query, {parameters[1].Name})",
+            OperatorKind.OrderBy or OperatorKind.OrderByDescending or OperatorKind.ThenBy or OperatorKind.ThenByDescending
+                => $"{SqlProjection}.{site.Operator}(query, \"{site.OrderProperty}\")",
             _ when site.Aggregate is { } aggregate => Aggregate(
                 SqlProjection,
                 site,

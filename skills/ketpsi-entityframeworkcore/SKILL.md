@@ -43,6 +43,7 @@ var page = await db.Blogs
 - `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`, `AsSplitQuery()`, `AsSingleQuery()` (see Include below).
 - `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below without a predicate (see
   Projections below).
+- `Join(inner, outerKey, innerKey, (o, i) => ...)`, inner joins in method syntax (see Join below).
 - `Distinct()` on the entities or on a projection.
 - `GroupBy(x => key)`, with an element or result selector too, then `Where`, `OrderBy`/`ThenBy`, `Select` of keys and
   aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups (see GroupBy below).
@@ -70,7 +71,7 @@ var page = await db.Blogs
   The SQL and the empty-set behavior are EF Core's: `Sum` of no rows is 0, a nullable or reference result is null, and
   `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
-**Not supported yet** (build error): `Join`,
+**Not supported yet** (build error): `GroupJoin`, `SelectMany`,
 `FromSql*` (KP1004), `TagWith`, `ExecuteUpdate`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
@@ -177,9 +178,12 @@ var rows = await db.Posts
   entities the projection doesn't select are ignored. Without tracking or identity resolution, every projected
   entity is its own instance and nothing is connected.
 - A projection with entities reads every row before returning any; one with only columns streams them.
-- After `Select`, only `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are allowed (KP1007).
-  Filter and order the entities before `Select`. `Skip`/`Take` after `Select` page the entity rows, so they give the
-  same rows as before it.
+- After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are allowed.
+  `Skip`/`Take` after `Select` page the entity rows, so they give the same rows as before it.
+- `Where`, `OrderBy`/`ThenBy`, another `Select` and `Join` can follow a `Select` when they read only its members that
+  are entities or columns as they are, before any paging: `Select(p => new { p, p.Blog }).Where(x => x.Blog.Rating > 1)`
+  is `WHERE` on the blog's column. A member that is computed, or anything after `Skip`, `Take` or `Distinct`, is
+  KP1007; filter and order before the `Select` instead.
 - `Distinct` after `Select` compares the projected columns in SQL, so it can't follow computed members (KP1007).
   An aggregate after `Select` needs a projection of one property.
 - `Count`, `LongCount` and `Any` ignore the projection, so they don't join its navigations, as in EF Core: with a
@@ -189,6 +193,33 @@ var rows = await db.Posts
   first), types or members the generated code cannot reach (private nested types and methods), and aggregate
   selectors that compute (`Sum(o => o.Price * o.Quantity)`).
 - The indexed overload `Select((x, i) => ...)` is not supported (KP1006).
+
+## Join
+
+```csharp
+var rows = await db.Posts
+    .Join(db.Blogs.Where(b => b.IsActive), p => p.BlogId, b => b.Id, (p, b) => new { p, b })
+    .Where(x => x.b.Rating > minimum)
+    .OrderBy(x => x.b.Name).ThenByDescending(x => x.p.Title)
+    .Select(x => new { x.p.Title, Blog = x.b.Name })
+    .ToListAsync(ct);
+```
+
+- `INNER JOIN` on the keys, as EF Core: a property on each side, or anonymous types of them for composite keys
+  (`p => new { A = p.BlogId, B = p.Lang }`). The outer key can read through reference navigations; the inner key is a
+  property of the inner entity itself. `(int?)` casts on keys are fine.
+- The inner sequence is a `DbSet` of the same context, optionally with `Where`, `WhereIf`, the tracking operators and
+  `IgnoreQueryFilters`; its query filters go in `ON`, its predicates in `WHERE`. Another context throws EF Core's
+  "Cannot use multiple context instances" error.
+- The outer query can have any operators before the join; paging before it joins a derived table, as in EF Core.
+- The result selector is a projection of both sides: columns, the entities themselves (tracked like any projected
+  entity), computed members. A navigation of the inner entity (`b.Owner.Name`) is KP2009; join that entity too.
+- After the join: `Where`, `OrderBy`, `Select` and further joins reading through the result (`x.b.Rating`, a second
+  `Join(db.Posts, x => x.b.Id, o => o.BlogId, ...)`), then paging, `Distinct`, aggregates and terminals. `Count` keeps
+  the join, so it counts the joined rows.
+- Write joins in method syntax: query syntax (`from p in db.Posts join b in db.Blogs ...`) is KP1009.
+- Not supported (KP2012): an inner sequence that is not a filtered `DbSet` (a list, or one with `OrderBy` or `Take`),
+  inner keys through navigations, and computed keys. `GroupJoin` and `SelectMany` (left joins) are KP1001.
 
 ## GroupBy
 
@@ -279,7 +310,7 @@ Same behavior as EF Core:
 | KP1002 | Include one navigation per lambda, chain with `ThenInclude`, filter collections in a separate query |
 | KP1005 | Write the lambda inline at the call |
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
-| KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate (after a `Select` on groups, also `Where` and `OrderBy` before any paging); group the entities, not a projection |
+| KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate, plus `Where`, `OrderBy`, `Select` and `Join` that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |
 | KP1008 | On groups use `Where`, `OrderBy`/`ThenBy`, `Select`, `Count`, `LongCount`, `Any`, `ToList`, `ToArray`; select the key and aggregates to page or take the first |
 | KP1009 | Rewrite the query expression with methods: `where` is `Where`, `orderby` is `OrderBy`/`ThenBy`, `select` is `Select` |
 | KP2001–KP2005 | Simplify the predicate to comparisons of a property (or one through reference navigations) with a value; query related collections separately |
@@ -289,5 +320,6 @@ Same behavior as EF Core:
 | KP2009 | Avoid collection navigations and instance methods in projections; aggregate one property; make projected types accessible |
 | KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
 | KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
+| KP2012 | Join a filtered `DbSet` on properties: properties or navigations on the outer side, the inner entity's own properties on the inner side |
 | KP3001–KP3004 | Change the mapping to a supported type and shape |
 | KP3005 | Make the query filter a translatable predicate |

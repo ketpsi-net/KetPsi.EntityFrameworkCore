@@ -53,6 +53,9 @@ internal sealed class SqlBuilder
     private readonly List<EntitySegment> _segments = [];
     private readonly List<CollectionLoad> _collections = [];
     private readonly List<int> _roots = [];
+
+    // The entities joined by Join, by join path: "$0", "$1", ...
+    private readonly Dictionary<string, BoundEntity> _joined = new(StringComparer.Ordinal);
     private int _aliasCount;
     private SelectState? _state;
 
@@ -270,19 +273,25 @@ internal sealed class SqlBuilder
                 ApplyRoot(root);
                 break;
             case WhereNode where:
-                EnsureNotProjected();
+                EnsureEntityRows();
                 WrapIf(State.HasPaging || State.Distinct);
                 State.Predicates.Add(RenderEntityPredicate(where.Predicate, where.Values));
                 break;
             case OrderNode { IsThenBy: false } order:
-                EnsureNotProjected();
+                EnsureEntityRows();
                 WrapIf(State.HasPaging);
                 State.Ordering.Clear();
                 State.Ordering.Add(new Ordering(ResolvePath(order.PropertyName).Column, order.Descending));
                 break;
             case OrderNode order:
-                EnsureNotProjected();
+                EnsureEntityRows();
                 State.Ordering.Add(new Ordering(ResolvePath(order.PropertyName).Column, order.Descending));
+                break;
+            case JoinNode join:
+                // Join works on the rows the operators selected, so paging moves into a derived table first, as in EF Core.
+                EnsureEntityRows();
+                WrapIf(State.HasPaging || State.Distinct);
+                ApplyJoin(join);
                 break;
             case SkipNode skip:
                 WrapIf(State.HasPaging || State.Distinct);
@@ -305,8 +314,9 @@ internal sealed class SqlBuilder
                 State.Pending = new Projection(projection.Columns, projection.EntityPaths);
                 break;
             case ProjectionNode projection:
-                // Distinct entity rows are made distinct before they are projected.
-                EnsureNotProjected();
+                // Distinct entity rows are made distinct before they are projected. A projection not selected yet is
+                // replaced: the generator writes the paths of a Select after it through the entities it projects.
+                EnsureEntityRows();
                 WrapIf(State.Distinct);
                 State.Pending = new Projection(projection.Columns, projection.EntityPaths);
                 break;
@@ -368,6 +378,75 @@ internal sealed class SqlBuilder
                 throw new UnreachableException(node.GetType().ToString());
         }
     }
+
+    /// <summary>
+    /// For an operator on the entity rows: no projection selected yet, or one the generator reads through, with its
+    /// paths written as the queried entity's and the joins'. Paging after such a projection ends that.
+    /// </summary>
+    private void EnsureEntityRows()
+    {
+        if (State.Columns is not null || State.Keys is not null || State.Pending is not null && (State.HasPaging || State.Distinct))
+        {
+            throw new UnreachableException("Where, OrderBy, Join and Select follow a projection only before any paging.");
+        }
+    }
+
+    /// <summary>
+    /// Joins the inner query of <paramref name="join"/> at the next join path: its table with its query filters in
+    /// <c>ON</c>, and its predicates, which read the joined entity, added to the level's own.
+    /// </summary>
+    private void ApplyJoin(JoinNode join)
+    {
+        var innerNodes = Chain(join.Inner);
+        var inner = Bind(((RootNode)innerNodes[0]).EntityType);
+        var path = JoinNode.PathPrefix + _joined.Count.ToString(CultureInfo.InvariantCulture);
+
+        // The outer keys can read through navigations, which join before this table.
+        var outerKeys = join.OuterKeys.Select(key => ResolvePath(key).Column.Sql).ToList();
+        var alias = NextAlias();
+        var conditions = new List<string>();
+        for (var i = 0; i < outerKeys.Count; i++)
+        {
+            conditions.Add(outerKeys[i] + " = " + Column(inner.GetProperty(join.InnerKeys[i]), alias));
+        }
+
+        foreach (var filter in _filtersFor(inner))
+        {
+            conditions.Add(RenderPredicate(inner.BindPredicate(filter.Predicate), filter.Values, negated: false, alias));
+        }
+
+        State.Joins.Add("INNER JOIN " + _dialect.QualifyTable(inner.Table, inner.Schema) + " AS " + alias + " ON " + string.Join(" AND ", conditions));
+        State.Targets.Add(path, new JoinTarget(alias, inner, AlwaysExists: true));
+        _joined.Add(path, inner);
+
+        // An inner join keeps the rows that match in both, so the inner predicates can filter after the join.
+        foreach (var node in innerNodes.Skip(1))
+        {
+            switch (node)
+            {
+                case WhereNode where:
+                    State.Predicates.Add(RenderEntityPredicate(Prefixed(where.Predicate, path), where.Values));
+                    break;
+                case TrackingNode or IgnoreQueryFiltersNode:
+                    break;
+                default:
+                    throw new UnreachableException("The inner query of a Join only filters its entity: " + node.GetType());
+            }
+        }
+    }
+
+    /// <summary>The predicate with each name read through <paramref name="path"/>, such as <c>"$0.Name"</c> for <c>"Name"</c>.</summary>
+    private static PredicateTemplate Prefixed(PredicateTemplate template, string path) => template switch
+    {
+        ComparisonTemplate comparison => new ComparisonTemplate(path + "." + comparison.PropertyName, comparison.Comparison, comparison.ValueIndex),
+        BooleanPropertyTemplate boolean => new BooleanPropertyTemplate(path + "." + boolean.PropertyName),
+        NullCheckTemplate nullCheck => new NullCheckTemplate(path + "." + nullCheck.PropertyName, nullCheck.IsNull),
+        InListTemplate inList => new InListTemplate(path + "." + inList.PropertyName, inList.ValueIndex),
+        NotTemplate not => new NotTemplate(Prefixed(not.Operand, path)),
+        AndTemplate and => new AndTemplate(Prefixed(and.Left, path), Prefixed(and.Right, path)),
+        OrTemplate or => new OrTemplate(Prefixed(or.Left, path), Prefixed(or.Right, path)),
+        _ => throw new UnreachableException(template.GetType().ToString()),
+    };
 
     // The generator only lets paging, Distinct and terminals follow Select, and only operators on groups follow GroupBy.
     private void EnsureNotProjected()
@@ -629,7 +708,7 @@ internal sealed class SqlBuilder
     /// Selects the pending projection at the current level: its columns, then its entities with the references
     /// included on them, joining every navigation they are read through.
     /// </summary>
-    private void Materialize()
+    private void Materialize(bool wrapForNavigations = true)
     {
         if (State.Pending is not { } projection)
         {
@@ -637,7 +716,7 @@ internal sealed class SqlBuilder
         }
 
         // Navigations join the rows the operators selected, so paging moves into a derived table first.
-        WrapIf(State.HasPaging && Joins(projection));
+        WrapIf(wrapForNavigations && State.HasPaging && Joins(projection));
 
         var columns = new List<SqlColumn>();
         foreach (var path in projection.Columns)
@@ -655,10 +734,16 @@ internal sealed class SqlBuilder
         State.Columns = columns;
     }
 
+    // Whether selecting the projection joins navigations. The joined entities of Join are already joined at the level.
     private bool Joins(Projection projection)
-        => projection.Columns.Any(static path => path.Contains('.', StringComparison.Ordinal))
-            || projection.EntityPaths.Any(path => path.Length > 0
+        => projection.Columns.Any(static path => path.Contains('.', StringComparison.Ordinal) && !IsThroughJoin(path))
+            || projection.EntityPaths.Any(path => path.Length > 0 && !IsThroughJoin(path)
                 || (_includes?.Find(path)?.Branches.Any(static b => !b.Navigation.IsCollection) ?? false));
+
+    private static bool IsThroughJoin(string path) => path.Length > 1 && path[0] == JoinNode.PathPrefix;
+
+    private static bool ReadsJoins(Projection projection)
+        => projection.Columns.Any(IsThroughJoin) || projection.EntityPaths.Any(IsThroughJoin);
 
     /// <summary>
     /// Adds an entity's columns, once per path, and a segment that reads them, then the references included from it
@@ -763,6 +848,11 @@ internal sealed class SqlBuilder
     /// <summary>The navigation a path ends with and the path of the entity that has it, or null when it ends with a property.</summary>
     private (string ParentPath, BoundNavigation Navigation)? NavigationAt(string path)
     {
+        if (JoinNode.IsJoinPath(path))
+        {
+            return null;
+        }
+
         var dot = path.LastIndexOf('.');
         var parentPath = dot < 0 ? RootPath : path[..dot];
         var parent = EntityAt(parentPath);
@@ -770,13 +860,14 @@ internal sealed class SqlBuilder
         return parent.HasProperty(name) ? null : (parentPath, parent.GetNavigation(name));
     }
 
-    /// <summary>The entity a navigation path reaches, without joining it.</summary>
+    /// <summary>The entity a navigation path reaches, without joining it; the path can start at a joined entity.</summary>
     private BoundEntity EntityAt(string path)
     {
         var entity = _entity;
-        foreach (var name in path.Length == 0 ? [] : path.Split('.'))
+        var names = path.Length == 0 ? [] : path.Split('.');
+        for (var i = 0; i < names.Length; i++)
         {
-            entity = Bind(entity.GetNavigation(name).TargetClrType);
+            entity = i == 0 && _joined.TryGetValue(names[0], out var joined) ? joined : Bind(entity.GetNavigation(names[i]).TargetClrType);
         }
 
         return entity;
@@ -915,6 +1006,12 @@ internal sealed class SqlBuilder
         if (!condition)
         {
             return;
+        }
+
+        // The joined entities of Join stay at this level, so a projection that reads them is selected here.
+        if (State.Pending is { } pending && ReadsJoins(pending))
+        {
+            Materialize(wrapForNavigations: false);
         }
 
         var inner = State;

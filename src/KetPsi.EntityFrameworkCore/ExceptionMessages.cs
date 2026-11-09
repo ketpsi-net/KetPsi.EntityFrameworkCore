@@ -167,6 +167,12 @@ internal static class ExceptionMessages
     public const string DeletePagedKeyless =
         "ExecuteDelete after Skip, Take or another operator that pages '{0}' needs a primary key, which the entity type doesn't have.";
 
+    // EF Core's message for a query that uses two contexts.
+    public const string MultipleContexts =
+        "Cannot use multiple context instances within a single query execution. Ensure the query uses a single context instance.";
+
+    public const string JoinKeysMismatch = "A Join needs the same number of outer and inner key parts, at least one; there are {0} and {1}.";
+
     public const string LastWithoutOrdering =
         "Queries performing '{0}' operation must have a deterministic sort order. Rewrite the query to apply an 'OrderBy' operation on the sequence before calling '{0}'.";
 

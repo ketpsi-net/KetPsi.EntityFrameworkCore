@@ -25,26 +25,32 @@ internal sealed class IgnoredQueryFilters
     {
         ArgumentNullException.ThrowIfNull(tail);
 
-        var all = false;
         var keys = new HashSet<string>(StringComparer.Ordinal);
+        var all = Collect(tail, keys);
+        return all || keys.Count > 0 ? new IgnoredQueryFilters(all, keys) : None;
+    }
+
+    // The inner query of a Join is part of the query too.
+    private static bool Collect(QueryNode tail, HashSet<string> keys)
+    {
+        var all = false;
         for (var node = tail; node is not null; node = node.Parent)
         {
-            if (node is not IgnoreQueryFiltersNode ignore)
+            switch (node)
             {
-                continue;
-            }
-
-            if (ignore.FilterKeys is null)
-            {
-                all = true;
-            }
-            else
-            {
-                keys.UnionWith(ignore.FilterKeys);
+                case IgnoreQueryFiltersNode { FilterKeys: null }:
+                    all = true;
+                    break;
+                case IgnoreQueryFiltersNode ignore:
+                    keys.UnionWith(ignore.FilterKeys);
+                    break;
+                case JoinNode join:
+                    all |= Collect(join.Inner, keys);
+                    break;
             }
         }
 
-        return all || keys.Count > 0 ? new IgnoredQueryFilters(all, keys) : None;
+        return all;
     }
 
     /// <summary>Whether the filter with <paramref name="filterKey"/> is disabled. An unnamed filter is only disabled by <see cref="All"/>.</summary>

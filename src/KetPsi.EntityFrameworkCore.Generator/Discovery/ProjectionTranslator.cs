@@ -28,6 +28,8 @@ internal sealed partial class ProjectionTranslator
     public const string Captures = "captures";
 
     private const string ReasonLambda = "the selector must be a lambda with one parameter and an expression body";
+    private const string ReasonJoinedNavigation =
+        "navigations of an entity joined by Join cannot be projected yet; select its columns or the entity itself";
     private const string ReasonInstanceMethod =
         "methods of the enclosing instance cannot be called from generated code; compute the value before the query";
     private const string ReasonThis = "the enclosing instance itself cannot be projected; capture the values it holds instead";
@@ -40,7 +42,7 @@ internal sealed partial class ProjectionTranslator
 
     private readonly SemanticModel _model;
     private readonly IParameterSymbol _parameter;
-    private readonly INamedTypeSymbol _root;
+    private readonly Dictionary<IParameterSymbol, IReadOnlyList<Alias>> _parameters = new(SymbolEqualityComparer.Default);
     private readonly LocationInfo _location;
     private readonly CancellationToken _cancellationToken;
     private readonly List<string> _propertyPaths = [];
@@ -55,10 +57,24 @@ internal sealed partial class ProjectionTranslator
 
     private ProjectionTranslator(
         SemanticModel model, IParameterSymbol parameter, INamedTypeSymbol root, LocationInfo location, CancellationToken cancellationToken)
+        : this(model, [parameter], [Alias.At("", root)], location, cancellationToken)
+    {
+    }
+
+    private ProjectionTranslator(
+        SemanticModel model,
+        IReadOnlyList<IParameterSymbol> parameters,
+        IReadOnlyList<IReadOnlyList<Alias>> aliases,
+        LocationInfo location,
+        CancellationToken cancellationToken)
     {
         _model = model;
-        _parameter = parameter;
-        _root = root;
+        _parameter = parameters[0];
+        for (var i = 0; i < parameters.Count; i++)
+        {
+            _parameters[parameters[i]] = aliases[i];
+        }
+
         _location = location;
         _cancellationToken = cancellationToken;
     }
@@ -74,22 +90,38 @@ internal sealed partial class ProjectionTranslator
     public static (ProjectionModel? Projection, DiagnosticInfo? Diagnostic) Translate(
         LambdaExpressionSyntax lambda, INamedTypeSymbol root, SemanticModel model, LocationInfo location, CancellationToken cancellationToken)
     {
-        var parameterSyntax = lambda switch
+        var (projection, _, diagnostic) = Translate(lambda, [Alias.At("", root)], model, location, cancellationToken);
+        return (projection, diagnostic);
+    }
+
+    /// <summary>
+    /// Translates a selector whose parameters stand for <paramref name="parameters"/>, one alias list per parameter,
+    /// such as a <c>Join</c> result selector or a <c>Select</c> after a projection the operators read through. Also returns
+    /// what the projection's members stand for, for the operators after it.
+    /// </summary>
+    public static (ProjectionModel? Projection, IReadOnlyList<Alias>? Aliases, DiagnosticInfo? Diagnostic) Translate(
+        LambdaExpressionSyntax lambda,
+        IReadOnlyList<IReadOnlyList<Alias>> parameters,
+        SemanticModel model,
+        LocationInfo location,
+        CancellationToken cancellationToken)
+    {
+        var parameterSyntaxes = lambda switch
         {
-            SimpleLambdaExpressionSyntax simple => simple.Parameter,
-            ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: 1 } parenthesized => parenthesized.ParameterList.Parameters[0],
-            _ => null,
+            SimpleLambdaExpressionSyntax simple => [simple.Parameter],
+            ParenthesizedLambdaExpressionSyntax parenthesized => parenthesized.ParameterList.Parameters.ToList(),
+            _ => [],
         };
 
-        if (parameterSyntax is null
-            || model.GetDeclaredSymbol(parameterSyntax, cancellationToken) is not IParameterSymbol parameter
+        var symbols = parameterSyntaxes.Select(s => model.GetDeclaredSymbol(s, cancellationToken)).OfType<IParameterSymbol>().ToList();
+        if (symbols.Count == 0 || symbols.Count != parameters.Count
             || lambda.Body is not ExpressionSyntax body
             || model.GetOperation(body, cancellationToken) is not { } operation)
         {
-            return (null, Unsupported(lambda, ReasonLambda));
+            return (null, null, Unsupported(lambda, ReasonLambda));
         }
 
-        var translator = new ProjectionTranslator(model, parameter, root, location, cancellationToken);
+        var translator = new ProjectionTranslator(model, symbols, parameters, location, cancellationToken);
         try
         {
             var code = translator.Translate(operation);
@@ -109,12 +141,75 @@ internal sealed partial class ProjectionTranslator
                     translator._entities.ToEquatableArray(),
                     translator._hasComputedValues,
                     translator.CaptureCount),
+                translator.AliasesOf(operation, memberPath: ""),
                 null);
         }
         catch (TranslationException exception)
         {
-            return (null, exception.Diagnostic);
+            return (null, null, exception.Diagnostic);
         }
+    }
+
+    /// <summary>
+    /// What the members of a projected value stand for: the value itself when it is a column or an entity, and the
+    /// members of an anonymous type or an object initializer that are, by member path. Computed members stand for nothing.
+    /// </summary>
+    private List<Alias> AliasesOf(IOperation value, string memberPath)
+    {
+        while (value is IConversionOperation { IsImplicit: true } conversion)
+        {
+            value = conversion.Operand;
+        }
+
+        if (value is IParameterReferenceOperation { Parameter: var parameter } && _parameters.TryGetValue(parameter, out var aliases))
+        {
+            return [.. aliases.Select(a => a with { MemberPath = Alias.Combine(memberPath, [a.MemberPath]) })];
+        }
+
+        // A member of a parameter that stands for several members, such as the pair of an earlier join.
+        if (AliasedGroup(value) is { } group)
+        {
+            return [.. group.Aliases.Select(a => a with { MemberPath = Alias.Combine(memberPath, [a.MemberPath.Substring(group.Prefix.Length).TrimStart('.')]) })];
+        }
+
+        if (value is IPropertyReferenceOperation && MemberPath(value) is { } path && IsReadable(path, value.Syntax))
+        {
+            if (path.Column is not null)
+            {
+                return [new Alias(memberPath, path.Prefix, path.Owner, path.Column)];
+            }
+
+            var owner = path.Owner;
+            for (var i = 0; i < path.Rest.Count; i++)
+            {
+                if (EntityShapeBuilder.IsReadableScalar(path.Rest[i].Type))
+                {
+                    return i == path.Rest.Count - 1 ? [new Alias(memberPath, path.Path, owner, path.Rest[i])] : [];
+                }
+
+                owner = EntityShapeBuilder.NavigationTarget(path.Rest[i].Type)!;
+            }
+
+            return [new Alias(memberPath, path.Path, owner)];
+        }
+
+        var initializers = value switch
+        {
+            IAnonymousObjectCreationOperation anonymous => anonymous.Initializers,
+            IObjectCreationOperation { Initializer: { } initializer } => initializer.Initializers,
+            _ => [],
+        };
+
+        var members = new List<Alias>();
+        foreach (var initializer in initializers)
+        {
+            if (initializer is ISimpleAssignmentOperation { Target: IPropertyReferenceOperation { Property.Name: var name }, Value: var member })
+            {
+                members.AddRange(AliasesOf(member, Alias.Combine(memberPath, [name])));
+            }
+        }
+
+        return members;
     }
 
     /// <summary>
@@ -141,10 +236,10 @@ internal sealed partial class ProjectionTranslator
         var translator = new ProjectionTranslator(model, parameter, root, LocationInfo.From(lambda.GetLocation()), cancellationToken);
         try
         {
-            return translator.MemberPath(operation) is { Count: > 0 } path
-                && translator.IsReadable(path, body)
-                && EntityShapeBuilder.IsReadableScalar(path[path.Count - 1].Type)
-                    ? string.Join(".", path.Select(static p => p.Name))
+            return translator.MemberPath(operation) is { Column: null, Rest.Count: > 0 } path
+                && IsReadable(path, body)
+                && EntityShapeBuilder.IsReadableScalar(path.Rest[path.Rest.Count - 1].Type)
+                    ? path.Path
                     : null;
         }
         catch (TranslationException)
@@ -210,6 +305,9 @@ internal sealed partial class ProjectionTranslator
                 when MemberPath(operation) is { } path && IsReadable(path, operation.Syntax):
                 return Member(path, operation.Syntax, asNullable: false);
 
+            case IParameterReferenceOperation or IPropertyReferenceOperation when AliasedGroup(operation) is { } group:
+                return Rebuild(group.Type, group.Aliases, group.Prefix, operation.Syntax);
+
             default:
                 return Computed(operation.Syntax);
         }
@@ -227,21 +325,33 @@ internal sealed partial class ProjectionTranslator
     /// Whether a member path is read directly: a column or an entity, through reference navigations. A path that goes
     /// on past a column, such as <c>x.Created.Year</c>, is computed from the column instead.
     /// </summary>
-    /// <exception cref="TranslationException">The path goes through a collection navigation.</exception>
-    private bool IsReadable(List<IPropertySymbol> path, SyntaxNode syntax)
+    /// <exception cref="TranslationException">The path goes through a collection navigation, or a navigation of a joined entity.</exception>
+    private static bool IsReadable(AliasedPath path, SyntaxNode syntax)
     {
-        for (var i = 0; i < path.Count; i++)
+        if (path.Column is not null)
         {
-            var type = path[i].Type;
+            return true;
+        }
+
+        var rest = path.Rest;
+        for (var i = 0; i < rest.Count; i++)
+        {
+            var type = rest[i].Type;
             if (EntityShapeBuilder.IsCollectionNavigation(type))
             {
                 throw Fail(syntax, ReasonCollection);
             }
 
-            var isLast = i == path.Count - 1;
+            var isLast = i == rest.Count - 1;
             if (EntityShapeBuilder.NavigationTarget(type) is null)
             {
                 return isLast && EntityShapeBuilder.IsReadableScalar(type);
+            }
+
+            // A joined entity is joined before any paging, which its navigations would have to follow.
+            if (path.IsThroughJoin)
+            {
+                throw Fail(syntax, ReasonJoinedNavigation);
             }
         }
 
@@ -297,14 +407,71 @@ internal sealed partial class ProjectionTranslator
         return code;
     }
 
+    /// <summary>
+    /// The members a parameter, or a member chain of one, stands for when it is a value of an anonymous type made of
+    /// aliased members, such as the pair <c>x</c> of an earlier join; null for anything else.
+    /// </summary>
+    private (INamedTypeSymbol Type, IReadOnlyList<Alias> Aliases, string Prefix)? AliasedGroup(IOperation operation)
+    {
+        if (_group is not null || _readsNoMembers || operation.Type is not INamedTypeSymbol { IsAnonymousType: true } type)
+        {
+            return null;
+        }
+
+        var names = new List<string>();
+        while (operation is IPropertyReferenceOperation { Instance: { } instance, Property: var property })
+        {
+            names.Insert(0, property.Name);
+            operation = instance;
+        }
+
+        if (operation is not IParameterReferenceOperation { Parameter: var parameter } || !_parameters.TryGetValue(parameter, out var aliases))
+        {
+            return null;
+        }
+
+        var prefix = string.Join(".", names);
+        var members = aliases.Where(a => prefix.Length == 0 || a.MemberPath.StartsWith(prefix + ".", StringComparison.Ordinal)).ToList();
+        return members.Count == 0 ? null : (type, members, prefix);
+    }
+
+    /// <summary>
+    /// Rebuilds a value of an anonymous type from what its members stand for: the same anonymous type, since it has the
+    /// same members in the same order in the same assembly. A member that stands for nothing, a computed one, cannot be.
+    /// </summary>
+    private string Rebuild(INamedTypeSymbol type, IReadOnlyList<Alias> aliases, string prefix, SyntaxNode syntax)
+    {
+        var members = new List<string>();
+        foreach (var property in type.GetMembers().OfType<IPropertySymbol>())
+        {
+            var path = Alias.Combine(prefix, [property.Name]);
+            if (aliases.FirstOrDefault(a => a.MemberPath == path) is { } alias)
+            {
+                members.Add(property.Name + " = " + (alias.Property is { } column
+                    ? Column(alias.Entity, column, alias.Path, syntax, asNullable: false)
+                    : Entity(alias.Entity, alias.Path, syntax)));
+            }
+            else if (property.Type is INamedTypeSymbol { IsAnonymousType: true } nested && aliases.Any(a => a.MemberPath.StartsWith(path + ".", StringComparison.Ordinal)))
+            {
+                members.Add(property.Name + " = " + Rebuild(nested, aliases, path, syntax));
+            }
+            else
+            {
+                throw Fail(syntax, $"the member '{property.Name}' is computed, so it cannot be read back; select it again from the entities");
+            }
+        }
+
+        return "new { " + string.Join(", ", members) + " }";
+    }
+
     private string Arguments(IEnumerable<IArgumentOperation> arguments)
         => string.Join(", ", arguments.Select(a => Translate(a.Value)));
 
     /// <summary>
-    /// The properties a member access reads from the lambda's parameter, such as <c>x.Blog.Name</c>; an empty path
-    /// for the parameter itself; <see langword="null"/> for anything else.
+    /// The member chain a member access reads from a lambda parameter, such as <c>x.Blog.Name</c>, through what the
+    /// parameter and its members stand for; <see langword="null"/> for anything else.
     /// </summary>
-    private List<IPropertySymbol>? MemberPath(IOperation operation)
+    private AliasedPath? MemberPath(IOperation operation)
     {
         // A group, or a query projected from groups, has no entity to read members of.
         if (_group is not null || _readsNoMembers)
@@ -312,29 +479,26 @@ internal sealed partial class ProjectionTranslator
             return null;
         }
 
-        var properties = new List<IPropertySymbol>();
-        while (operation is IPropertyReferenceOperation { Instance: { } instance, Property: var property })
-        {
-            properties.Insert(0, property);
-            operation = instance;
-        }
-
-        return operation is IParameterReferenceOperation { Parameter: var parameter } && SymbolEqualityComparer.Default.Equals(parameter, _parameter)
-            ? properties
-            : null;
+        return Alias.Resolve(operation, _parameters);
     }
 
     // A path through reference navigations to a column, which is read, or to an entity, which the runtime reads.
-    private string Member(List<IPropertySymbol> path, SyntaxNode syntax, bool asNullable)
+    private string Member(AliasedPath path, SyntaxNode syntax, bool asNullable)
     {
-        var entity = _root;
-        for (var i = 0; i < path.Count; i++)
+        if (path.Column is { } column)
         {
-            var property = path[i];
-            var isLast = i == path.Count - 1;
+            return Column(path.Owner, column, path.Prefix, syntax, asNullable);
+        }
+
+        var entity = path.Owner;
+        var rest = path.Rest;
+        for (var i = 0; i < rest.Count; i++)
+        {
+            var property = rest[i];
+            var isLast = i == rest.Count - 1;
             if (isLast && EntityShapeBuilder.IsReadableScalar(property.Type))
             {
-                return Column(entity, property, path, syntax, asNullable);
+                return Column(entity, property, path.Path, syntax, asNullable);
             }
 
             if (EntityShapeBuilder.IsCollectionNavigation(property.Type))
@@ -346,15 +510,23 @@ internal sealed partial class ProjectionTranslator
                 ?? throw Fail(syntax, $"'{property.Name}' is neither a column nor a navigation that KetPsi.EntityFrameworkCore can read");
         }
 
-        return Entity(entity, path, syntax);
+        return Entity(entity, path.Path, syntax);
     }
 
-    private string Column(INamedTypeSymbol entity, IPropertySymbol property, List<IPropertySymbol> path, SyntaxNode syntax, bool asNullable)
+    private string Column(INamedTypeSymbol entity, IPropertySymbol property, string path, SyntaxNode syntax, bool asNullable)
     {
         var shape = PropertyShape(entity, property, syntax);
         var ordinal = Ordinal(_propertyPaths.Count);
-        _propertyPaths.Add(string.Join(".", path.Select(static p => p.Name)));
-        return ReadColumn(shape, ordinal, throughNavigation: path.Count > 1, asNullable);
+        _propertyPaths.Add(path);
+        return ReadColumn(shape, ordinal, throughNavigation: ThroughNavigation(path), asNullable);
+    }
+
+    // Whether a column path goes through a navigation, which can be missing; a joined entity always exists.
+    private static bool ThroughNavigation(string path)
+    {
+        var segments = path.Split('.');
+        var start = segments[0].Length > 0 && segments[0][0] == '$' ? 1 : 0;
+        return segments.Length - start > 1;
     }
 
     private PropertyShape PropertyShape(INamedTypeSymbol entity, IPropertySymbol property, SyntaxNode syntax)
@@ -401,10 +573,10 @@ internal sealed partial class ProjectionTranslator
             : call;
     }
 
-    private string Entity(INamedTypeSymbol entity, List<IPropertySymbol> path, SyntaxNode syntax)
+    private string Entity(INamedTypeSymbol entity, string path, SyntaxNode syntax)
     {
         var index = _entityPaths.Count;
-        _entityPaths.Add(string.Join(".", path.Select(static p => p.Name)));
+        _entityPaths.Add(path);
 
         var shape = Shape(entity);
         if (!_entities.Contains(shape))
@@ -557,13 +729,18 @@ internal sealed partial class ProjectionTranslator
 
             // A column or entity of the lambda's parameter, read like any projected member.
             if (operation is IParameterReferenceOperation or IPropertyReferenceOperation
-                && translator.MemberPath(operation) is { } path && translator.IsReadable(path, expression))
+                && translator.MemberPath(operation) is { } path && IsReadable(path, expression))
             {
                 return translator.Member(path, expression, asNullable: false);
             }
 
+            if (operation is IParameterReferenceOperation or IPropertyReferenceOperation && translator.AliasedGroup(operation) is { } group)
+            {
+                return translator.Rebuild(group.Type, group.Aliases, group.Prefix, expression);
+            }
+
             if (operation is IConversionOperation { IsImplicit: false } conversion && IsNullableOf(conversion.Type, conversion.Operand.Type)
-                && translator.MemberPath(conversion.Operand) is { } nullablePath && translator.IsReadable(nullablePath, expression))
+                && translator.MemberPath(conversion.Operand) is { } nullablePath && IsReadable(nullablePath, expression))
             {
                 return translator.Member(nullablePath, expression, asNullable: true);
             }
@@ -631,9 +808,9 @@ internal sealed partial class ProjectionTranslator
 
         private bool IsColumn(ExpressionSyntax expression)
             => Model.GetOperation(expression, CancellationToken) is IPropertyReferenceOperation operation
-                && translator.MemberPath(operation) is { Count: > 0 } path
-                && translator.IsReadable(path, expression)
-                && EntityShapeBuilder.IsReadableScalar(path[path.Count - 1].Type);
+                && translator.MemberPath(operation) is { } path
+                && IsReadable(path, expression)
+                && (path.Column is not null || path.Rest.Count > 0 && EntityShapeBuilder.IsReadableScalar(path.Rest[path.Rest.Count - 1].Type));
 
         // The name after the dot in a member access, which belongs to the expression before it.
         private static bool IsMemberName(ExpressionSyntax expression)

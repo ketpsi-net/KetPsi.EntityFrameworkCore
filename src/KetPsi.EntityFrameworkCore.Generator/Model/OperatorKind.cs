@@ -39,4 +39,5 @@ internal enum OperatorKind
     Any,
     Find,
     ExecuteDelete,
+    Join,
 }

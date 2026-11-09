@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using KetPsi.EntityFrameworkCore.Execution;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
@@ -169,6 +170,86 @@ public static class SqlProjection
     /// <summary>Whether there is any result: <c>AnyAsync</c>.</summary>
     public static Task<bool> AnyAsync<T>(IQueryable<T> source, CancellationToken cancellationToken = default)
         => ProjectionRunner.AnyAsync(ToProjected(source), cancellationToken);
+
+    /// <summary>
+    /// Appends <c>Where</c> on a projection the generator reads through: the predicate's names are paths of the
+    /// queried entity and of the joined ones, such as <c>"$0.Name"</c>, written through the projected members.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IQueryable<T> Where<T>(IQueryable<T> source, PredicateTemplate predicate, object?[] values)
+    {
+        ArgumentNullException.ThrowIfNull(predicate);
+        ArgumentNullException.ThrowIfNull(values);
+        if (values.Length != predicate.ValueCount)
+        {
+            throw new ArgumentException(
+                string.Format(CultureInfo.InvariantCulture, ExceptionMessages.ValueCountMismatch, predicate.ValueCount, values.Length),
+                nameof(values));
+        }
+
+        var query = ToProjected(source);
+        return query.WithTail(new WhereNode(query.Tail, predicate, values));
+    }
+
+    /// <summary>Appends <c>OrderBy</c> on a path of the queried or a joined entity, written through the projected members.</summary>
+    public static IOrderedQueryable<T> OrderBy<T>(IQueryable<T> source, string propertyPath)
+        => AppendOrder(source, propertyPath, descending: false, isThenBy: false);
+
+    /// <summary>Appends <c>OrderByDescending</c> on a path of the queried or a joined entity.</summary>
+    public static IOrderedQueryable<T> OrderByDescending<T>(IQueryable<T> source, string propertyPath)
+        => AppendOrder(source, propertyPath, descending: true, isThenBy: false);
+
+    /// <summary>Appends <c>ThenBy</c> on a path of the queried or a joined entity.</summary>
+    public static IOrderedQueryable<T> ThenBy<T>(IOrderedQueryable<T> source, string propertyPath)
+        => AppendOrder(source, propertyPath, descending: false, isThenBy: true);
+
+    /// <summary>Appends <c>ThenByDescending</c> on a path of the queried or a joined entity.</summary>
+    public static IOrderedQueryable<T> ThenByDescending<T>(IOrderedQueryable<T> source, string propertyPath)
+        => AppendOrder(source, propertyPath, descending: true, isThenBy: true);
+
+    /// <summary>Appends a <c>Select</c> after one the generator reads through, which replaces it.</summary>
+    /// <param name="source">The projected query.</param>
+    /// <param name="propertyNames">The paths the reader reads, of the queried entity and of the joined ones.</param>
+    /// <param name="entityPaths">The paths of the entities the reader uses.</param>
+    /// <param name="reader">Builds each result.</param>
+    public static IQueryable<TResult> Select<T, TResult>(
+        IQueryable<T> source, IReadOnlyList<string> propertyNames, IReadOnlyList<string> entityPaths, ProjectionReader<TResult> reader)
+    {
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        ArgumentNullException.ThrowIfNull(entityPaths);
+        ArgumentNullException.ThrowIfNull(reader);
+        if (propertyNames.Count == 0 && entityPaths.Count == 0)
+        {
+            throw new ArgumentException(ExceptionMessages.ProjectionRequiresColumns, nameof(propertyNames));
+        }
+
+        var query = ToProjected(source);
+        return new ProjectedQueryable<TResult>(query.Context, new ProjectionNode(query.Tail, propertyNames, entityPaths), reader);
+    }
+
+    /// <summary>Appends <c>Join</c> after a projection the generator reads through, such as the pair of an earlier join.</summary>
+    /// <exception cref="InvalidOperationException">The inner query belongs to another context.</exception>
+    public static IQueryable<TResult> Join<TOuter, [DynamicallyAccessedMembers(EntityMembers.Required)] TInner, TResult>(
+        IQueryable<TOuter> outer,
+        IEnumerable<TInner> inner,
+        IReadOnlyList<string> outerKeys,
+        IReadOnlyList<string> innerKeys,
+        IReadOnlyList<string> propertyNames,
+        IReadOnlyList<string> entityPaths,
+        ProjectionReader<TResult> reader)
+        where TInner : class
+    {
+        var query = ToProjected(outer);
+        return SqlQuery.Joined(query.Context, query.Tail, inner, outerKeys, innerKeys, propertyNames, entityPaths, reader);
+    }
+
+    private static ProjectedQueryable<T> AppendOrder<T>(IQueryable<T> source, string propertyPath, bool descending, bool isThenBy)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(propertyPath);
+
+        var query = ToProjected(source);
+        return query.WithTail(new OrderNode(query.Tail, propertyPath, descending, isThenBy));
+    }
 
     private static ProjectedQueryable<T> AppendGroupOrder<T>(IQueryable<T> source, GroupValue value, object?[] values, bool descending, bool isThenBy)
     {

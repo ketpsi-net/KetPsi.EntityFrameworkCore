@@ -23,7 +23,7 @@ That is the whole API: you keep writing EF Core LINQ, in method syntax. The only
 the compiler makes for it.
 
 > **Preview.** Filtering, ordering, paging, tracking, `Include`/`ThenInclude`, projection (`Select`), `Distinct`,
-> aggregates, `GroupBy` and the common terminals work today. Anything not supported yet is a
+> aggregates, `GroupBy`, `Join` and the common terminals work today. Anything not supported yet is a
 > **build error** with a `KP` diagnostic, never a silent fallback to EF Core's runtime pipeline.
 
 ## Install
@@ -50,6 +50,7 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Projection | `Select` to anonymous types, records and constructors, object initializers, `ValueTuple.Create` or one member, reading properties, reference navigations and entities, with computed members; then `Skip`, `Take`, `Distinct`, aggregates and terminals |
 | Distinct | `Distinct()` on entities and on projections without computed members |
 | Aggregates | `Sum`, `Average`, `Min`, `Max` and their `Async` versions, over one property (through reference navigations too) or a projection of one property |
+| Joins | `Join` of a filtered `DbSet` on properties or anonymous types of them, with a result selector; then `Where`, `OrderBy`, `Select` and further joins through its result, paging and terminals |
 | Grouping | `GroupBy` on properties, ones through reference navigations, or an anonymous type of them, with an element or result selector too; then `Where`, `OrderBy`/`ThenBy`, a `Select` of keys and aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups |
 | Bulk delete | `ExecuteDelete` and `ExecuteDeleteAsync` after the filtering, ordering and paging operators, without loading or tracking the rows |
 | Lookup by key | `Find` and `FindAsync`, which return a tracked entity without a query, as EF Core does |
@@ -101,8 +102,24 @@ are tracked, identity-resolved and given the includes below them, as in EF Core.
 navigation is null, and a non-nullable value type there throws as it does in EF Core unless it is cast to nullable.
 Computed members run in C# on the values read, as EF Core evaluates a final projection on the client; captured values
 are read each time the query runs. Following C# rather than SQL, `Math.Round` rounds halves to even and string methods
-use the current culture. After `Select`, only `Skip`, `Take`, `Distinct`, aggregates and terminals without a
-predicate are allowed; filter and order before it. Collection navigations in projections are not supported yet.
+use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are
+allowed, and `Where`, `OrderBy`, `Select` and `Join` that read only its entity and column members, before any paging.
+Collection navigations in projections are not supported yet.
+
+### Join
+
+`Join` is an `INNER JOIN`, as in EF Core: the inner side is a `DbSet` with optional `Where`, its query filters go in
+`ON`, and keys are properties or anonymous types of them. Write it in method syntax; the operators after it read
+through the result selector's members:
+
+```csharp
+var rows = db.Posts
+    .Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b })
+    .Where(x => x.b.Rating > 2)
+    .OrderBy(x => x.p.Title)
+    .Select(x => new { x.p.Title, x.b.Name })
+    .ToList();
+```
 
 ### Aggregates
 
@@ -159,6 +176,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP2009 | Projection not supported: a collection navigation, an instance method or `this`, a computed aggregate selector, or a type the generated code cannot reach |
 | KP2010 | `GroupBy` key not supported: a computed, constant, entity or `ValueTuple.Create` key |
 | KP2011 | Group expression not supported: the group's rows (`g.First()`, `g.ToList()`), an aggregate through a navigation or with a computed selector |
+| KP2012 | Join not supported: an inner sequence that is not a filtered `DbSet`, an inner key through a navigation, or a computed key |
 | KP3001–KP3005 | Property type, value converter, owned/complex/JSON mapping, entity construction or query filter not supported |
 
 ## How it works

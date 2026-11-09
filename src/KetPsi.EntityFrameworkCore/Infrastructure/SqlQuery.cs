@@ -227,6 +227,70 @@ public static class SqlQuery
         return new ProjectedQueryable<TResult>(query.Context, new ProjectionNode(query.Tail, propertyNames, entityPaths), reader);
     }
 
+    /// <summary>Appends <c>Join</c> with its result selector, which is a projection of both entities.</summary>
+    /// <param name="outer">The entity query.</param>
+    /// <param name="inner">The joined entity query: a set with filters, of the same context.</param>
+    /// <param name="outerKeys">The paths of the outer key parts.</param>
+    /// <param name="innerKeys">The inner entity's key properties, one for each outer key part.</param>
+    /// <param name="propertyNames">The property paths the reader reads; those of the inner entity start with its join path.</param>
+    /// <param name="entityPaths">The paths of the entities the reader uses.</param>
+    /// <param name="reader">Builds each result.</param>
+    /// <exception cref="InvalidOperationException">The inner query belongs to another context.</exception>
+    public static IQueryable<TResult> Join<[DynamicallyAccessedMembers(EntityMembers.Required)] TOuter, [DynamicallyAccessedMembers(EntityMembers.Required)] TInner, TResult>(
+        IQueryable<TOuter> outer,
+        IEnumerable<TInner> inner,
+        IReadOnlyList<string> outerKeys,
+        IReadOnlyList<string> innerKeys,
+        IReadOnlyList<string> propertyNames,
+        IReadOnlyList<string> entityPaths,
+        ProjectionReader<TResult> reader)
+        where TOuter : class
+        where TInner : class
+    {
+        var query = ToSqlQueryable(outer);
+        return Joined(query.Context, query.Tail, inner, outerKeys, innerKeys, propertyNames, entityPaths, reader);
+    }
+
+    internal static ProjectedQueryable<TResult> Joined<[DynamicallyAccessedMembers(EntityMembers.Required)] TInner, TResult>(
+        DbContext context,
+        QueryNode tail,
+        IEnumerable<TInner> inner,
+        IReadOnlyList<string> outerKeys,
+        IReadOnlyList<string> innerKeys,
+        IReadOnlyList<string> propertyNames,
+        IReadOnlyList<string> entityPaths,
+        ProjectionReader<TResult> reader)
+        where TInner : class
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        ArgumentNullException.ThrowIfNull(outerKeys);
+        ArgumentNullException.ThrowIfNull(innerKeys);
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        ArgumentNullException.ThrowIfNull(entityPaths);
+        ArgumentNullException.ThrowIfNull(reader);
+        if (outerKeys.Count == 0 || outerKeys.Count != innerKeys.Count)
+        {
+            throw new ArgumentException(
+                string.Format(CultureInfo.InvariantCulture, ExceptionMessages.JoinKeysMismatch, outerKeys.Count, innerKeys.Count), nameof(innerKeys));
+        }
+
+        if (propertyNames.Count == 0 && entityPaths.Count == 0)
+        {
+            throw new ArgumentException(ExceptionMessages.ProjectionRequiresColumns, nameof(propertyNames));
+        }
+
+        var innerQuery = inner is IQueryable<TInner> queryable
+            ? ToSqlQueryable(queryable)
+            : throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, ExceptionMessages.NotAnEntityQuery, inner.GetType()));
+        if (!ReferenceEquals(innerQuery.Context, context))
+        {
+            throw new InvalidOperationException(ExceptionMessages.MultipleContexts);
+        }
+
+        var joined = new JoinNode(tail, innerQuery.Tail, outerKeys, innerKeys);
+        return new ProjectedQueryable<TResult>(context, new ProjectionNode(joined, propertyNames, entityPaths), reader);
+    }
+
     /// <summary>Computes <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c> of an entity property.</summary>
     /// <param name="source">The entity query.</param>
     /// <param name="function">The aggregate.</param>

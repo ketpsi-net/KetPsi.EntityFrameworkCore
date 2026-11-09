@@ -26,6 +26,7 @@ KP2008 | KetPsi.EntityFrameworkCore | Error | Order key not supported
 KP2009 | KetPsi.EntityFrameworkCore | Error | Projection not supported
 KP2010 | KetPsi.EntityFrameworkCore | Error | GroupBy key not supported
 KP2011 | KetPsi.EntityFrameworkCore | Error | Group expression not supported
+KP2012 | KetPsi.EntityFrameworkCore | Error | Join not supported
 KP3001 | KetPsi.EntityFrameworkCore | Error | Property type not supported
 KP3002 | KetPsi.EntityFrameworkCore | Error | Value converter not supported
 KP3003 | KetPsi.EntityFrameworkCore | Error | Owned, complex or JSON mapping not supported
