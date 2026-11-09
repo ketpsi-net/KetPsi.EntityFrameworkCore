@@ -56,6 +56,11 @@ internal static class DiagnosticDescriptors
         "Operator not supported on groups",
         "'{0}' on the groups of GroupBy is not supported yet: {1}");
 
+    public static readonly DiagnosticDescriptor QuerySyntaxNotSupported = Error(
+        "KP1009",
+        "Query syntax not supported",
+        "Query syntax over an entity query cannot be intercepted, so it would run through EF Core's own pipeline; write it with method syntax, such as db.Posts.Join(...).Where(...).Select(...)");
+
     public static readonly DiagnosticDescriptor ExpressionNotSupported = Error(
         "KP2001",
         "Expression not supported",
@@ -96,7 +101,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor OrderKeyNotSupported = Error(
         "KP2008",
         "Order key not supported",
-        "The order key '{0}' must be a property of the entity itself, such as x => x.Name");
+        "The order key '{0}' must be a property of the entity or of a reference navigation, such as x => x.Name or x => x.Blog.Name");
 
     public static readonly DiagnosticDescriptor ProjectionNotSupported = Error(
         "KP2009",
@@ -112,6 +117,11 @@ internal static class DiagnosticDescriptors
         "KP2011",
         "Group expression not supported",
         "'{0}' cannot be translated from the groups yet: {1}");
+
+    public static readonly DiagnosticDescriptor JoinNotSupported = Error(
+        "KP2012",
+        "Join not supported",
+        "'{0}' cannot be joined yet: {1}");
 
     public static readonly DiagnosticDescriptor PropertyTypeNotSupported = Error(
         "KP3001",

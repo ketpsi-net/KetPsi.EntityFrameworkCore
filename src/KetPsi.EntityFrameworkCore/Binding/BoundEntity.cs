@@ -84,6 +84,9 @@ internal sealed class BoundEntity
                 string.Format(CultureInfo.InvariantCulture, ExceptionMessages.NavigationNotFound, ClrType, navigationName));
     }
 
+    /// <summary>Whether the entity maps a property named <paramref name="propertyName"/>.</summary>
+    public bool HasProperty(string propertyName) => _propertiesByName.ContainsKey(propertyName);
+
     /// <exception cref="InvalidOperationException">The entity has no mapped property named <paramref name="propertyName"/>.</exception>
     public BoundProperty GetProperty(string propertyName)
         => _propertiesByName.TryGetValue(propertyName, out var property)

@@ -23,6 +23,11 @@ internal static class QueryRunner
     // Two rows are enough to tell "exactly one" from "more than one".
     internal const int SingleRowLimit = 2;
 
+    // EF Core names the synchronous operator in its message for both forms, as these do.
+    internal const string LastMethod = "Last";
+
+    internal const string LastOrDefaultMethod = "LastOrDefault";
+
     // EF Core 9 is the first version that can track entities under Native AOT, with a --nativeaot compiled model.
     private const int MinimumEfCoreMajorForAotTracking = 9;
 
@@ -80,6 +85,24 @@ internal static class QueryRunner
         where T : class
         => FirstOrDefaultOf(await ReadRowsAsync(query, FirstRowLimit, cancellationToken).ConfigureAwait(false));
 
+    public static T Last<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
+        where T : class
+        => FirstOf(ReadRows(Reversed(query, LastMethod), FirstRowLimit), isAsync: false);
+
+    public static async Task<T> LastAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query, CancellationToken cancellationToken)
+        where T : class
+        => FirstOf(await ReadRowsAsync(Reversed(query, LastMethod), FirstRowLimit, cancellationToken).ConfigureAwait(false), isAsync: true);
+
+    public static T? LastOrDefault<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
+        where T : class
+        => FirstOrDefaultOf(ReadRows(Reversed(query, LastOrDefaultMethod), FirstRowLimit));
+
+    public static async Task<T?> LastOrDefaultAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query, CancellationToken cancellationToken)
+        where T : class
+        => FirstOrDefaultOf(await ReadRowsAsync(Reversed(query, LastOrDefaultMethod), FirstRowLimit, cancellationToken).ConfigureAwait(false));
+
     public static T Single<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
         where T : class
         => SingleOf(ReadRows(query, SingleRowLimit), isAsync: false);
@@ -125,6 +148,22 @@ internal static class QueryRunner
         where T : class
         => Convert.ToBoolean(await ExecuteScalarAsync(query, QueryTerminal.Any, cancellationToken).ConfigureAwait(false), CultureInfo.InvariantCulture);
 
+    /// <summary>Deletes the rows the query selects, without loading or tracking them, and returns how many were deleted.</summary>
+    public static int ExecuteDelete<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
+        where T : class
+    {
+        var (dialect, statement) = PrepareDelete(query);
+        return QueryExecutor.ExecuteNonQuery(query.Context, dialect, statement);
+    }
+
+    public static Task<int> ExecuteDeleteAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query, CancellationToken cancellationToken)
+        where T : class
+    {
+        var (dialect, statement) = PrepareDelete(query);
+        return QueryExecutor.ExecuteNonQueryAsync(query.Context, dialect, statement, cancellationToken);
+    }
+
     /// <summary>The tracking behavior of a query: the last <c>AsTracking</c> or <c>AsNoTracking</c>, else the context default.</summary>
     internal static QueryTrackingBehavior ResolveTracking(QueryNode tail, QueryTrackingBehavior contextDefault)
     {
@@ -147,6 +186,11 @@ internal static class QueryRunner
             throw new InvalidOperationException(ExceptionMessages.TrackingRequiresEfCore9UnderAot);
         }
     }
+
+    // Last is the first row of the query read in reverse.
+    private static SqlQueryable<T> Reversed<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, string method)
+        where T : class
+        => query.WithTail(new ReverseOrderNode(query.Tail, method));
 
     private static List<T> ReadRows<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, int? rowLimit)
         where T : class
@@ -239,8 +283,22 @@ internal static class QueryRunner
             includes.EnsureNoCycle();
         }
 
-        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, filtersFor, rowLimit);
+        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, filtersFor, rowLimit, bind);
         return new IncludedQuery(statement, new IncludeLoader(context, dialect, tracking, filtersFor, bind));
+    }
+
+    // Tracking doesn't matter to a delete, which never reads rows; the change tracker is left as it is, as in EF Core.
+    private static (ISqlDialect Dialect, SqlStatement Statement) PrepareDelete<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query)
+        where T : class
+    {
+        var context = query.Context;
+        var bind = Binder(context);
+        var entity = bind(query.Root.EntityType);
+        var dialect = SqlDialects.Resolve(context.Database.ProviderName);
+        var statement = SqlBuilder.BuildDelete(
+            entity, query.Tail, dialect, IncludeTree.FromChain(entity, query.Tail, bind), FiltersFor(context, query.Tail), bind);
+        return (dialect, statement);
     }
 
     /// <summary>Binds entity types against the context's model.</summary>

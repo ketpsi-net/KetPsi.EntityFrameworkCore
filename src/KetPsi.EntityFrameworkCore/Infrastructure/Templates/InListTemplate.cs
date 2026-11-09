@@ -17,7 +17,7 @@ public sealed class InListTemplate : PredicateTemplate
         ValueIndex = valueIndex;
     }
 
-    /// <summary>The entity property looked up in the list.</summary>
+    /// <summary>The property looked up in the list, or a path to one through reference navigations.</summary>
     public string PropertyName { get; }
 
     /// <summary>The slot holding the list.</summary>

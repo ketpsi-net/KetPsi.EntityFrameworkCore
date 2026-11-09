@@ -183,6 +183,9 @@ public sealed class ProjectionInterceptorTests : IDisposable
         Assert.Equal("alpha", Invoke("First"));
         Assert.StartsWith("SELECT TOP(1) ", _connection.LastCommand.CommandText, StringComparison.Ordinal);
         Assert.Equal("alpha", await InvokeAsync("FirstOrDefaultAsync", Token));
+        Assert.Equal("alpha", Invoke("Last"));
+        Assert.Equal("SELECT TOP(1) [t0].[Name] FROM [Blogs] AS [t0] ORDER BY [t0].[Id] DESC", _connection.LastCommand.CommandText);
+        Assert.Equal("alpha", await InvokeAsync("LastOrDefaultAsync", Token));
 
         _connection.Rows = Table(["Id", "Name"], [1, "alpha"]);
         Assert.Equal(1, Get(Invoke("Single")!, "Id"));

@@ -117,6 +117,84 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
+    public void Last_WithPredicate_ReversesTheOrdering()
+    {
+        var blog = Invoke("Last", 2);
+
+        Assert.Equal(
+            "SELECT TOP(1) " + Columns + " FROM " + Table + " WHERE [t0].[Rating] > @p0 ORDER BY [t0].[Name] DESC",
+            _connection.LastCommand.CommandText);
+        Assert.Equal([2], Parameters());
+        Assert.Equal("alpha", Get(blog!, "Name"));
+    }
+
+    [Fact]
+    public async Task LastOrDefaultAsync_AfterTake_ReadsThePageFromItsEnd()
+    {
+        var blog = await InvokeAsync("LastOrDefaultAsync", Token);
+
+        Assert.Equal(
+            "SELECT TOP(1) " + Columns.Replace("[t0]", "[t1]", StringComparison.Ordinal) + " FROM (SELECT TOP(@p0) " + Columns + " FROM " + Table +
+            " ORDER BY [t0].[Id]) AS [t1] ORDER BY [t1].[Id] DESC",
+            _connection.LastCommand.CommandText);
+        Assert.NotNull(blog);
+    }
+
+    [Fact]
+    public void Navigations_InPredicatesAndOrderings_AreJoined()
+    {
+        _connection.Rows = PostRows((10, 1, "first"));
+
+        var posts = AsList(Invoke("ByBlog", "alpha", 0));
+
+        Assert.Equal(
+            "SELECT [t0].[Id], [t0].[BlogId], [t0].[Title] FROM [Posts] AS [t0] INNER JOIN [Blogs] AS [t1] ON [t0].[BlogId] = [t1].[Id] " +
+            "WHERE (([t1].[Name] = @p0 AND [t0].[BlogId] IS NOT NULL) AND [t0].[BlogId] > @p1) ORDER BY [t1].[Rating] DESC",
+            _connection.LastCommand.CommandText);
+        Assert.Equal(["alpha", 0], Parameters());
+        Assert.Single(posts);
+    }
+
+    [Fact]
+    public void Find_QueriesByKeyThenReturnsTheTrackedEntity()
+    {
+        var blog = Invoke("Find", 1);
+
+        Assert.Equal("SELECT TOP(1) " + Columns + " FROM " + Table + " WHERE [t0].[Id] = @p0", _connection.LastCommand.CommandText);
+        Assert.Equal([1], Parameters());
+        Assert.Same(blog, Invoke("Find", 1));
+        Assert.Single(_connection.Commands);
+    }
+
+    [Fact]
+    public async Task FindAsync_BothOverloads_QueryByKey()
+    {
+        Assert.Equal("alpha", Get((await InvokeValueTask("FindAsync", 1))!, "Name"));
+        Assert.Null(await InvokeValueTask("FindWithTokenAsync", new object?[] { null }, Token));
+        Assert.Single(_connection.Commands);
+
+        var exception = Assert.Throws<TargetInvocationException>(() => Invoke("FindWithTokenAsync", new object?[] { 1L }, Token));
+        Assert.Equal(
+            "The key value at position 0 of the call to 'DbSet<Blog>.Find' was of type 'long', which does not match the property type of 'int'.",
+            Assert.IsType<ArgumentException>(exception.InnerException).Message);
+    }
+
+    [Fact]
+    public async Task ExecuteDelete_SendsADeleteAndReturnsTheRowsDeleted()
+    {
+        _connection.RowsAffected = 4;
+
+        Assert.Equal(4, Invoke("DeleteBelow", 3));
+        Assert.Equal("DELETE FROM [t0] FROM " + Table + " WHERE [t0].[Rating] < @p0", _connection.LastCommand.CommandText);
+        Assert.Equal([3], Parameters());
+
+        Assert.Equal(4, await InvokeAsync("DeletePageAsync", Token));
+        Assert.Equal(
+            "DELETE FROM [t1] FROM [Blogs] AS [t1] WHERE [t1].[Id] IN (SELECT TOP(@p0) [t0].[Id] FROM " + Table + " ORDER BY [t0].[Id])",
+            _connection.LastCommand.CommandText);
+    }
+
+    [Fact]
     public void Single_TwoRows_ThrowsLikeLinq()
     {
         var exception = Assert.Throws<TargetInvocationException>(() => Invoke("Single"));
@@ -339,6 +417,14 @@ public sealed class QueryInterceptorTests : IDisposable
     private async Task<object?> InvokeAsync(string method, params object?[] arguments)
     {
         var task = (Task)Invoke(method, arguments)!;
+        await task;
+        return task.GetType().GetProperty("Result")!.GetValue(task);
+    }
+
+    private async Task<object?> InvokeValueTask(string method, params object?[] arguments)
+    {
+        var valueTask = Invoke(method, arguments)!;
+        var task = (Task)valueTask.GetType().GetMethod("AsTask")!.Invoke(valueTask, null)!;
         await task;
         return task.GetType().GetProperty("Result")!.GetValue(task);
     }

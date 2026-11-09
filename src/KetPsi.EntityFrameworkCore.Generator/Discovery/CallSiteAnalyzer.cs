@@ -11,7 +11,7 @@ namespace KetPsi.EntityFrameworkCore.Generator.Discovery;
 /// Classifies calls to query operators: each call becomes a supported operator or a diagnostic. Whether the
 /// query is an entity query is decided later, once the entity types are known.
 /// </summary>
-internal static class CallSiteAnalyzer
+internal static partial class CallSiteAnalyzer
 {
     /// <summary>The element type used for internal errors, which are reported whatever the query is.</summary>
     public const string UnknownElementType = "?";
@@ -152,7 +152,7 @@ internal static class CallSiteAnalyzer
 
         if (projectedFrom is { } projection)
         {
-            return ClassifyProjected(site, method, family, projection.Projection, projection.IsPaged);
+            return ClassifyProjected(site, method, family, projection);
         }
 
         return family switch
@@ -163,6 +163,10 @@ internal static class CallSiteAnalyzer
             {
                 "AsSplitQuery" => site.Supported(OperatorKind.AsSplitQuery),
                 "AsSingleQuery" => site.Supported(OperatorKind.AsSingleQuery),
+
+                // EF Core 8 declares ExecuteDelete with the relational extensions, EF Core 9 and later with the others.
+                "ExecuteDelete" => site.Supported(OperatorKind.ExecuteDelete),
+                "ExecuteDeleteAsync" => site.Supported(OperatorKind.ExecuteDelete, isAsync: true),
                 _ when method.Name.StartsWith("FromSql", StringComparison.Ordinal) => site.Reject(DiagnosticDescriptors.RawSqlNotSupported, method.Name),
                 _ => site.Unsupported(),
             },
@@ -171,7 +175,13 @@ internal static class CallSiteAnalyzer
             Family.SqlServer => site.Unsupported(),
 
             // Of DbSet's own methods, only these query the database through EF Core's pipeline.
-            Family.DbSet => method.Name is "Find" or "FindAsync" or "AsAsyncEnumerable" ? site.Unsupported() : null,
+            Family.DbSet => method.Name switch
+            {
+                "Find" => site.Find(isAsync: false),
+                "FindAsync" => site.Find(isAsync: true),
+                "AsAsyncEnumerable" => site.Unsupported(),
+                _ => null,
+            },
             _ => null,
         };
     }
@@ -201,9 +211,12 @@ internal static class CallSiteAnalyzer
                 return parameters.Length == 1 ? site.Supported(OperatorKind.Distinct) : site.Overload(ReasonComparer);
             case "GroupBy":
                 return parameters.Skip(1).All(static p => IsLambdaParameter(p.Type)) ? site.GroupBy() : site.Overload(ReasonComparer);
+            case "Join":
+                return parameters.Length == 5 ? site.JoinOnEntity() : site.Overload(ReasonComparer);
             case "Sum" or "Average" or "Min" or "Max" when parameters.Length == 2 && IsSelector(parameters[1].Type):
                 return site.Supported(AggregateKind(method.Name), lambdaOrdinal: 1);
-            case "First" or "FirstOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count" or "LongCount":
+            case "First" or "FirstOrDefault" or "Last" or "LastOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count"
+                or "LongCount":
                 if (parameters.Length == 1)
                 {
                     return site.Supported(TerminalKind(method.Name));
@@ -237,10 +250,14 @@ internal static class CallSiteAnalyzer
                     : site.Supported(include, lambdaOrdinal: 1);
             case "ToListAsync" or "ToArrayAsync":
                 return site.Supported(method.Name == "ToListAsync" ? OperatorKind.ToList : OperatorKind.ToArray, isAsync: true);
+            case "ExecuteDelete":
+                return site.Supported(OperatorKind.ExecuteDelete);
+            case "ExecuteDeleteAsync":
+                return site.Supported(OperatorKind.ExecuteDelete, isAsync: true);
             case "SumAsync" or "AverageAsync" or "MinAsync" or "MaxAsync" when parameters.Length == 3 && IsSelector(parameters[1].Type):
                 return site.Supported(AggregateKind(method.Name.Substring(0, method.Name.Length - "Async".Length)), lambdaOrdinal: 1, isAsync: true);
-            case "FirstAsync" or "FirstOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync" or "AnyAsync" or "CountAsync"
-                or "LongCountAsync":
+            case "FirstAsync" or "FirstOrDefaultAsync" or "LastAsync" or "LastOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync"
+                or "AnyAsync" or "CountAsync" or "LongCountAsync":
                 var kind = TerminalKind(method.Name.Substring(0, method.Name.Length - "Async".Length));
                 return parameters.Length == 3 && IsPredicate(parameters[1].Type)
                     ? site.Supported(kind, lambdaOrdinal: 1, hasPredicate: true, isAsync: true)
@@ -252,8 +269,9 @@ internal static class CallSiteAnalyzer
 
     // After Select the query is a projection: paging, Distinct, aggregates and terminals run it, anything else is reported.
     // The projection is null when the Select itself is reported.
-    private static CallSite? ClassifyProjected(SiteBuilder site, IMethodSymbol method, Family family, ProjectionModel? projection, bool isPaged)
+    private static CallSite? ClassifyProjected(SiteBuilder site, IMethodSymbol method, Family family, ProjectionSource source)
     {
+        var (projection, isPaged) = (source.Projection, source.IsPaged);
         var parameters = method.Parameters;
         if (projection is { IsGrouped: true } grouped && family == Family.Queryable
             && (method.Name == "Where" && IsPredicate(parameters[1].Type)
@@ -262,6 +280,17 @@ internal static class CallSiteAnalyzer
             return isPaged
                 ? site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonAfterGroupPaging)
                 : site.AfterGroupSelect(method.Name == "Where" ? OperatorKind.Where : OrderKind(method.Name), grouped);
+        }
+
+        // Operators that read through the projection's members, such as the pair of a query-syntax join.
+        if (family == Family.Queryable && source.Aliases is { Count: > 0 } aliases && AliasOperator(method) is { } aliasKind)
+        {
+            if (isPaged)
+            {
+                return site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonAliasAfterPaging);
+            }
+
+            return aliasKind == OperatorKind.Join ? site.JoinOn(aliases, source.JoinCount) : site.OnAliases(aliasKind, aliases);
         }
 
         switch (family)
@@ -283,13 +312,14 @@ internal static class CallSiteAnalyzer
             case Family.Queryable when method.Name is "Skip" or "Take" && parameters[1].Type.SpecialType == SpecialType.System_Int32:
                 return site.SupportedAfterSelect(method.Name == "Skip" ? OperatorKind.Skip : OperatorKind.Take);
             case Family.Queryable when parameters.Length == 1
-                && method.Name is "First" or "FirstOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count" or "LongCount":
+                && method.Name is "First" or "FirstOrDefault" or "Last" or "LastOrDefault" or "Single" or "SingleOrDefault" or "Any"
+                    or "Count" or "LongCount":
                 return site.SupportedAfterSelect(TerminalKind(method.Name));
             case Family.EntityFramework when method.Name is "ToListAsync" or "ToArrayAsync":
                 return site.SupportedAfterSelect(method.Name == "ToListAsync" ? OperatorKind.ToList : OperatorKind.ToArray, isAsync: true);
             case Family.EntityFramework when parameters.Length == 2
-                && method.Name is "FirstAsync" or "FirstOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync" or "AnyAsync"
-                    or "CountAsync" or "LongCountAsync":
+                && method.Name is "FirstAsync" or "FirstOrDefaultAsync" or "LastAsync" or "LastOrDefaultAsync" or "SingleAsync"
+                    or "SingleOrDefaultAsync" or "AnyAsync" or "CountAsync" or "LongCountAsync":
                 return site.SupportedAfterSelect(TerminalKind(method.Name.Substring(0, method.Name.Length - "Async".Length)), isAsync: true);
             case Family.Enumerable:
                 // Enumerating a projected query runs it, so only the terminals that would otherwise copy it are intercepted.
@@ -353,10 +383,55 @@ internal static class CallSiteAnalyzer
                             return new ProjectionSource(grouped.EntityType, groupProjection, isPaged);
                         }
 
-                        var projection = selector is LambdaExpressionSyntax lambda
-                            ? ProjectionTranslator.Translate(lambda, element, semanticModel, location, cancellationToken).Projection
-                            : null;
-                        return new ProjectionSource(EntityDiscovery.TypeName(element), projection, isPaged);
+                        // A Select after a projection reads through the members of that projection.
+                        if (ProjectedFrom(GetSource(invocation), semanticModel, queryableInterface, location, cancellationToken) is { } upstream)
+                        {
+                            if (upstream.Aliases is not { Count: > 0 } upstreamAliases || upstream.IsPaged || selector is not LambdaExpressionSyntax aliased)
+                            {
+                                return new ProjectionSource(upstream.EntityType, null, isPaged);
+                            }
+
+                            var (reselected, reselectedAliases, _) = ProjectionTranslator.Translate(
+                                aliased, [upstreamAliases], semanticModel, location, cancellationToken);
+                            return new ProjectionSource(upstream.EntityType, reselected, isPaged, reselectedAliases, upstream.JoinCount);
+                        }
+
+                        if (selector is not LambdaExpressionSyntax lambda)
+                        {
+                            return new ProjectionSource(EntityDiscovery.TypeName(element), null, isPaged);
+                        }
+
+                        var (projection, aliases, _) = ProjectionTranslator.Translate(lambda, [Alias.At("", element)], semanticModel, location, cancellationToken);
+                        return new ProjectionSource(EntityDiscovery.TypeName(element), projection, isPaged, aliases);
+                    }
+
+                    if (family == Family.Queryable && name == "Join" && invocation.TargetMethod.Parameters.Length == 5)
+                    {
+                        // A join of the entity query, or of a projection whose members the outer key and result read through.
+                        var outerSource = GetSource(invocation);
+                        IReadOnlyList<Alias> outer;
+                        int index;
+                        string entityType;
+                        if (ProjectedFrom(outerSource, semanticModel, queryableInterface, location, cancellationToken) is { } projectedOuter)
+                        {
+                            if (projectedOuter.Aliases is not { Count: > 0 } outerAliases || projectedOuter.IsPaged)
+                            {
+                                return new ProjectionSource(projectedOuter.EntityType, null, isPaged);
+                            }
+
+                            (outer, index, entityType) = (outerAliases, projectedOuter.JoinCount, projectedOuter.EntityType);
+                        }
+                        else if (outerSource?.Type is { } outerType && GetElementType(outerType, queryableInterface) is { } outerElement)
+                        {
+                            (outer, index, entityType) = (Alias.At("", outerElement), 0, EntityDiscovery.TypeName(outerElement));
+                        }
+                        else
+                        {
+                            return null;
+                        }
+
+                        var (join, _) = TranslateJoin(invocation, outer, index, semanticModel, location, cancellationToken);
+                        return new ProjectionSource(entityType, join?.Projection, isPaged, join?.Aliases, index + 1);
                     }
 
                     if (family == Family.Queryable && name == "GroupBy" && HasResultSelector(invocation.TargetMethod))
@@ -650,6 +725,8 @@ internal static class CallSiteAnalyzer
     {
         "First" => OperatorKind.First,
         "FirstOrDefault" => OperatorKind.FirstOrDefault,
+        "Last" => OperatorKind.Last,
+        "LastOrDefault" => OperatorKind.LastOrDefault,
         "Single" => OperatorKind.Single,
         "SingleOrDefault" => OperatorKind.SingleOrDefault,
         "Any" => OperatorKind.Any,
@@ -657,7 +734,7 @@ internal static class CallSiteAnalyzer
         _ => OperatorKind.LongCount,
     };
 
-    private sealed class SiteBuilder(
+    private sealed partial class SiteBuilder(
         INamedTypeSymbol elementSymbol,
         LocationInfo location,
         string methodName,
@@ -695,6 +772,29 @@ internal static class CallSiteAnalyzer
                 Aggregate: aggregate);
         }
 
+        /// <summary>
+        /// <c>Find</c> or <c>FindAsync</c>, which are methods of the set itself: the interceptor takes the set as its
+        /// <see langword="this"/> parameter, followed by the method's parameters.
+        /// </summary>
+        public CallSite Find(bool isAsync)
+        {
+            var method = operation.TargetMethod;
+            var set = new ParameterSignature(method.ContainingType.ToDisplayString(SignatureFormat), "set");
+            var parameters = new[] { set }
+                .Concat(method.Parameters.Select(static p => new ParameterSignature(p.Type.ToDisplayString(SignatureFormat), p.Name)))
+                .ToEquatableArray();
+            return new(
+                _elementType,
+                location,
+                OperatorKind.Find,
+                isAsync,
+                HasPredicate: false,
+                Diagnostic: null,
+                Interception: semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax(),
+                Signature: new InterceptorSignature(
+                    method.Name, EntityDiscovery.TypeName(method.ContainingType), method.ReturnType.ToDisplayString(SignatureFormat), parameters));
+        }
+
         /// <param name="kind">The operator.</param>
         /// <param name="lambdaOrdinal">The parameter that must be a lambda written at the call site.</param>
         /// <param name="hasPredicate">Whether that lambda is a predicate, which is translated here.</param>
@@ -719,7 +819,8 @@ internal static class CallSiteAnalyzer
 
                 if (lambda is not null && IsPredicate(kind, hasPredicate))
                 {
-                    var (translated, translationDiagnostic) = PredicateTranslator.Translate(lambda, semanticModel, cancellationToken);
+                    var (translated, translationDiagnostic) = PredicateTranslator.Translate(
+                        lambda, semanticModel, cancellationToken, allowNavigations: true);
                     if (translationDiagnostic is not null)
                     {
                         return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, translationDiagnostic);
@@ -1010,7 +1111,13 @@ internal static class CallSiteAnalyzer
 /// The entity query a projection was made from, its <c>Select</c>'s projection when it translates, and whether
 /// <c>Skip</c>, <c>Take</c> or <c>Distinct</c> came after the <c>Select</c>.
 /// </summary>
-internal readonly record struct ProjectionSource(string EntityType, ProjectionModel? Projection, bool IsPaged = false);
+/// <param name="EntityType">The queried entity of the chain.</param>
+/// <param name="Projection">The projection, when it translates.</param>
+/// <param name="IsPaged">Whether <c>Skip</c>, <c>Take</c> or <c>Distinct</c> came after it.</param>
+/// <param name="Aliases">What the projection's members stand for, which the operators after it read through.</param>
+/// <param name="JoinCount">How many joins the chain has made, which numbers the next one's join path.</param>
+internal readonly record struct ProjectionSource(
+    string EntityType, ProjectionModel? Projection, bool IsPaged = false, IReadOnlyList<Alias>? Aliases = null, int JoinCount = 0);
 
 /// <summary>
 /// The entity query a grouped query was grouped from, the translated <c>GroupBy</c> when it translates, and whether a

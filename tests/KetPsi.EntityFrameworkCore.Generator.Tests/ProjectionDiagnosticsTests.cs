@@ -88,17 +88,18 @@ public sealed class ProjectionDiagnosticsTests
     }
 
     [Theory]
-    [InlineData("var r = db.Blogs.Select(b => b.Id).Where(i => i > 1).ToList();", "Where")]
-    [InlineData("var r = db.Blogs.Select(b => b.Name).OrderBy(n => n).ToList();", "OrderBy")]
+    [InlineData("var r = db.Blogs.Select(b => b.Name + \"!\").Where(n => n != \"\").ToList();", "Where")]
+    [InlineData("var r = db.Blogs.Select(b => b.Name).Take(2).OrderBy(n => n).ToList();", "OrderBy")]
     [InlineData("var r = db.Blogs.Select(b => b.Id).First(i => i > 1);", "First")]
     [InlineData("var r = await db.Blogs.Select(b => b.Id).AnyAsync(i => i > 1, ct);", "AnyAsync")]
     [InlineData("var r = db.Blogs.Select(b => b.Name + \"!\").Distinct().ToList();", "Distinct")]
     [InlineData("var r = db.Blogs.Select(b => new { b.Id, b.Rating }).Sum(x => x.Rating);", "Sum")]
     [InlineData("var r = db.Blogs.Select(b => b.Rating + 1).Sum();", "Sum")]
     [InlineData("var r = db.Blogs.Select(b => b.Author).Max();", "Max")]
-    [InlineData("var r = db.Blogs.Select(b => b.Author).Select(a => a!.Id).ToList();", "Select")]
+    [InlineData("var r = db.Blogs.Select(b => b.Author).Distinct().Select(a => a!.Id).ToList();", "Select")]
     [InlineData("var r = db.Blogs.Select(b => new { b.Id }).AsNoTracking().ToList();", "AsNoTracking")]
-    [InlineData("var q = db.Blogs.Select(b => b.Id); var r = q.Where(i => i > 0).ToList();", "Where")]
+    [InlineData("var r = db.Blogs.Select(b => b.Author).ExecuteDelete();", "ExecuteDelete")]
+    [InlineData("var q = db.Blogs.Select(b => b.Id).Skip(1); var r = q.Where(i => i > 0).ToList();", "Where")]
     public void OperatorAfterSelect_ReportsKP1007AtOperatorName(string body, string operatorName)
     {
         var run = GeneratorHost.Run(TestSources.WithBody(body));

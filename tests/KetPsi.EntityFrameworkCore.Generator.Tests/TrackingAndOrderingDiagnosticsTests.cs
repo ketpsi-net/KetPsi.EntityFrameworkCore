@@ -23,7 +23,7 @@ public sealed class TrackingAndOrderingDiagnosticsTests
     [Theory]
     [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Name.Length).ToList();", "b.Name.Length")]
     [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => -b.Rating).ToList();", "-b.Rating")]
-    [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Id).ThenBy(b => b.Author!.Id).ToList();", "b.Author!.Id")]
+    [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Id).ThenBy(b => b.Posts.Count).ToList();", "b.Posts.Count")]
     [InlineData("var r = db.Blogs.AsNoTracking().OrderByDescending(b => b.Author).ToList();", "b.Author")]
     [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => 1).ToList();", "1")]
     public void UnsupportedOrderKey_ReportsKP2008AtKey(string body, string key)
@@ -33,12 +33,16 @@ public sealed class TrackingAndOrderingDiagnosticsTests
         var diagnostic = Assert.Single(run.Diagnostics);
         Assert.Equal("KP2008", diagnostic.Id);
         Assert.Equal(key, run.TextAt(diagnostic));
-        Assert.Equal($"The order key '{key}' must be a property of the entity itself, such as x => x.Name", diagnostic.GetMessage());
+        Assert.Equal(
+            $"The order key '{key}' must be a property of the entity or of a reference navigation, such as x => x.Name or x => x.Blog.Name",
+            diagnostic.GetMessage());
     }
 
     [Theory]
     [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => (b.Name)).ToList();")]
     [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Views).ThenByDescending(b => b.Status).ToList();")]
+    [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Id).ThenBy(b => b.Author!.Id).ToList();")]
+    [InlineData("var r = db.Posts.AsNoTracking().OrderByDescending(p => (p.Blog).Rating).ThenBy(p => p.Blog.Author!.Id).ToList();")]
     public void DirectPropertyKey_IsAccepted(string body)
         => Assert.Empty(GeneratorHost.Run(TestSources.WithBody(body)).Diagnostics);
 }

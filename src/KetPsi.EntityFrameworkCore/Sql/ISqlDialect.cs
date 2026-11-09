@@ -45,6 +45,14 @@ public interface ISqlDialect
     string Exists(string subquery);
 
     /// <summary>
+    /// Returns the statement that deletes the rows of the table aliased <paramref name="alias"/> that
+    /// <paramref name="from"/> selects: <c>ExecuteDelete</c>.
+    /// </summary>
+    /// <param name="alias">The quoted alias of the table to delete from.</param>
+    /// <param name="from">The table with its alias, the joins and the <c>WHERE</c> clause, as after <c>FROM</c>.</param>
+    string Delete(string alias, string from);
+
+    /// <summary>
     /// Returns the select expression that computes <paramref name="function"/> over <paramref name="column"/>, with
     /// EF Core's semantics: a <c>Sum</c> of no rows is zero of <paramref name="valueType"/>, and an <c>Average</c> of
     /// integers is computed in floating point.

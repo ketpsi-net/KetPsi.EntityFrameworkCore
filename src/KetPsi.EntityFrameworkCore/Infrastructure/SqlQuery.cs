@@ -155,22 +155,22 @@ public static class SqlQuery
         return query.WithTail(new IgnoreQueryFiltersNode(query.Tail, [.. filterKeys]));
     }
 
-    /// <summary>Appends <c>OrderBy</c> on the entity property <paramref name="propertyName"/>.</summary>
+    /// <summary>Appends <c>OrderBy</c> on the entity property <paramref name="propertyName"/>, or a path to one through reference navigations.</summary>
     public static IOrderedQueryable<T> OrderBy<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, string propertyName)
         where T : class
         => AppendOrder(source, propertyName, descending: false, isThenBy: false);
 
-    /// <summary>Appends <c>OrderByDescending</c> on the entity property <paramref name="propertyName"/>.</summary>
+    /// <summary>Appends <c>OrderByDescending</c> on the entity property <paramref name="propertyName"/>, or a path to one through reference navigations.</summary>
     public static IOrderedQueryable<T> OrderByDescending<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, string propertyName)
         where T : class
         => AppendOrder(source, propertyName, descending: true, isThenBy: false);
 
-    /// <summary>Appends <c>ThenBy</c> on the entity property <paramref name="propertyName"/>.</summary>
+    /// <summary>Appends <c>ThenBy</c> on the entity property <paramref name="propertyName"/>, or a path to one through reference navigations.</summary>
     public static IOrderedQueryable<T> ThenBy<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IOrderedQueryable<T> source, string propertyName)
         where T : class
         => AppendOrder(source, propertyName, descending: false, isThenBy: true);
 
-    /// <summary>Appends <c>ThenByDescending</c> on the entity property <paramref name="propertyName"/>.</summary>
+    /// <summary>Appends <c>ThenByDescending</c> on the entity property <paramref name="propertyName"/>, or a path to one through reference navigations.</summary>
     public static IOrderedQueryable<T> ThenByDescending<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IOrderedQueryable<T> source, string propertyName)
         where T : class
         => AppendOrder(source, propertyName, descending: true, isThenBy: true);
@@ -225,6 +225,70 @@ public static class SqlQuery
 
         var query = ToSqlQueryable(source);
         return new ProjectedQueryable<TResult>(query.Context, new ProjectionNode(query.Tail, propertyNames, entityPaths), reader);
+    }
+
+    /// <summary>Appends <c>Join</c> with its result selector, which is a projection of both entities.</summary>
+    /// <param name="outer">The entity query.</param>
+    /// <param name="inner">The joined entity query: a set with filters, of the same context.</param>
+    /// <param name="outerKeys">The paths of the outer key parts.</param>
+    /// <param name="innerKeys">The inner entity's key properties, one for each outer key part.</param>
+    /// <param name="propertyNames">The property paths the reader reads; those of the inner entity start with its join path.</param>
+    /// <param name="entityPaths">The paths of the entities the reader uses.</param>
+    /// <param name="reader">Builds each result.</param>
+    /// <exception cref="InvalidOperationException">The inner query belongs to another context.</exception>
+    public static IQueryable<TResult> Join<[DynamicallyAccessedMembers(EntityMembers.Required)] TOuter, [DynamicallyAccessedMembers(EntityMembers.Required)] TInner, TResult>(
+        IQueryable<TOuter> outer,
+        IEnumerable<TInner> inner,
+        IReadOnlyList<string> outerKeys,
+        IReadOnlyList<string> innerKeys,
+        IReadOnlyList<string> propertyNames,
+        IReadOnlyList<string> entityPaths,
+        ProjectionReader<TResult> reader)
+        where TOuter : class
+        where TInner : class
+    {
+        var query = ToSqlQueryable(outer);
+        return Joined(query.Context, query.Tail, inner, outerKeys, innerKeys, propertyNames, entityPaths, reader);
+    }
+
+    internal static ProjectedQueryable<TResult> Joined<[DynamicallyAccessedMembers(EntityMembers.Required)] TInner, TResult>(
+        DbContext context,
+        QueryNode tail,
+        IEnumerable<TInner> inner,
+        IReadOnlyList<string> outerKeys,
+        IReadOnlyList<string> innerKeys,
+        IReadOnlyList<string> propertyNames,
+        IReadOnlyList<string> entityPaths,
+        ProjectionReader<TResult> reader)
+        where TInner : class
+    {
+        ArgumentNullException.ThrowIfNull(inner);
+        ArgumentNullException.ThrowIfNull(outerKeys);
+        ArgumentNullException.ThrowIfNull(innerKeys);
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        ArgumentNullException.ThrowIfNull(entityPaths);
+        ArgumentNullException.ThrowIfNull(reader);
+        if (outerKeys.Count == 0 || outerKeys.Count != innerKeys.Count)
+        {
+            throw new ArgumentException(
+                string.Format(CultureInfo.InvariantCulture, ExceptionMessages.JoinKeysMismatch, outerKeys.Count, innerKeys.Count), nameof(innerKeys));
+        }
+
+        if (propertyNames.Count == 0 && entityPaths.Count == 0)
+        {
+            throw new ArgumentException(ExceptionMessages.ProjectionRequiresColumns, nameof(propertyNames));
+        }
+
+        var innerQuery = inner is IQueryable<TInner> queryable
+            ? ToSqlQueryable(queryable)
+            : throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, ExceptionMessages.NotAnEntityQuery, inner.GetType()));
+        if (!ReferenceEquals(innerQuery.Context, context))
+        {
+            throw new InvalidOperationException(ExceptionMessages.MultipleContexts);
+        }
+
+        var joined = new JoinNode(tail, innerQuery.Tail, outerKeys, innerKeys);
+        return new ProjectedQueryable<TResult>(context, new ProjectionNode(joined, propertyNames, entityPaths), reader);
     }
 
     /// <summary>Computes <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c> of an entity property.</summary>
@@ -299,6 +363,30 @@ public static class SqlQuery
         where T : class
         => QueryRunner.FirstOrDefaultAsync(ToSqlQueryable(source), cancellationToken);
 
+    /// <summary>Returns the last entity in the query's ordering: <c>Last</c>.</summary>
+    /// <exception cref="InvalidOperationException">The query has no ordering, or returns no rows.</exception>
+    public static T Last<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
+        where T : class
+        => QueryRunner.Last(ToSqlQueryable(source));
+
+    /// <summary>Returns the last entity in the query's ordering: <c>LastAsync</c>.</summary>
+    /// <exception cref="InvalidOperationException">The query has no ordering, or returns no rows.</exception>
+    public static Task<T> LastAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        where T : class
+        => QueryRunner.LastAsync(ToSqlQueryable(source), cancellationToken);
+
+    /// <summary>Returns the last entity in the query's ordering, or <see langword="null"/>: <c>LastOrDefault</c>.</summary>
+    /// <exception cref="InvalidOperationException">The query has no ordering.</exception>
+    public static T? LastOrDefault<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
+        where T : class
+        => QueryRunner.LastOrDefault(ToSqlQueryable(source));
+
+    /// <summary>Returns the last entity in the query's ordering, or <see langword="null"/>: <c>LastOrDefaultAsync</c>.</summary>
+    /// <exception cref="InvalidOperationException">The query has no ordering.</exception>
+    public static Task<T?> LastOrDefaultAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        where T : class
+        => QueryRunner.LastOrDefaultAsync(ToSqlQueryable(source), cancellationToken);
+
     /// <summary>Returns the only entity: <c>Single</c>.</summary>
     /// <exception cref="InvalidOperationException">The query returns no rows, or more than one.</exception>
     public static T Single<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
@@ -352,6 +440,42 @@ public static class SqlQuery
     public static Task<bool> AnyAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, CancellationToken cancellationToken = default)
         where T : class
         => QueryRunner.AnyAsync(ToSqlQueryable(source), cancellationToken);
+
+    /// <summary>Deletes the rows the query selects and returns how many were deleted: <c>ExecuteDelete</c>.</summary>
+    public static int ExecuteDelete<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
+        where T : class
+        => QueryRunner.ExecuteDelete(ToSqlQueryable(source));
+
+    /// <summary>Deletes the rows the query selects and returns how many were deleted: <c>ExecuteDeleteAsync</c>.</summary>
+    public static Task<int> ExecuteDeleteAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, CancellationToken cancellationToken = default)
+        where T : class
+        => QueryRunner.ExecuteDeleteAsync(ToSqlQueryable(source), cancellationToken);
+
+    /// <summary>Finds an entity by its primary key: <c>DbSet.Find</c>.</summary>
+    /// <param name="set">The set the entity belongs to.</param>
+    /// <param name="keyValues">The key values in key order; with a <see langword="null"/> the result is <see langword="null"/>.</param>
+    /// <exception cref="ArgumentException">The number or the types of the key values don't match the key.</exception>
+    public static T? Find<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(DbSet<T> set, object?[]? keyValues)
+        where T : class
+        => EntityFinder.Find(set, keyValues);
+
+    /// <summary>Finds an entity by its primary key: <c>DbSet.FindAsync</c>.</summary>
+    /// <param name="set">The set the entity belongs to.</param>
+    /// <param name="keyValues">The key values in key order; with a <see langword="null"/> the result is <see langword="null"/>.</param>
+    /// <exception cref="ArgumentException">The number or the types of the key values don't match the key.</exception>
+    public static ValueTask<T?> FindAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(DbSet<T> set, object?[]? keyValues)
+        where T : class
+        => EntityFinder.FindAsync(set, keyValues, CancellationToken.None);
+
+    /// <summary>Finds an entity by its primary key: <c>DbSet.FindAsync</c> with a cancellation token.</summary>
+    /// <param name="set">The set the entity belongs to.</param>
+    /// <param name="keyValues">The key values in key order; with a <see langword="null"/> the result is <see langword="null"/>.</param>
+    /// <param name="cancellationToken">Cancels the query.</param>
+    /// <exception cref="ArgumentException">The number or the types of the key values don't match the key.</exception>
+    public static ValueTask<T?> FindAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        DbSet<T> set, object?[]? keyValues, CancellationToken cancellationToken)
+        where T : class
+        => EntityFinder.FindAsync(set, keyValues, cancellationToken);
 
     internal static SqlQueryable<T> ToSqlQueryable<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
         where T : class

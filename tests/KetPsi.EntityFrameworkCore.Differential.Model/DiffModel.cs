@@ -156,7 +156,7 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
 /// </summary>
 public sealed class CommandCounter : DbCommandInterceptor
 {
-    /// <summary>The number of queries EF Core ran.</summary>
+    /// <summary>The number of queries EF Core ran, ExecuteDelete included.</summary>
     public int Reads { get; private set; }
 
     /// <summary>The text of every other command, such as the UPDATE SaveChanges sends, in order.</summary>
@@ -204,9 +204,11 @@ public sealed class CommandCounter : DbCommandInterceptor
         return ValueTask.FromResult(result);
     }
 
+    // ExecuteDelete runs as a query does, outside SaveChanges.
     private void Record(DbCommand command)
     {
-        if (command.CommandText.TrimStart().StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+        var text = command.CommandText.TrimStart();
+        if (text.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) || text.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase))
         {
             Reads++;
         }

@@ -14,6 +14,7 @@ KP1005 | KetPsi.EntityFrameworkCore | Error | Lambda expression required
 KP1006 | KetPsi.EntityFrameworkCore | Error | Operator overload not supported
 KP1007 | KetPsi.EntityFrameworkCore | Error | Operator not supported after Select
 KP1008 | KetPsi.EntityFrameworkCore | Error | Operator not supported on groups
+KP1009 | KetPsi.EntityFrameworkCore | Error | Query syntax not supported
 KP2001 | KetPsi.EntityFrameworkCore | Error | Expression not supported
 KP2002 | KetPsi.EntityFrameworkCore | Error | Navigation not supported
 KP2003 | KetPsi.EntityFrameworkCore | Error | Method or member not supported
@@ -25,6 +26,7 @@ KP2008 | KetPsi.EntityFrameworkCore | Error | Order key not supported
 KP2009 | KetPsi.EntityFrameworkCore | Error | Projection not supported
 KP2010 | KetPsi.EntityFrameworkCore | Error | GroupBy key not supported
 KP2011 | KetPsi.EntityFrameworkCore | Error | Group expression not supported
+KP2012 | KetPsi.EntityFrameworkCore | Error | Join not supported
 KP3001 | KetPsi.EntityFrameworkCore | Error | Property type not supported
 KP3002 | KetPsi.EntityFrameworkCore | Error | Value converter not supported
 KP3003 | KetPsi.EntityFrameworkCore | Error | Owned, complex or JSON mapping not supported

@@ -18,10 +18,12 @@ var page = await db.Blogs
     .ToListAsync(ct);
 ```
 
-That is the whole API: you keep writing EF Core LINQ. The only addition is `WhereIf`.
+That is the whole API: you keep writing EF Core LINQ, in method syntax. The only addition is `WhereIf`. Query syntax
+(`from b in db.Blogs where ... select ...`) is a build error (KP1009), because interceptors cannot replace the calls
+the compiler makes for it.
 
 > **Preview.** Filtering, ordering, paging, tracking, `Include`/`ThenInclude`, projection (`Select`), `Distinct`,
-> aggregates, `GroupBy` and the common terminals work today. Anything not supported yet is a
+> aggregates, `GroupBy`, `Join` and the common terminals work today. Anything not supported yet is a
 > **build error** with a `KP` diagnostic, never a silent fallback to EF Core's runtime pipeline.
 
 ## Install
@@ -39,8 +41,8 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Area | Supported |
 |------|-----------|
 | Sources | `db.Blogs`, `db.Set<Blog>()`, and queries composed across statements (`IQueryable<Blog> q = db.Blogs; ...`) |
-| Filtering | `Where`, `WhereIf(condition, predicate)` |
-| Ordering | `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending` on a property of the entity |
+| Filtering | `Where`, `WhereIf(condition, predicate)`, on properties of the entity and of reference navigations (`p => p.Blog.Name == name`, `p => p.Blog != null`) |
+| Ordering | `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending` on a property of the entity or of a reference navigation |
 | Paging | `Skip`, `Take`, in any order and combination, as EF Core translates them |
 | Tracking | `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`, and the context's `QueryTrackingBehavior` |
 | Query filters | Model query filters always apply; `IgnoreQueryFilters()` (and, on EF Core 10, `IgnoreQueryFilters(["name"])`) |
@@ -48,8 +50,11 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Projection | `Select` to anonymous types, records and constructors, object initializers, `ValueTuple.Create` or one member, reading properties, reference navigations and entities, with computed members; then `Skip`, `Take`, `Distinct`, aggregates and terminals |
 | Distinct | `Distinct()` on entities and on projections without computed members |
 | Aggregates | `Sum`, `Average`, `Min`, `Max` and their `Async` versions, over one property (through reference navigations too) or a projection of one property |
+| Joins | `Join` of a filtered `DbSet` on properties or anonymous types of them, with a result selector; then `Where`, `OrderBy`, `Select` and further joins through its result, paging and terminals |
 | Grouping | `GroupBy` on properties, ones through reference navigations, or an anonymous type of them, with an element or result selector too; then `Where`, `OrderBy`/`ThenBy`, a `Select` of keys and aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups |
-| Terminals | `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`, their `Async` versions, the predicate overloads, and `foreach` / `await foreach` |
+| Bulk delete | `ExecuteDelete` and `ExecuteDeleteAsync` after the filtering, ordering and paging operators, without loading or tracking the rows |
+| Lookup by key | `Find` and `FindAsync`, which return a tracked entity without a query, as EF Core does |
+| Terminals | `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault` (after an `OrderBy`, as in EF Core), `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`, their `Async` versions, the predicate overloads, and `foreach` / `await foreach` |
 
 ### Predicates
 
@@ -57,6 +62,8 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 - `&&`, `||`, `!`, boolean properties, `== null`, `!= null` and `.HasValue`.
 - `string.Equals(value)`, enums, nullable properties.
 - `list.Contains(b.Property)` over arrays and lists, sent as one JSON parameter through `OPENJSON`.
+- Properties through reference navigations, such as `p.Blog.Name == name`, joined like an included reference
+  (`INNER JOIN` when required, `LEFT JOIN` when optional), and `p.Blog == null`, which checks the foreign key.
 - Values: constants, locals, parameters, fields and properties of them, static members. Every value is sent as a
   `DbParameter`; nothing is concatenated into SQL.
 
@@ -77,7 +84,8 @@ query and tracks nothing.
 accessible parameterless constructor. Private setters and constructors are fine. Shadow properties are supported.
 
 Not supported yet: value converters, owned and complex types, JSON columns, inheritance, many-to-many navigations
-without a join entity, and navigations inside predicates.
+without a join entity, collection navigations inside predicates (`b.Posts.Any()`), and navigations inside query
+filters.
 
 ### Include
 
@@ -94,8 +102,24 @@ are tracked, identity-resolved and given the includes below them, as in EF Core.
 navigation is null, and a non-nullable value type there throws as it does in EF Core unless it is cast to nullable.
 Computed members run in C# on the values read, as EF Core evaluates a final projection on the client; captured values
 are read each time the query runs. Following C# rather than SQL, `Math.Round` rounds halves to even and string methods
-use the current culture. After `Select`, only `Skip`, `Take`, `Distinct`, aggregates and terminals without a
-predicate are allowed; filter and order before it. Collection navigations in projections are not supported yet.
+use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are
+allowed, and `Where`, `OrderBy`, `Select` and `Join` that read only its entity and column members, before any paging.
+Collection navigations in projections are not supported yet.
+
+### Join
+
+`Join` is an `INNER JOIN`, as in EF Core: the inner side is a `DbSet` with optional `Where`, its query filters go in
+`ON`, and keys are properties or anonymous types of them. Write it in method syntax; the operators after it read
+through the result selector's members:
+
+```csharp
+var rows = db.Posts
+    .Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b })
+    .Where(x => x.b.Rating > 2)
+    .OrderBy(x => x.p.Title)
+    .Select(x => new { x.p.Title, x.b.Name })
+    .ToList();
+```
 
 ### Aggregates
 
@@ -147,10 +171,12 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP1006 | Operator overload not supported |
 | KP1007 | Operator not supported after `Select` |
 | KP1008 | Operator not supported on the groups of `GroupBy` |
+| KP1009 | Query syntax over a query, which interceptors cannot replace; use method syntax |
 | KP2001–KP2008 | Expression, navigation, method, `EF.Functions`, collection, property comparison, value or order key not translatable |
 | KP2009 | Projection not supported: a collection navigation, an instance method or `this`, a computed aggregate selector, or a type the generated code cannot reach |
 | KP2010 | `GroupBy` key not supported: a computed, constant, entity or `ValueTuple.Create` key |
 | KP2011 | Group expression not supported: the group's rows (`g.First()`, `g.ToList()`), an aggregate through a navigation or with a computed selector |
+| KP2012 | Join not supported: an inner sequence that is not a filtered `DbSet`, an inner key through a navigation, or a computed key |
 | KP3001–KP3005 | Property type, value converter, owned/complex/JSON mapping, entity construction or query filter not supported |
 
 ## How it works

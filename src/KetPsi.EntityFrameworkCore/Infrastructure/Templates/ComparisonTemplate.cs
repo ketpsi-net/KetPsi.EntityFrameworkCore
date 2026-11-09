@@ -25,7 +25,7 @@ public sealed class ComparisonTemplate : PredicateTemplate
         ValueIndex = valueIndex;
     }
 
-    /// <summary>The compared entity property.</summary>
+    /// <summary>The compared property, or a path to one through reference navigations, such as <c>Blog.Name</c>.</summary>
     public string PropertyName { get; }
 
     /// <summary>The comparison, with the property on the left.</summary>
