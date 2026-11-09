@@ -656,18 +656,16 @@ internal sealed class SqlBuilder
     };
 
     /// <summary>
-    /// Replaces each null check of a reference navigation (<c>x.Blog == null</c>) with null checks of the key that joins
-    /// it, as EF Core does: the foreign key when this side holds it, otherwise the joined target's.
+    /// Replaces each null check of a reference navigation (<c>x.Blog == null</c>) with null checks of the target's key
+    /// that joins it, as EF Core does. <see cref="ResolvePath"/> reads that key from the foreign key when it can.
     /// </summary>
     private PredicateTemplate ExpandNavigationChecks(PredicateTemplate template)
     {
         switch (template)
         {
-            case NullCheckTemplate nullCheck when NavigationAt(nullCheck.PropertyName) is var (parentPath, navigation):
-                var keys = navigation.IsOnDependent
-                    ? navigation.SourceKey.Select(key => Append(parentPath, key.Name))
-                    : navigation.TargetKey.Select(key => nullCheck.PropertyName + "." + key);
-                return keys
+            case NullCheckTemplate nullCheck when NavigationAt(nullCheck.PropertyName) is var (_, navigation):
+                return navigation.TargetKey
+                    .Select(key => nullCheck.PropertyName + "." + key)
                     .Select(PredicateTemplate (key) => new NullCheckTemplate(key, nullCheck.IsNull))
                     .Aggregate((left, right) => nullCheck.IsNull ? new OrTemplate(left, right) : new AndTemplate(left, right));
             case NotTemplate not:
@@ -709,7 +707,7 @@ internal sealed class SqlBuilder
     /// <summary>
     /// The column a property path of a predicate or an ordering reads, and its property, nullable when a navigation on
     /// the way can be missing. A key of a navigation's target is read from the foreign key that joins it, without
-    /// joining the target, as in EF Core.
+    /// joining the target, as in EF Core; unless the target has query filters, which only the join applies.
     /// </summary>
     private (SqlColumn Column, BoundProperty Property) ResolvePath(string path)
     {
@@ -724,7 +722,8 @@ internal sealed class SqlBuilder
         var name = path[(dot + 1)..];
         if (NavigationAt(navigationPath) is var (parentPath, navigation)
             && navigation is { IsOnDependent: true, IsCollection: false }
-            && IndexOf(navigation.TargetKey, name) is >= 0 and var index)
+            && IndexOf(navigation.TargetKey, name) is >= 0 and var index
+            && _filtersFor(Bind(navigation.TargetClrType)).Count == 0)
         {
             var parent = GetTarget(parentPath, entity: null);
             var key = navigation.SourceKey[index];

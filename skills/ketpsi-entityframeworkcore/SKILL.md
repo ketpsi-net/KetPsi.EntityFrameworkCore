@@ -81,9 +81,10 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
   in `ON`; a predicate and an ordering through the same navigation share one join. Through an optional navigation the
   value is null when there is no related entity, so `p.Blog.Name != name` also keeps posts without a blog, as in
   EF Core.
-- `p.Blog == null` and `p.Blog != null`: on the side that holds the foreign key it checks the foreign key
-  (`[BlogId] IS NULL`); on the other side of a one-to-one it joins the dependent and checks its key. A key of the
-  target, such as `p.Blog.Id`, is read from the foreign key without a join, as in EF Core.
+- `p.Blog == null` and `p.Blog != null` check the target's key, and a key of the target, such as `p.Blog.Id`, is read
+  from the foreign key without a join (`[BlogId] IS NULL`), as in EF Core. When the target has query filters, or on
+  the other side of a one-to-one, the target is joined and its key checked, so a filtered-out target counts as
+  missing.
 - `list.Contains(b.Property)` for arrays and lists (one JSON parameter, `OPENJSON` on SQL Server).
 - Values may be constants, locals, parameters, fields/properties of them, or static members. Compute anything else
   into a local first (KP2007).

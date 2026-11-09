@@ -48,6 +48,24 @@ public sealed class SqlBuilderNavigationPredicateTests : IDisposable
             Build(Where(Query<Review>(), new ComparisonTemplate("Book.Id", ComparisonOperator.Equal, 0), 3)).CommandText);
     }
 
+    // Only the join applies the target's query filters, so EF Core joins a filtered target even to read its key.
+    [Fact]
+    public void KeyOrNullCheckOfAFilteredTarget_JoinsTheTarget()
+    {
+        static IReadOnlyList<ResolvedQueryFilter> EditorFilter(BoundEntity entity)
+            => entity.ClrType == typeof(Editor)
+                ? [new ResolvedQueryFilter(Key: null, new ComparisonTemplate(nameof(Editor.Id), ComparisonOperator.NotEqual, 0), [7])]
+                : [];
+        const string EditorJoin = "LEFT JOIN [Editor] AS [t1] ON [t0].[EditorId] = [t1].[Id] AND [t1].[Id] <> @p0";
+
+        Assert.Equal(
+            $"SELECT {Cols<Book>("t0")} FROM [Book] AS [t0] {EditorJoin} WHERE [t1].[Id] = @p1",
+            Build(Where(Query<Book>(), new ComparisonTemplate("Editor.Id", ComparisonOperator.Equal, 0), 3), EditorFilter).CommandText);
+        Assert.Equal(
+            $"SELECT {Cols<Book>("t0")} FROM [Book] AS [t0] {EditorJoin} WHERE [t1].[Id] IS NULL",
+            Build(Where(Query<Book>(), new NullCheckTemplate("Editor", isNull: true)), EditorFilter).CommandText);
+    }
+
     [Fact]
     public void NullCheckOfANavigationOnTheDependent_ChecksTheForeignKey()
     {
