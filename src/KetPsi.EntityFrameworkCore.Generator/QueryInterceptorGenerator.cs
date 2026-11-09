@@ -42,10 +42,17 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
             .Combine(modelCallEntities)
             .Select(static (pair, _) => EntityDiscovery.Merge(pair.Left, pair.Right));
 
-        var callSites = context.SyntaxProvider
+        var invocationSites = context.SyntaxProvider
             .CreateSyntaxProvider(CallSiteAnalyzer.IsCandidate, CallSiteAnalyzer.Analyze)
             .Where(static site => site is not null)
             .Collect();
+        var querySyntaxSites = context.SyntaxProvider
+            .CreateSyntaxProvider(CallSiteAnalyzer.IsQueryExpression, CallSiteAnalyzer.AnalyzeQueryExpression)
+            .Where(static site => site is not null)
+            .Collect();
+        var callSites = invocationSites
+            .Combine(querySyntaxSites)
+            .Select(static (pair, _) => pair.Left.AddRange(pair.Right));
         var entitySites = callSites
             .Combine(entities)
             .Select(static (pair, _) => ForEntities(pair.Left, pair.Right));

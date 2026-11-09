@@ -11,7 +11,7 @@ namespace KetPsi.EntityFrameworkCore.Generator.Discovery;
 /// Classifies calls to query operators: each call becomes a supported operator or a diagnostic. Whether the
 /// query is an entity query is decided later, once the entity types are known.
 /// </summary>
-internal static class CallSiteAnalyzer
+internal static partial class CallSiteAnalyzer
 {
     /// <summary>The element type used for internal errors, which are reported whatever the query is.</summary>
     public const string UnknownElementType = "?";

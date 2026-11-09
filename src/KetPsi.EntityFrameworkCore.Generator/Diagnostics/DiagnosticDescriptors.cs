@@ -56,6 +56,11 @@ internal static class DiagnosticDescriptors
         "Operator not supported on groups",
         "'{0}' on the groups of GroupBy is not supported yet: {1}");
 
+    public static readonly DiagnosticDescriptor QuerySyntaxNotSupported = Error(
+        "KP1009",
+        "Query syntax not supported",
+        "Query syntax over an entity query cannot be intercepted, so it would run through EF Core's own pipeline; write it with method syntax, such as db.Posts.Join(...).Where(...).Select(...)");
+
     public static readonly DiagnosticDescriptor ExpressionNotSupported = Error(
         "KP2001",
         "Expression not supported",

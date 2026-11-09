@@ -18,7 +18,9 @@ var page = await db.Blogs
     .ToListAsync(ct);
 ```
 
-That is the whole API: you keep writing EF Core LINQ. The only addition is `WhereIf`.
+That is the whole API: you keep writing EF Core LINQ, in method syntax. The only addition is `WhereIf`. Query syntax
+(`from b in db.Blogs where ... select ...`) is a build error (KP1009), because interceptors cannot replace the calls
+the compiler makes for it.
 
 > **Preview.** Filtering, ordering, paging, tracking, `Include`/`ThenInclude`, projection (`Select`), `Distinct`,
 > aggregates, `GroupBy` and the common terminals work today. Anything not supported yet is a
@@ -152,6 +154,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP1006 | Operator overload not supported |
 | KP1007 | Operator not supported after `Select` |
 | KP1008 | Operator not supported on the groups of `GroupBy` |
+| KP1009 | Query syntax over a query, which interceptors cannot replace; use method syntax |
 | KP2001–KP2008 | Expression, navigation, method, `EF.Functions`, collection, property comparison, value or order key not translatable |
 | KP2009 | Projection not supported: a collection navigation, an instance method or `this`, a computed aggregate selector, or a type the generated code cannot reach |
 | KP2010 | `GroupBy` key not supported: a computed, constant, entity or `ValueTuple.Create` key |

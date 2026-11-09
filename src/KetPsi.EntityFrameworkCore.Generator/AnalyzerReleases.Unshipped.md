@@ -14,6 +14,7 @@ KP1005 | KetPsi.EntityFrameworkCore | Error | Lambda expression required
 KP1006 | KetPsi.EntityFrameworkCore | Error | Operator overload not supported
 KP1007 | KetPsi.EntityFrameworkCore | Error | Operator not supported after Select
 KP1008 | KetPsi.EntityFrameworkCore | Error | Operator not supported on groups
+KP1009 | KetPsi.EntityFrameworkCore | Error | Query syntax not supported
 KP2001 | KetPsi.EntityFrameworkCore | Error | Expression not supported
 KP2002 | KetPsi.EntityFrameworkCore | Error | Navigation not supported
 KP2003 | KetPsi.EntityFrameworkCore | Error | Method or member not supported

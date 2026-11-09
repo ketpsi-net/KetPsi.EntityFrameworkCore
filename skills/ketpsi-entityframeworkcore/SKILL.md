@@ -106,6 +106,10 @@ joined like a predicate's navigation; not `b => b.Name.Length` or `b => b.Posts.
 
 **Lambdas** must be written at the call site, not passed as variables or method groups (KP1005).
 
+**Method syntax only.** Query syntax over a query (`from b in db.Blogs where b.IsActive select b`) is a build error
+(KP1009): the compiler gives interceptors no call to replace in a query expression, so it would run through EF Core's
+own pipeline. Write the same query with methods: `db.Blogs.Where(b => b.IsActive)`.
+
 ## Include
 
 ```csharp
@@ -277,6 +281,7 @@ Same behavior as EF Core:
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
 | KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate (after a `Select` on groups, also `Where` and `OrderBy` before any paging); group the entities, not a projection |
 | KP1008 | On groups use `Where`, `OrderBy`/`ThenBy`, `Select`, `Count`, `LongCount`, `Any`, `ToList`, `ToArray`; select the key and aggregates to page or take the first |
+| KP1009 | Rewrite the query expression with methods: `where` is `Where`, `orderby` is `OrderBy`/`ThenBy`, `select` is `Select` |
 | KP2001–KP2005 | Simplify the predicate to comparisons of a property (or one through reference navigations) with a value; query related collections separately |
 | KP2006 | Compare a property with a value, not with another property |
 | KP2007 | Move the value into a local variable before the query |
