@@ -103,8 +103,9 @@ are tracked, identity-resolved and given the includes below them, as in EF Core.
 navigation is null, and a non-nullable value type there throws as it does in EF Core unless it is cast to nullable.
 Computed members run in C# on the values read, as EF Core evaluates a final projection on the client; captured values
 are read each time the query runs. Following C# rather than SQL, `Math.Round` rounds halves to even and string methods
-use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are
-allowed, and `Where`, `OrderBy`, `Select` and `Join` that read only its entity and column members, before any paging.
+use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals are allowed, and
+`Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read only its entity and column members, before
+any paging.
 Collection navigations in projections are not supported yet.
 
 ### Raw SQL

@@ -41,8 +41,8 @@ var page = await db.Blogs
 - `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`,
   `IgnoreQueryFilters()` (EF Core 10 also `IgnoreQueryFilters(["name"])`).
 - `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`, `AsSplitQuery()`, `AsSingleQuery()` (see Include below).
-- `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below without a predicate (see
-  Projections below).
+- `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below, with a predicate when it
+  reads the projection's entity and column members (see Projections below).
 - `FromSql($"...")`, `FromSqlInterpolated($"...")` and `FromSqlRaw("...", args)` on a `DbSet`, with any operator after
   them, and `db.Database.SqlQuery<T>($"...")` and `SqlQueryRaw<T>` for scalars and unmapped types (see Raw SQL below).
 - `Join(inner, outerKey, innerKey, (o, i) => ...)`, inner joins in method syntax (see Join below).
@@ -179,10 +179,11 @@ var rows = await db.Posts
   entities the projection doesn't select are ignored. Without tracking or identity resolution, every projected
   entity is its own instance and nothing is connected.
 - A projection with entities reads every row before returning any; one with only columns streams them.
-- After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are allowed.
+- After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals are allowed.
   `Skip`/`Take` after `Select` page the entity rows, so they give the same rows as before it.
-- `Where`, `OrderBy`/`ThenBy`, another `Select` and `Join` can follow a `Select` when they read only its members that
-  are entities or columns as they are, before any paging: `Select(p => new { p, p.Blog }).Where(x => x.Blog.Rating > 1)`
+- `Where`, `OrderBy`/`ThenBy`, another `Select`, `Join` and the terminals' predicates (`Count(x => ...)`,
+  `First(x => ...)`, ...) can follow a `Select` when they read only its members that are entities or columns as they
+  are, before any paging: `Select(p => new { p, p.Blog }).Where(x => x.Blog.Rating > 1)`
   is `WHERE` on the blog's column. A member that is computed, or anything after `Skip`, `Take` or `Distinct`, is
   KP1007; filter and order before the `Select` instead.
 - `Distinct` after `Select` compares the projected columns in SQL, so it can't follow computed members (KP1007).
@@ -237,9 +238,9 @@ var rows = db.Database.SqlQuery<BlogRow>($"EXEC dbo.BlogRows").ToList();   // pu
   initializer or a constructor whose parameters are its properties. A missing column throws "The required column 'X'
   was not present". A null in a non-nullable column throws, as in EF Core: "Nullable object must have a value." for a
   scalar, the provider's error for a property; use `int?` or `string?` for columns that can be null.
-- `Where`, `OrderBy`, `Select`, paging, `Distinct`, aggregates and the terminals without a predicate work on the
-  result's members, such as `rows.Where(r => r.Id > 1).Select(r => r.Name)`; write `Where(v => v > 1).Count()`, not
-  `Count(v => v > 1)`. Results are never tracked.
+- `Where`, `OrderBy`, `Select`, paging, `Distinct`, aggregates and the terminals, with or without a predicate, work
+  on the result's members, such as `rows.Where(r => r.Id > 1).Select(r => r.Name)` or `ids.Count(v => v > 1)`.
+  Results are never tracked.
 - Not supported (KP1004): a type with navigation properties (EF Core rejects it too; use `FromSql` on its set), a
   collection, or a type without an accessible parameterless constructor or one whose parameters are its properties.
 
@@ -364,7 +365,7 @@ Same behavior as EF Core:
 | KP1004 | Make the `SqlQuery<T>` result a scalar, or a class or record of column properties without navigations, constructible by generated code |
 | KP1005 | Write the lambda inline at the call |
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
-| KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate, plus `Where`, `OrderBy`, `Select` and `Join` that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |
+| KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals, plus `Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |
 | KP1008 | On groups use `Where`, `OrderBy`/`ThenBy`, `Select`, `Count`, `LongCount`, `Any`, `ToList`, `ToArray`; select the key and aggregates to page or take the first |
 | KP1009 | Rewrite the query expression with methods: `where` is `Where`, `orderby` is `OrderBy`/`ThenBy`, `select` is `Select` |
 | KP2001–KP2005 | Simplify the predicate to comparisons of a property (or one through reference navigations) with a value; query related collections separately |

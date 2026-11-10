@@ -22,6 +22,16 @@ public sealed class JoinDiagnosticsTests
     [InlineData("var r = db.Blogs.Select(b => b.Id).Where(i => i > 1).ToList();")]
     [InlineData("var r = db.Blogs.Select(b => b.Name).OrderBy(n => n).ToList();")]
     [InlineData("var r = db.Blogs.Select(b => b.Author).Select(a => a!.Id).ToList();")]
+    [InlineData("var min = 1; var r = db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).Count(x => x.b.Rating > min);")]
+    [InlineData("var r = db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).OrderBy(x => x.p.Id).First(x => x.b.IsActive).p;")]
+    [InlineData("var r = db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p.Id, b.Name }).Any(x => x.Name == \"a\");")]
+    [InlineData("var r = db.Posts.Select(p => new { p, p.Blog }).SingleOrDefault(x => x.Blog.Rating > 4 && x.p.Id == 1);")]
+    [InlineData("var r = db.Blogs.Select(b => b.Rating).LongCount(i => i > 1);")]
+    [InlineData("var r = db.Blogs.Select(b => b.Name).OrderBy(n => n).LastOrDefault(n => n != \"z\");")]
+    [InlineData("var r = await db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).CountAsync(x => x.b.Rating > 1, ct);")]
+    [InlineData("var r = await db.Blogs.Select(b => b.Id).OrderBy(i => i).FirstOrDefaultAsync(i => i > 1, ct);")]
+    [InlineData("var r = await db.Blogs.Select(b => b.Id).AnyAsync(i => i > 1, ct);")]
+    [InlineData("var r = await db.Posts.Select(p => new { p, p.Blog }).SingleAsync(x => x.p.Id == 1, ct);")]
     public void SupportedJoin_GeneratesCompilingCode(string body)
     {
         var run = GeneratorHost.Run(TestSources.WithBody(body));
@@ -38,6 +48,8 @@ public sealed class JoinDiagnosticsTests
     [InlineData("var r = db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => b.Author!.Id).ToList();", "KP2009", "b.Author!.Id")]
     [InlineData("var r = db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).Take(2).Where(x => x.b.Rating > 1).ToList();", "KP1007", "Where")]
     [InlineData("var r = db.Posts.Select(p => new { L = p.Id + 1 }).Where(x => x.L > 1).ToList();", "KP1007", "Where")]
+    [InlineData("var r = db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).Skip(1).Any(x => x.b.Rating > 1);", "KP1007", "Any")]
+    [InlineData("var r = db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).Count(x => x.b.Name.StartsWith(\"a\"));", "KP2001", "x.b.Name.StartsWith(\"a\")")]
     [InlineData("var r = db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).Where(x => x.b.Name.StartsWith(\"a\")).ToList();", "KP2001", "x.b.Name.StartsWith(\"a\")")]
     [InlineData("var r = db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => p.Id, EqualityComparer<int>.Default).ToList();", "KP1006", "Join")]
     [InlineData("var r = db.Blogs.GroupJoin(db.Posts, b => b.Id, p => p.BlogId, (b, ps) => b).ToList();", "KP1001", "GroupJoin")]

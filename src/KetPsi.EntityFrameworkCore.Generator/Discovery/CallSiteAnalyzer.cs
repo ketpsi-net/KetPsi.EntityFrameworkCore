@@ -23,7 +23,7 @@ internal static partial class CallSiteAnalyzer
     private const string ReasonRangeCount = "only an int count is supported";
     private const string ReasonDefaultValue = "overloads with a default value are not supported";
     private const string ReasonAfterSelect =
-        "only Skip, Take, Distinct, aggregates and terminals without a predicate can follow Select; filter and order the entities before it";
+        "only Skip, Take, Distinct, aggregates and terminals can follow Select, and Where, orderings, Select, Join and predicates only when they read its entity and column members before any paging; filter and order the entities before it";
     private const string ReasonDistinctComputed =
         "Distinct compares the projected values in SQL, so the projection cannot compute values in C#";
     private const string ReasonAggregateProjection =
@@ -299,6 +299,15 @@ internal static partial class CallSiteAnalyzer
             }
 
             return aliasKind == OperatorKind.Join ? site.JoinOn(aliases, source.JoinCount) : site.OnAliases(aliasKind, aliases);
+        }
+
+        // A terminal's predicate reads through the projection's members as Where does.
+        if (source.Aliases is { Count: > 0 } terminalAliases && projection is not { IsGrouped: true }
+            && PredicateTerminal(method, family) is var (terminal, isAsyncTerminal))
+        {
+            return isPaged
+                ? site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonAliasAfterPaging)
+                : site.OnAliases(terminal, terminalAliases, hasPredicate: true, isAsync: isAsyncTerminal);
         }
 
         switch (family)
@@ -734,6 +743,25 @@ internal static partial class CallSiteAnalyzer
         "ThenBy" => OperatorKind.ThenBy,
         _ => OperatorKind.ThenByDescending,
     };
+
+    // First, Count and the other terminals with a predicate, and their async forms: the kind, and whether it is async.
+    private static (OperatorKind Kind, bool IsAsync)? PredicateTerminal(IMethodSymbol method, Family family)
+    {
+        var parameters = method.Parameters;
+        var name = family == Family.EntityFramework && method.Name.EndsWith("Async", StringComparison.Ordinal)
+            ? method.Name.Substring(0, method.Name.Length - "Async".Length)
+            : method.Name;
+        var count = family switch
+        {
+            Family.Queryable when name == method.Name => 2,
+            Family.EntityFramework when name != method.Name => 3,
+            _ => 0,
+        };
+        return count > 0 && parameters.Length == count && IsPredicate(parameters[1].Type)
+            && name is "First" or "FirstOrDefault" or "Last" or "LastOrDefault" or "Single" or "SingleOrDefault" or "Any" or "Count" or "LongCount"
+                ? (TerminalKind(name), family == Family.EntityFramework)
+                : null;
+    }
 
     private static OperatorKind TerminalKind(string name) => name switch
     {

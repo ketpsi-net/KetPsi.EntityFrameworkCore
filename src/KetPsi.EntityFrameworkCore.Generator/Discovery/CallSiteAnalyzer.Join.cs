@@ -314,10 +314,11 @@ internal static partial class CallSiteAnalyzer
         }
 
         /// <summary>
-        /// <c>Where</c>, an ordering or <c>Select</c> on a projection, reading its members through what they stand for, so
-        /// the predicate, the key and the selected paths are the queried entity's and the joined ones'.
+        /// <c>Where</c>, an ordering, <c>Select</c> or a terminal with a predicate on a projection, reading its members
+        /// through what they stand for, so the predicate, the key and the selected paths are the queried entity's and the
+        /// joined ones'.
         /// </summary>
-        public CallSite OnAliases(OperatorKind kind, IReadOnlyList<Alias> aliases)
+        public CallSite OnAliases(OperatorKind kind, IReadOnlyList<Alias> aliases, bool hasPredicate = false, bool isAsync = false)
         {
             var (lambda, lambdaDiagnostic) = RequireLambda(1);
             if (lambdaDiagnostic is not null)
@@ -336,7 +337,7 @@ internal static partial class CallSiteAnalyzer
             ProjectionModel? projection = null;
             switch (kind)
             {
-                case OperatorKind.Where:
+                case var _ when hasPredicate || kind == OperatorKind.Where:
                     PredicateOperand? Operand(ExpressionSyntax node)
                         => semanticModel.GetOperation(node, cancellationToken) is { } read
                             && Alias.Resolve(read, parameters) is { } path
@@ -385,14 +386,14 @@ internal static partial class CallSiteAnalyzer
                 _elementType,
                 location,
                 kind,
-                IsAsync: false,
-                HasPredicate: false,
+                isAsync,
+                hasPredicate,
                 Diagnostic: null,
                 Interception: semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax(),
                 Predicate: predicate,
                 Signature: GetGenericSignature(operation.TargetMethod),
                 OrderProperty: orderProperty,
-                UsesDecimalOperators: kind == OperatorKind.Where && DecimalOperators.AreUsedIn(lambda, semanticModel, cancellationToken),
+                UsesDecimalOperators: predicate is not null && DecimalOperators.AreUsedIn(lambda, semanticModel, cancellationToken),
                 Projection: projection,
                 ProjectedFrom: projectedFrom);
         }
