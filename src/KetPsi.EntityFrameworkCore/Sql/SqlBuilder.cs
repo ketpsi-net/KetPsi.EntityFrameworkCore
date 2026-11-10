@@ -56,7 +56,15 @@ internal sealed class SqlBuilder
 
     // The entities joined by Join, by join path: "$0", "$1", ...
     private readonly Dictionary<string, BoundEntity> _joined = new(StringComparer.Ordinal);
+
+    // The names of the DbParameters given to FromSql, which the statement's own parameters skip.
+    private readonly HashSet<string> _givenParameterNames = new(StringComparer.OrdinalIgnoreCase);
     private int _aliasCount;
+    private int _parameterCount;
+
+    // The SQL of FromSql at the root, and whether an operator composes over it.
+    private string? _rootSql;
+    private bool _composed;
     private SelectState? _state;
 
     private SqlBuilder(
@@ -111,14 +119,17 @@ internal sealed class SqlBuilder
         }
 
         var builder = new SqlBuilder(entity, dialect, filters ?? [], filtersFor, bindEntity, includes: null);
-        foreach (var node in Chain(tail))
-        {
-            builder.Apply(node);
-        }
+        builder.ApplyChain(tail);
 
         if (terminal == QueryTerminal.Aggregate && aggregate is null)
         {
             throw new ArgumentNullException(nameof(aggregate));
+        }
+
+        // SQL of FromSql that nothing composes over runs as it is, and its columns are read by name, as in EF Core.
+        if (terminal == QueryTerminal.Rows && rowLimit is null && builder.RunsAsWritten)
+        {
+            return new SqlStatement(builder._rootSql!, builder._parameters, [.. entity.Properties.Select(static p => p.ColumnName)]);
         }
 
         var commandText = builder.Finish(terminal, rowLimit, aggregate);
@@ -159,10 +170,7 @@ internal sealed class SqlBuilder
         }
 
         var builder = new SqlBuilder(entity, dialect, filtersFor(entity), filtersFor, bindEntity, includes);
-        foreach (var node in Chain(tail))
-        {
-            builder.Apply(node);
-        }
+        builder.ApplyChain(tail);
 
         var commandText = builder.FinishRows(rowLimit);
         return builder.ToIncludeStatement(commandText);
@@ -243,15 +251,90 @@ internal sealed class SqlBuilder
         ArgumentNullException.ThrowIfNull(filtersFor);
 
         var builder = new SqlBuilder(entity, dialect, filtersFor(entity), filtersFor, bindEntity, includes);
-        foreach (var node in Chain(tail))
-        {
-            builder.Apply(node);
-        }
+        builder.ApplyChain(tail);
 
         return new SqlStatement(builder.FinishDelete(), builder._parameters);
     }
 
     private static IReadOnlyList<ResolvedQueryFilter> NoFilters(BoundEntity entity) => [];
+
+    /// <summary>
+    /// Applies the chain's nodes, after reserving the names of the DbParameters that FromSql was given anywhere in it,
+    /// so the statement's own parameters never take them.
+    /// </summary>
+    private void ApplyChain(QueryNode tail)
+    {
+        var nodes = Chain(tail);
+        foreach (var name in RawSources(nodes).SelectMany(static sql => sql.ParameterNames))
+        {
+            _givenParameterNames.Add(name.TrimStart('@'));
+        }
+
+        foreach (var node in nodes)
+        {
+            Apply(node);
+        }
+
+        // A query filter composes over the SQL too, as in EF Core.
+        _composed |= _rootSql is not null && _filters.Count > 0;
+    }
+
+    private static IEnumerable<RawSql> RawSources(IEnumerable<QueryNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            switch (node)
+            {
+                case RootNode { Sql: { } sql }:
+                    yield return sql;
+                    break;
+                case JoinNode join:
+                    foreach (var inner in RawSources(Chain(join.Inner)))
+                    {
+                        yield return inner;
+                    }
+
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Whether the root is SQL of FromSql that no operator or query filter composes over.</summary>
+    private bool RunsAsWritten => _rootSql is not null && !_composed;
+
+    /// <summary>
+    /// The SQL of FromSql with each placeholder replaced by its parameter: a new one for a value, the given one for a
+    /// DbParameter. EF Core names the values <c>@p0</c>, <c>@p1</c>, ... in order, which the root's SQL gets too.
+    /// </summary>
+    private string RenderRawSql(RawSql sql)
+    {
+        if (sql.Arguments.Count == 0 && !sql.AlwaysFormat)
+        {
+            return sql.Format;
+        }
+
+        var substitutions = new object[sql.Arguments.Count];
+        for (var i = 0; i < substitutions.Length; i++)
+        {
+            if (sql.Arguments[i] is System.Data.Common.DbParameter given)
+            {
+                _parameters.Add(new QueryParameter(given.ParameterName, given, Property: null));
+                substitutions[i] = given.ParameterName;
+            }
+            else
+            {
+                substitutions[i] = AddParameter(sql.Arguments[i] ?? DBNull.Value, property: null);
+            }
+        }
+
+        return string.Format(CultureInfo.InvariantCulture, sql.Format, substitutions);
+    }
+
+    /// <summary>The source that composes over SQL of FromSql: a derived table, after checking the SQL allows it.</summary>
+    private static string Composed(string sql)
+        => RawSql.IsComposable(sql)
+            ? "(\n" + sql + "\n)"
+            : throw new InvalidOperationException(ExceptionMessages.NonComposableSql);
 
     private static List<QueryNode> Chain(QueryNode tail)
     {
@@ -267,6 +350,7 @@ internal sealed class SqlBuilder
 
     private void Apply(QueryNode node)
     {
+        _composed |= node is not (RootNode or TrackingNode or IgnoreQueryFiltersNode);
         switch (node)
         {
             case RootNode root:
@@ -415,7 +499,10 @@ internal sealed class SqlBuilder
             conditions.Add(RenderPredicate(inner.BindPredicate(filter.Predicate), filter.Values, negated: false, alias));
         }
 
-        State.Joins.Add("INNER JOIN " + _dialect.QualifyTable(inner.Table, inner.Schema) + " AS " + alias + " ON " + string.Join(" AND ", conditions));
+        var innerSource = ((RootNode)innerNodes[0]).Sql is { } innerSql
+            ? Composed(RenderRawSql(innerSql))
+            : _dialect.QualifyTable(inner.Table, inner.Schema);
+        State.Joins.Add("INNER JOIN " + innerSource + " AS " + alias + " ON " + string.Join(" AND ", conditions));
         State.Targets.Add(path, new JoinTarget(alias, inner, AlwaysExists: true));
         _joined.Add(path, inner);
 
@@ -447,6 +534,14 @@ internal sealed class SqlBuilder
         OrTemplate or => new OrTemplate(Prefixed(or.Left, path), Prefixed(or.Right, path)),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
+
+    private void EnsureRootComposable()
+    {
+        if (_rootSql is not null)
+        {
+            _ = Composed(_rootSql);
+        }
+    }
 
     // The generator only lets paging, Distinct and terminals follow Select, and only operators on groups follow GroupBy.
     private void EnsureNotProjected()
@@ -580,7 +675,16 @@ internal sealed class SqlBuilder
                 CultureInfo.InvariantCulture, ExceptionMessages.RootEntityMismatch, root.EntityType, _entity.ClrType));
         }
 
-        _state = new SelectState(_dialect.QualifyTable(_entity.Table, _entity.Schema), NextAlias());
+        if (root.Sql is { } sql)
+        {
+            // Rendered first, so its values are @p0, @p1, ... as in EF Core; checked when a statement composes over it.
+            _rootSql = RenderRawSql(sql);
+            _state = new SelectState("(\n" + _rootSql + "\n)", NextAlias(), isDerived: true);
+        }
+        else
+        {
+            _state = new SelectState(_dialect.QualifyTable(_entity.Table, _entity.Schema), NextAlias());
+        }
 
         // Query filters restrict the entity set itself, so they apply before any operator, like in EF Core.
         foreach (var filter in _filters)
@@ -592,6 +696,7 @@ internal sealed class SqlBuilder
 
     private string Finish(QueryTerminal terminal, int? rowLimit, SqlAggregate? aggregate)
     {
+        EnsureRootComposable();
         switch (terminal)
         {
             case QueryTerminal.Rows:
@@ -627,6 +732,7 @@ internal sealed class SqlBuilder
 
     private string FinishRows(int? rowLimit)
     {
+        EnsureRootComposable();
         if (State.Pending is null && State.Columns is null)
         {
             State.Pending = EntityProjection;
@@ -653,6 +759,7 @@ internal sealed class SqlBuilder
 
     private string FinishDelete()
     {
+        EnsureRootComposable();
         EnsureNotProjected();
         JoinIncludedReferences(_includes, RootPath);
 
@@ -1288,7 +1395,13 @@ internal sealed class SqlBuilder
 
     private string AddParameter(object value, BoundProperty? property)
     {
-        var name = _dialect.ParameterName(_parameters.Count);
+        string name;
+        do
+        {
+            name = _dialect.ParameterName(_parameterCount++);
+        }
+        while (_givenParameterNames.Contains(name.TrimStart('@')));
+
         _parameters.Add(new QueryParameter(name, value, property));
         return name;
     }
