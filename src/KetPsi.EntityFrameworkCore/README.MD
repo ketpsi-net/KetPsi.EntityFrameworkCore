@@ -172,6 +172,8 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
   their expression tree with reflection over the result type's properties. KetPsi never reads that tree, so the
   warning is harmless and the query runs under Native AOT. Records, other constructors, single members and
   `ValueTuple.Create` don't warn; use one of them where trim warnings must stay at zero.
+- **Raw SQL works under Native AOT.** `FromSql`, `Database.SqlQuery<T>` and their `Raw` forms run with generated
+  readers on every version; `Database.ExecuteSql` is EF Core's own and works too.
 - The `DbContext` constructor itself carries EF Core's trim and AOT warnings, which an application cannot remove.
 
 ## Diagnostics

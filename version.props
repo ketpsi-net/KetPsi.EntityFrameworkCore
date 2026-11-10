@@ -1,7 +1,7 @@
 <Project>
 	<PropertyGroup>
 		<Title>$(AssemblyName)</Title>
-		<Version>1.0.0-preview.5</Version>
+		<Version>1.0.0-preview.6</Version>
 		<Authors>KetPsi</Authors>
 		<PackageId>$(AssemblyName)</PackageId>
 		<PackageProjectUrl>https://github.com/ketpsi-net/KetPsi.EntityFrameworkCore</PackageProjectUrl>

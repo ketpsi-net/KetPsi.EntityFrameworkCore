@@ -43,6 +43,9 @@ public sealed class Review
 /// <summary>A projection target built through its constructor.</summary>
 public sealed record ProductPrice(int Id, decimal Price);
 
+/// <summary>A Database.SqlQuery result read from the columns named like its properties.</summary>
+public sealed record ProductStock(int Id, string Name, int? Stock);
+
 /// <summary>A projection target built with an object initializer.</summary>
 public sealed class ProductLabel
 {

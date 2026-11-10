@@ -215,7 +215,8 @@ var fromProcedure = db.Blogs.FromSqlRaw("EXEC dbo.GetBlogs {0}", minimum).AsNoTr
   entity: the SQL becomes a derived table, `SELECT ... FROM (your SQL) AS [t0] WHERE ...`.
 - Only SQL that starts with `SELECT` (after whitespace and comments) can be composed over. A stored procedure call
   (`EXEC`), `WITH ...` or a leading `(` runs only as written; composing over it throws EF Core's "non-composable SQL"
-  error. Call `AsEnumerable()` after an uncomposed `ToList()` to filter in memory instead.
+  error. Call `AsEnumerable()` after an uncomposed `ToList()` to filter in memory instead. An entity with a query
+  filter composes too, so call `IgnoreQueryFilters()` to run a stored procedure for it.
 - Interpolated values and `{0}` placeholders become parameters `@p0`, `@p1`, ... in order, never concatenated into
   the SQL; a `DbParameter` argument is sent as it is, and the query's own parameters never take its name.
   `FromSqlRaw` without arguments sends braces as written.
@@ -236,8 +237,9 @@ var rows = db.Database.SqlQuery<BlogRow>($"EXEC dbo.BlogRows").ToList();   // pu
   initializer or a constructor whose parameters are its properties. A missing column throws "The required column 'X'
   was not present". A null in a non-nullable column throws, as in EF Core: "Nullable object must have a value." for a
   scalar, the provider's error for a property; use `int?` or `string?` for columns that can be null.
-- `Where`, `OrderBy`, `Select`, paging, `Distinct`, aggregates and the terminals work on the result's members, such as
-  `rows.Where(r => r.Id > 1).Select(r => r.Name)`. Results are never tracked.
+- `Where`, `OrderBy`, `Select`, paging, `Distinct`, aggregates and the terminals without a predicate work on the
+  result's members, such as `rows.Where(r => r.Id > 1).Select(r => r.Name)`; write `Where(v => v > 1).Count()`, not
+  `Count(v => v > 1)`. Results are never tracked.
 - Not supported (KP1004): a type with navigation properties (EF Core rejects it too; use `FromSql` on its set), a
   collection, or a type without an accessible parameterless constructor or one whose parameters are its properties.
 
@@ -336,7 +338,7 @@ Same behavior as EF Core:
    adding `--nativeaot` on EF Core 9 and 10, and call `options.UseModel(MyApp.CompiledModel.MyDbModel.Instance)`.
 2. Compiled models cannot hold query filters; filters only work under JIT.
 3. EF Core 8 cannot track or save changes under Native AOT. KetPsi throws a clear `InvalidOperationException` for
-   tracking queries there, `Find` on a tracking context included; use `AsNoTracking()` (or set the context's
+   tracking queries there, `Find` and `FromSql` on a tracking context included; use `AsNoTracking()` (or set the context's
    `QueryTrackingBehavior` to `NoTracking`), or move to EF Core 9+. `ExecuteDelete` never tracks, so it works on all
    three. No-tracking queries with `Include` work under Native AOT on EF Core 8, 9 and 10.
 4. Keep `InvariantGlobalization` off; SqlClient needs culture data.
@@ -348,6 +350,9 @@ Same behavior as EF Core:
    reflection over the result type's properties. KetPsi never reads that tree, so the warning is harmless and the
    query runs under Native AOT. Records, other constructors, single members and `ValueTuple.Create` don't warn; use one
    of them where trim warnings must stay at zero.
+8. `FromSql`, `FromSqlRaw`, `Database.SqlQuery<T>` and `SqlQueryRaw<T>` run under Native AOT on EF Core 8, 9 and 10:
+   their readers are generated, and `SqlQuery<T>` needs no entity in the model. `Database.ExecuteSql` and
+   `ExecuteSqlRaw` are EF Core's own (no LINQ to translate) and work under Native AOT too.
 
 ## Fixing KP diagnostics
 
