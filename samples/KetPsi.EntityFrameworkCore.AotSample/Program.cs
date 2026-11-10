@@ -313,6 +313,53 @@ await CheckAsync(
     },
     "Dune:4,Dune:5,Kind of Blue:5|4");
 
+await CheckAsync(
+    "FromSql sent as written, and composed over",
+    async db =>
+    {
+        var cheap = db.Products.FromSql($"SELECT * FROM shop.Products WHERE Price < {10m} ORDER BY Id").AsNoTracking().ToList();
+        var books = await db.Products.FromSqlRaw("SELECT * FROM shop.Products WHERE Category = {0}", (int)Category.Books)
+            .AsNoTracking()
+            .Where(p => p.IsActive)
+            .OrderByDescending(p => p.Price)
+            .Select(p => p.Name)
+            .ToListAsync(cancellationToken);
+        return $"{Ids(cheap)}|{string.Join(",", books)}";
+    },
+    "1,5,8|Dune,Foundation,Neuromancer");
+
+await CheckAsync(
+    "Database.SqlQuery of scalars",
+    async db =>
+    {
+        var unstocked = db.Database.SqlQuery<string>($"SELECT Name FROM shop.Products WHERE Stock IS NULL ORDER BY Id").ToList();
+        var stars = db.Database.SqlQuery<int>($"SELECT Stars AS Value FROM shop.Reviews").Where(s => s >= 4).Sum();
+        var games = await db.Database.SqlQueryRaw<int>("SELECT Id AS Value FROM shop.Products WHERE Category = {0}", (int)Category.Games).CountAsync(cancellationToken);
+        return $"{string.Join(",", unstocked)}|{stars}|{games}";
+    },
+    "Hades,Kind of Blue|14|3");
+
+await CheckAsync(
+    "Database.SqlQuery of a record, composed over",
+    db => Task.FromResult(string.Join(",", db.Database.SqlQuery<ProductStock>($"SELECT Stock, Name, Id FROM shop.Products")
+        .Where(x => x.Stock < 10)
+        .OrderBy(x => x.Id)
+        .Select(x => x.Name + ":" + x.Stock)
+        .ToList())),
+    "Abbey Road:3,Celeste:0,Outer Wilds:8");
+
+await CheckAsync(
+    "ExecuteSql runs through EF Core, rolled back",
+    async db =>
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var updated = await db.Database.ExecuteSqlAsync($"UPDATE shop.Products SET Stock = {99} WHERE Stock IS NULL", cancellationToken);
+        var stocked = await db.Products.CountAsync(p => p.Stock == 99, cancellationToken);
+        await transaction.RollbackAsync(cancellationToken);
+        return $"{updated}|{stocked}";
+    },
+    "2|2");
+
 #if NET8_0
 // EF Core 8 cannot track entities under Native AOT: tracking queries fail with a clear error instead of EF Core's
 // "model building is not supported". Add AsNoTracking(), or move to EF Core 9 or later to track.
@@ -393,6 +440,16 @@ await CheckAsync(
         return Task.FromResult($"{ReferenceEquals(first, second)}|{db.Entry(first!).State}");
     },
     "True|Unchanged");
+
+await CheckAsync(
+    "FromSql tracks its entities with their shadow values",
+    db =>
+    {
+        var product = db.Products.FromSql($"SELECT * FROM shop.Products WHERE Id = {5}").Single();
+        var entry = db.Entry(product);
+        return Task.FromResult($"{product.Name}|{entry.State}|{entry.Property<int>(ShopDb.Revision).CurrentValue}");
+    },
+    "Neuromancer|Unchanged|50");
 
 await CheckAsync(
     "Tracked groups attach their entities",

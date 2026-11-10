@@ -43,6 +43,8 @@ var page = await db.Blogs
 - `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`, `AsSplitQuery()`, `AsSingleQuery()` (see Include below).
 - `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below without a predicate (see
   Projections below).
+- `FromSql($"...")`, `FromSqlInterpolated($"...")` and `FromSqlRaw("...", args)` on a `DbSet`, with any operator after
+  them, and `db.Database.SqlQuery<T>($"...")` and `SqlQueryRaw<T>` for scalars and unmapped types (see Raw SQL below).
 - `Join(inner, outerKey, innerKey, (o, i) => ...)`, inner joins in method syntax (see Join below).
 - `Distinct()` on the entities or on a projection.
 - `GroupBy(x => key)`, with an element or result selector too, then `Where`, `OrderBy`/`ThenBy`, `Select` of keys and
@@ -71,8 +73,7 @@ var page = await db.Blogs
   The SQL and the empty-set behavior are EF Core's: `Sum` of no rows is 0, a nullable or reference result is null, and
   `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
-**Not supported yet** (build error): `GroupJoin`, `SelectMany`,
-`FromSql*` (KP1004), `TagWith`, `ExecuteUpdate`, `AsAsyncEnumerable`.
+**Not supported yet** (build error): `GroupJoin`, `SelectMany`, `TagWith`, `ExecuteUpdate`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
 on a `DbSet`, but after any KetPsi operator they run the query and finish in memory:
@@ -194,6 +195,54 @@ var rows = await db.Posts
   selectors that compute (`Sum(o => o.Price * o.Quantity)`).
 - The indexed overload `Select((x, i) => ...)` is not supported (KP1006).
 
+## Raw SQL
+
+```csharp
+var blogs = await db.Blogs
+    .FromSql($"SELECT * FROM dbo.Blogs WHERE Rating >= {minimum}")   // each value becomes a parameter
+    .Where(b => b.IsActive)
+    .Include(b => b.Posts)
+    .ToListAsync(ct);
+
+var fromProcedure = db.Blogs.FromSqlRaw("EXEC dbo.GetBlogs {0}", minimum).AsNoTracking().ToList();
+```
+
+- The SQL is a runtime value, so nothing about it is checked at build time; the operators after it are translated as
+  on any query.
+- As in EF Core, SQL that nothing composes over runs exactly as written, and its columns are read by name, ignoring
+  case and order; extra columns are ignored and a missing one throws "The required column 'X' was not present".
+  Tracking operators and `IgnoreQueryFilters` don't compose. Anything else does, and so does a query filter on the
+  entity: the SQL becomes a derived table, `SELECT ... FROM (your SQL) AS [t0] WHERE ...`.
+- Only SQL that starts with `SELECT` (after whitespace and comments) can be composed over. A stored procedure call
+  (`EXEC`), `WITH ...` or a leading `(` runs only as written; composing over it throws EF Core's "non-composable SQL"
+  error. Call `AsEnumerable()` after an uncomposed `ToList()` to filter in memory instead. An entity with a query
+  filter composes too, so call `IgnoreQueryFilters()` to run a stored procedure for it.
+- Interpolated values and `{0}` placeholders become parameters `@p0`, `@p1`, ... in order, never concatenated into
+  the SQL; a `DbParameter` argument is sent as it is, and the query's own parameters never take its name.
+  `FromSqlRaw` without arguments sends braces as written.
+- It composes with everything: `Where` (navigations too), `Include`, `Select`, `GroupBy`, `First`, `Count`,
+  `ExecuteDelete` (by the keys the SQL selects) and `Join`, whose inner side can be `FromSql` too.
+
+`db.Database.SqlQuery<T>($"...")` and `SqlQueryRaw<T>("...", args)` read scalars and types that aren't entities, with
+the same rules for parameters, composing and non-composable SQL:
+
+```csharp
+var ids = db.Database.SqlQuery<int>($"SELECT Id AS Value FROM dbo.Blogs").Where(id => id > minimum).ToList();
+var rows = db.Database.SqlQuery<BlogRow>($"EXEC dbo.BlogRows").ToList();   // public sealed record BlogRow(int Id, string Name);
+```
+
+- A scalar (`int`, `string`, `int?`, an enum, ...) is read from the first column when the SQL runs as written, and from
+  the column named `Value` when something composes over it, as in EF Core; name the column `Value` to compose.
+- A class or record is read from the columns named like its properties, ignoring case and order, through an object
+  initializer or a constructor whose parameters are its properties. A missing column throws "The required column 'X'
+  was not present". A null in a non-nullable column throws, as in EF Core: "Nullable object must have a value." for a
+  scalar, the provider's error for a property; use `int?` or `string?` for columns that can be null.
+- `Where`, `OrderBy`, `Select`, paging, `Distinct`, aggregates and the terminals without a predicate work on the
+  result's members, such as `rows.Where(r => r.Id > 1).Select(r => r.Name)`; write `Where(v => v > 1).Count()`, not
+  `Count(v => v > 1)`. Results are never tracked.
+- Not supported (KP1004): a type with navigation properties (EF Core rejects it too; use `FromSql` on its set), a
+  collection, or a type without an accessible parameterless constructor or one whose parameters are its properties.
+
 ## Join
 
 ```csharp
@@ -289,7 +338,7 @@ Same behavior as EF Core:
    adding `--nativeaot` on EF Core 9 and 10, and call `options.UseModel(MyApp.CompiledModel.MyDbModel.Instance)`.
 2. Compiled models cannot hold query filters; filters only work under JIT.
 3. EF Core 8 cannot track or save changes under Native AOT. KetPsi throws a clear `InvalidOperationException` for
-   tracking queries there, `Find` on a tracking context included; use `AsNoTracking()` (or set the context's
+   tracking queries there, `Find` and `FromSql` on a tracking context included; use `AsNoTracking()` (or set the context's
    `QueryTrackingBehavior` to `NoTracking`), or move to EF Core 9+. `ExecuteDelete` never tracks, so it works on all
    three. No-tracking queries with `Include` work under Native AOT on EF Core 8, 9 and 10.
 4. Keep `InvariantGlobalization` off; SqlClient needs culture data.
@@ -301,6 +350,9 @@ Same behavior as EF Core:
    reflection over the result type's properties. KetPsi never reads that tree, so the warning is harmless and the
    query runs under Native AOT. Records, other constructors, single members and `ValueTuple.Create` don't warn; use one
    of them where trim warnings must stay at zero.
+8. `FromSql`, `FromSqlRaw`, `Database.SqlQuery<T>` and `SqlQueryRaw<T>` run under Native AOT on EF Core 8, 9 and 10:
+   their readers are generated, and `SqlQuery<T>` needs no entity in the model. `Database.ExecuteSql` and
+   `ExecuteSqlRaw` are EF Core's own (no LINQ to translate) and work under Native AOT too.
 
 ## Fixing KP diagnostics
 
@@ -309,6 +361,7 @@ Same behavior as EF Core:
 | KP0002 | Keep `KetPsi.EntityFrameworkCore.Generated` in `InterceptorsNamespaces` |
 | KP1001 | Rewrite without the operator, or load and finish in memory after `ToList()` |
 | KP1002 | Include one navigation per lambda, chain with `ThenInclude`, filter collections in a separate query |
+| KP1004 | Make the `SqlQuery<T>` result a scalar, or a class or record of column properties without navigations, constructible by generated code |
 | KP1005 | Write the lambda inline at the call |
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
 | KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate, plus `Where`, `OrderBy`, `Select` and `Join` that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |

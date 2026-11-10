@@ -20,7 +20,7 @@ internal static class QueryExecutor
         try
         {
             using var command = CreateCommand(database, dialect, statement);
-            using var dataReader = command.ExecuteReader();
+            using var dataReader = Columns(command.ExecuteReader(), statement);
             while (dataReader.Read())
             {
                 yield return materialize(dataReader);
@@ -46,7 +46,7 @@ internal static class QueryExecutor
             var command = CreateCommand(database, dialect, statement);
             await using (command.ConfigureAwait(false))
             {
-                var dataReader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                var dataReader = Columns(await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false), statement);
                 await using (dataReader.ConfigureAwait(false))
                 {
                     while (await dataReader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -145,6 +145,13 @@ internal static class QueryExecutor
 
         foreach (var parameter in statement.Parameters)
         {
+            // A DbParameter given to FromSql is sent as it is, as EF Core sends it.
+            if (parameter.Value is DbParameter given)
+            {
+                command.Parameters.Add(given);
+                continue;
+            }
+
             var dbParameter = command.CreateParameter();
             dbParameter.ParameterName = parameter.Name;
             dbParameter.Value = ToProviderValue(parameter.Value);
@@ -154,6 +161,10 @@ internal static class QueryExecutor
 
         return command;
     }
+
+    // SQL of FromSql sent as it is returns its columns in its own order, so they are read by name.
+    private static DbDataReader Columns(DbDataReader reader, SqlStatement statement)
+        => statement.ColumnsByName is { } names ? new ColumnMappedReader(reader, names) : reader;
 
     // Enums without a value converter are stored as their underlying number, which providers expect as that type.
     internal static object ToProviderValue(object value)

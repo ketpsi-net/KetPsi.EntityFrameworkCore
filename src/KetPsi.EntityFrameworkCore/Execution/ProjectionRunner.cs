@@ -219,7 +219,7 @@ internal static class ProjectionRunner
 
         var context = query.Context;
         var bind = QueryRunner.Binder(context);
-        var entity = bind(QueryRunner.RootOf(query.Tail).EntityType);
+        var entity = QueryRunner.RootEntity(bind, QueryRunner.RootOf(query.Tail));
         var includes = IncludeTree.FromChain(entity, query.Tail, bind);
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
         var filtersFor = QueryRunner.FiltersFor(context, query.Tail);

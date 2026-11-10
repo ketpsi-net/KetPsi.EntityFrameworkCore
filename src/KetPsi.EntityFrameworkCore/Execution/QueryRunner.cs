@@ -265,7 +265,7 @@ internal static class QueryRunner
     {
         var context = query.Context;
         var bind = Binder(context);
-        var entity = bind(query.Root.EntityType);
+        var entity = RootEntity(bind, query.Root);
         if (IncludeTree.FromChain(entity, query.Tail, bind) is not { } includes)
         {
             return null;
@@ -294,12 +294,15 @@ internal static class QueryRunner
     {
         var context = query.Context;
         var bind = Binder(context);
-        var entity = bind(query.Root.EntityType);
+        var entity = RootEntity(bind, query.Root);
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
         var statement = SqlBuilder.BuildDelete(
             entity, query.Tail, dialect, IncludeTree.FromChain(entity, query.Tail, bind), FiltersFor(context, query.Tail), bind);
         return (dialect, statement);
     }
+
+    /// <summary>The root's entity: bound against the model, or the result columns of <c>Database.SqlQuery</c>.</summary>
+    internal static BoundEntity RootEntity(Func<Type, BoundEntity> bind, RootNode root) => root.Unmapped ?? bind(root.EntityType);
 
     /// <summary>Binds entity types against the context's model.</summary>
     internal static Func<Type, BoundEntity> Binder(DbContext context)
@@ -371,7 +374,7 @@ internal static class QueryRunner
         DbContext context, QueryNode tail, QueryTerminal terminal, int? rowLimit, SqlAggregate? aggregate = null)
     {
         var bind = Binder(context);
-        var entity = bind(RootOf(tail).EntityType);
+        var entity = RootEntity(bind, RootOf(tail));
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
         var filtersFor = FiltersFor(context, tail);
         var statement = SqlBuilder.Build(entity, tail, dialect, terminal, rowLimit, filtersFor(entity), aggregate, filtersFor, bind);

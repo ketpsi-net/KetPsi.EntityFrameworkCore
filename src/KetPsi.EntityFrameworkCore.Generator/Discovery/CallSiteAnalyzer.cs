@@ -57,7 +57,7 @@ internal static partial class CallSiteAnalyzer
         "ExecuteDelete", "ExecuteDeleteAsync", "ExecuteUpdate", "ExecuteUpdateAsync", "Find", "FindAsync", "FirstAsync",
         "FirstOrDefaultAsync", "ForEachAsync", "FromSql", "FromSqlInterpolated", "FromSqlRaw", "IgnoreAutoIncludes",
         "IgnoreQueryFilters", "Include", "LastAsync", "LastOrDefaultAsync", "Load", "LoadAsync", "LongCountAsync", "MaxAsync",
-        "MinAsync", "SingleAsync", "SingleOrDefaultAsync", "SumAsync", "TagWith", "TagWithCallSite", "TemporalAll",
+        "MinAsync", "SingleAsync", "SingleOrDefaultAsync", "SqlQuery", "SqlQueryRaw", "SumAsync", "TagWith", "TagWithCallSite", "TemporalAll",
         "TemporalAsOf", "TemporalBetween", "TemporalContainedIn", "TemporalFromTo", "ThenInclude", "ToArrayAsync",
         "ToDictionaryAsync", "ToHashSetAsync", "ToListAsync", "ToQueryString",
 
@@ -77,6 +77,7 @@ internal static partial class CallSiteAnalyzer
         Queryable,
         EntityFramework,
         Relational,
+        Database,
         SqlServer,
         KetPsi,
         Enumerable,
@@ -126,6 +127,11 @@ internal static partial class CallSiteAnalyzer
             return null;
         }
 
+        if (family == Family.Database)
+        {
+            return method.Name is "SqlQuery" or "SqlQueryRaw" ? ClassifySqlQuery(operation, invocation, semanticModel, cancellationToken) : null;
+        }
+
         var sourceType = GetSourceType(operation);
         var queryableInterface = semanticModel.Compilation.GetTypeByMetadataName(KnownTypes.QueryableInterface);
         if (sourceType is null || queryableInterface is null || GetElementType(sourceType, queryableInterface) is not { } elementType)
@@ -167,7 +173,9 @@ internal static partial class CallSiteAnalyzer
                 // EF Core 8 declares ExecuteDelete with the relational extensions, EF Core 9 and later with the others.
                 "ExecuteDelete" => site.Supported(OperatorKind.ExecuteDelete),
                 "ExecuteDeleteAsync" => site.Supported(OperatorKind.ExecuteDelete, isAsync: true),
-                _ when method.Name.StartsWith("FromSql", StringComparison.Ordinal) => site.Reject(DiagnosticDescriptors.RawSqlNotSupported, method.Name),
+                // The SQL is a value of the call, read when the query runs; the operators after it compose over it.
+                "FromSql" or "FromSqlInterpolated" => site.Supported(OperatorKind.FromSql),
+                "FromSqlRaw" => site.Supported(OperatorKind.FromSqlRaw),
                 _ => site.Unsupported(),
             },
             Family.KetPsi => method.Name == WhereIfMethod ? site.Supported(OperatorKind.WhereIf, lambdaOrdinal: 2) : null,
@@ -353,6 +361,11 @@ internal static partial class CallSiteAnalyzer
                 case IParenthesizedOperation parenthesized:
                     source = parenthesized.Operand;
                     break;
+                case IInvocationOperation invocation when GetFamily(invocation.TargetMethod.ContainingType) == Family.Database
+                    && invocation.TargetMethod.Name is "SqlQuery" or "SqlQueryRaw":
+                    // The root of a query of a scalar or an unmapped type, read through its result's columns.
+                    var (rows, _) = SqlQueryTranslator.Translate(invocation.TargetMethod.TypeArguments[0], semanticModel.Compilation, location);
+                    return new ProjectionSource(SqlQueryRoot, rows?.Projection, isPaged, rows?.Aliases);
                 case IInvocationOperation invocation when GetFamily(invocation.TargetMethod.ContainingType) is var family
                     && family is Family.Queryable or Family.EntityFramework or Family.Relational or Family.KetPsi:
                     var name = invocation.TargetMethod.Name;
@@ -597,6 +610,7 @@ internal static partial class CallSiteAnalyzer
         KnownTypes.Queryable => Family.Queryable,
         KnownTypes.EntityFrameworkQueryableExtensions => Family.EntityFramework,
         KnownTypes.RelationalQueryableExtensions => Family.Relational,
+        KnownTypes.RelationalDatabaseFacadeExtensions => Family.Database,
         KnownTypes.SqlServerQueryableExtensions or KnownTypes.SqlServerDbSetExtensions => Family.SqlServer,
         KnownTypes.KetPsiQueryableExtensions => Family.KetPsi,
         KnownTypes.Enumerable => Family.Enumerable,

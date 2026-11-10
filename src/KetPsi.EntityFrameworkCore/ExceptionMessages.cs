@@ -173,6 +173,14 @@ internal static class ExceptionMessages
 
     public const string JoinKeysMismatch = "A Join needs the same number of outer and inner key parts, at least one; there are {0} and {1}.";
 
+    // EF Core's messages for raw SQL.
+    public const string NonComposableSql =
+        "'FromSql' or 'SqlQuery' was called with non-composable SQL and with a query composing over it. Consider calling 'AsEnumerable' after the method to perform the composition on the client side.";
+
+    public const string SqlQueryColumnsMismatch = "SqlQuery needs one CLR type per result column; there are {0} columns and {1} types.";
+
+    public const string FromSqlMissingColumn = "The required column '{0}' was not present in the results of a 'FromSql' operation.";
+
     public const string LastWithoutOrdering =
         "Queries performing '{0}' operation must have a deterministic sort order. Rewrite the query to apply an 'OrderBy' operation on the sequence before calling '{0}'.";
 

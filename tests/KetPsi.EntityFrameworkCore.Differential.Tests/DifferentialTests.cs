@@ -357,6 +357,46 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "JoinIgnoringInnerFilters", [] },
             { "SelectEntitiesThenWhere", [2] },
             { "SelectColumnThenWhere", [3] },
+
+            // FromSql.
+            { "FromSqlUnderFilters", [4] },
+            { "FromSqlReorderedColumns", [] },
+            { "FromSqlTracked", [] },
+            { "FromSqlMissingColumn", [] },
+            { "FromSqlRunsAsWritten", [1] },
+            { "FromSqlStoredProcedure", [] },
+            { "FromSqlAsWrittenMissingColumn", [] },
+            { "FromSqlAsWrittenTracked", [] },
+            { "FromSqlComposed", [3] },
+            { "FromSqlIgnoringFilters", [5] },
+            { "FromSqlRawArguments", ["Beta", 100] },
+            { "FromSqlDbParameter", [5, 20] },
+            { "FromSqlInterpolatedWithComment", [3] },
+            { "FromSqlNonComposable", [] },
+            { "FromSqlInclude", [5] },
+            { "FromSqlSelect", [] },
+            { "FromSqlCount", [4] },
+            { "FromSqlFirstAsync", [] },
+            { "FromSqlGroupBy", [] },
+            { "FromSqlJoinInner", [4] },
+            { "FromSqlExecuteDelete", [101] },
+
+            // Database.SqlQuery.
+            { "SqlQueryFirstColumn", [] },
+            { "SqlQueryComposed", [3] },
+            { "SqlQueryWithoutValue", [] },
+            { "SqlQueryNullable", [] },
+            { "SqlQueryNullableCount", [40] },
+            { "SqlQueryNullIntoInt", [] },
+            { "SqlQueryRawAsync", [2] },
+            { "SqlQueryFirstAsync", [] },
+            { "SqlQueryEnumDistinct", [] },
+            { "SqlQueryNonComposable", [] },
+            { "SqlQueryRecord", [] },
+            { "SqlQueryRecordComposed", [2] },
+            { "SqlQueryClass", [4] },
+            { "SqlQueryMissingColumn", [] },
+            { "SqlQueryNullIntoProperty", [] },
         };
 
 #if NET10_0_OR_GREATER
@@ -406,6 +446,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "LoadGraphModifySave()", "SelectEntityAndColumn()", "SelectAuthors()", "SelectBlogAndAuthor()", "SelectPostAndBlog()",
         "SelectNavigationWithInclude()", "SelectEntityFirst()", "Groups()",
         "FindBlog(1)", "FindPostAsync(101)", "FindTrackedTwice(3)", "DeleteTrackedComment()", "JoinEntities()",
+        "FromSqlTracked()", "FromSqlAsWrittenTracked()",
     };
 
 #if NET8_0
@@ -429,6 +470,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "SelectAuthorsIdentityResolution", "SelectAuthorTwiceNoTracking", "SelectNavigationWithInclude", "SelectEntityPaged",
         "GroupOrderByKey", "GroupOrderByAggregate", "GroupOrderAfterSelect", "GroupPaged", "GroupElementAndResultSelector",
         "PostsOrderedByBlog", "BlogsOrderedByAuthor", "JoinThroughThePair", "JoinAfterPaging", "JoinPagedAfter", "SelectEntitiesThenWhere",
+        "FromSqlComposed", "SqlQueryRawAsync", "SqlQueryRecordComposed",
     };
 
     private static string Key(string query, object?[] arguments)

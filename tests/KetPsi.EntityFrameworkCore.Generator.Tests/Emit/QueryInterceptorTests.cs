@@ -195,6 +195,54 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
+    public void FromSql_ComposedWrapsTheSqlAndAsWrittenSendsIt()
+    {
+        var composed = AsList(Invoke("FromSqlComposed", 3));
+
+        Assert.Equal(
+            "SELECT " + Columns + " FROM (\nSELECT * FROM Blogs WHERE Rating >= @p0\n) AS [t0] WHERE [t0].[IsActive] = CAST(1 AS bit)",
+            _connection.LastCommand.CommandText);
+        Assert.Equal([3], Parameters());
+        Assert.Equal(2, composed.Count);
+
+        var asWritten = (Array)Invoke("FromSqlAsWritten", "alpha")!;
+
+        Assert.Equal("EXEC GetBlogs @p0", _connection.LastCommand.CommandText);
+        Assert.Equal(["alpha"], Parameters());
+        Assert.Equal("beta", Get(asWritten.GetValue(1)!, "Name"));
+    }
+
+    [Fact]
+    public void SqlQuery_ComposedReadsValueAndAsWrittenReadsTheFirstColumn()
+    {
+        _connection.Rows = ValueRows(["Value"], 3, 5);
+
+        Assert.Equal([3, 5], (List<int>)Invoke("Ratings", 1)!);
+        Assert.Equal(
+            "SELECT [t0].[Value] FROM (\nSELECT Rating AS Value FROM Blogs WHERE Id > @p0\n) AS [t0] WHERE [t0].[Value] > @p1",
+            _connection.LastCommand.CommandText);
+        Assert.Equal([1, 2], Parameters());
+
+        _connection.Rows = ValueRows(["Rating", "Other"], 4, 9);
+        Assert.Equal([4, 9], (List<int>)Invoke("RatingsAsWritten")!);
+        Assert.Equal("EXEC GetRatings", _connection.LastCommand.CommandText);
+    }
+
+    [Fact]
+    public void SqlQuery_OfARecord_ReadsItsColumnsByName()
+    {
+        var table = new DataTable();
+        table.Columns.Add("name", typeof(string));
+        table.Columns.Add("Id", typeof(int));
+        table.Rows.Add("alpha", 1);
+        _connection.Rows = table;
+
+        var row = Assert.Single(AsList(Invoke("BlogRows")));
+
+        Assert.Equal((1, "alpha"), ((int)row.GetType().GetProperty("Id")!.GetValue(row)!, (string)row.GetType().GetProperty("Name")!.GetValue(row)!));
+    }
+
+    [Fact]
     public void Single_TwoRows_ThrowsLikeLinq()
     {
         var exception = Assert.Throws<TargetInvocationException>(() => Invoke("Single"));
@@ -388,6 +436,22 @@ public sealed class QueryInterceptorTests : IDisposable
         foreach (var row in rows)
         {
             table.Rows.Add(row.Id, row.IsActive, row.Name, row.Rating, 0, row.Views is { } views ? views : DBNull.Value);
+        }
+
+        return table;
+    }
+
+    private static DataTable ValueRows(string[] columns, params int[] values)
+    {
+        var table = new DataTable();
+        foreach (var column in columns)
+        {
+            table.Columns.Add(column, typeof(int));
+        }
+
+        foreach (var value in values)
+        {
+            table.Rows.Add([.. columns.Select((_, i) => (object)(i == 0 ? value : 0))]);
         }
 
         return table;

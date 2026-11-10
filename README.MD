@@ -50,9 +50,9 @@ Targets `net8.0`, `net9.0` and `net10.0`, each with its own EF Core major versio
 ## Status
 
 Preview. Done: filtering and ordering (through reference navigations too), paging, terminals, `Find`,
-`ExecuteDelete`, query filters, tracking, identity resolution, `Include` / `ThenInclude`, `Select` (properties,
-reference navigations, entities and computed members), `Distinct`, `Sum` / `Average` / `Min` / `Max`, `GroupBy`
-with keys, aggregates, `HAVING` and the groups themselves, and inner `Join` in method syntax.
+`ExecuteDelete`, `FromSql` and `SqlQuery`, query filters, tracking, identity resolution, `Include` / `ThenInclude`,
+`Select` (properties, reference navigations, entities and computed members), `Distinct`, `Sum` / `Average` / `Min` /
+`Max`, `GroupBy` with keys, aggregates, `HAVING` and the groups themselves, and inner `Join` in method syntax.
 
 See the [package README](./src/KetPsi.EntityFrameworkCore/README.MD) for the full support list, diagnostics and
 Native AOT notes, and [skills/ketpsi-entityframeworkcore/SKILL.md](./skills/ketpsi-entityframeworkcore/SKILL.md) for a

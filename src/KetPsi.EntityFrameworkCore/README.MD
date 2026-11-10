@@ -52,6 +52,7 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Aggregates | `Sum`, `Average`, `Min`, `Max` and their `Async` versions, over one property (through reference navigations too) or a projection of one property |
 | Joins | `Join` of a filtered `DbSet` on properties or anonymous types of them, with a result selector; then `Where`, `OrderBy`, `Select` and further joins through its result, paging and terminals |
 | Grouping | `GroupBy` on properties, ones through reference navigations, or an anonymous type of them, with an element or result selector too; then `Where`, `OrderBy`/`ThenBy`, a `Select` of keys and aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups |
+| Raw SQL | `FromSql`, `FromSqlInterpolated` and `FromSqlRaw` on a set, sent as written or composed over with any operator; `Database.SqlQuery<T>` and `SqlQueryRaw<T>` for scalars and unmapped classes and records |
 | Bulk delete | `ExecuteDelete` and `ExecuteDeleteAsync` after the filtering, ordering and paging operators, without loading or tracking the rows |
 | Lookup by key | `Find` and `FindAsync`, which return a tracked entity without a query, as EF Core does |
 | Terminals | `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault` (after an `OrderBy`, as in EF Core), `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`, their `Async` versions, the predicate overloads, and `foreach` / `await foreach` |
@@ -106,6 +107,21 @@ use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates 
 allowed, and `Where`, `OrderBy`, `Select` and `Join` that read only its entity and column members, before any paging.
 Collection navigations in projections are not supported yet.
 
+### Raw SQL
+
+`FromSql`, `FromSqlInterpolated` and `FromSqlRaw` start a query from your SQL, as in EF Core: each value becomes a
+parameter, SQL that nothing composes over runs as written (a stored procedure too) and is read by column name, and
+any other operator, or a query filter, wraps it in a derived table. Composing over SQL that doesn't start with
+`SELECT` throws EF Core's "non-composable SQL" error.
+
+```csharp
+var blogs = db.Blogs.FromSql($"SELECT * FROM dbo.Blogs WHERE Rating >= {minimum}").Where(b => b.IsActive).ToList();
+var ids = db.Database.SqlQuery<int>($"SELECT Id AS Value FROM dbo.Blogs").Where(id => id > minimum).ToList();
+```
+
+`Database.SqlQuery<T>` reads a scalar from its first column, or from `Value` when composed over, and a class or record
+from the columns named like its properties, as EF Core does. Its results are never tracked.
+
 ### Join
 
 `Join` is an `INNER JOIN`, as in EF Core: the inner side is a `DbSet` with optional `Where`, its query filters go in
@@ -156,6 +172,8 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
   their expression tree with reflection over the result type's properties. KetPsi never reads that tree, so the
   warning is harmless and the query runs under Native AOT. Records, other constructors, single members and
   `ValueTuple.Create` don't warn; use one of them where trim warnings must stay at zero.
+- **Raw SQL works under Native AOT.** `FromSql`, `Database.SqlQuery<T>` and their `Raw` forms run with generated
+  readers on every version; `Database.ExecuteSql` is EF Core's own and works too.
 - The `DbContext` constructor itself carries EF Core's trim and AOT warnings, which an application cannot remove.
 
 ## Diagnostics
@@ -166,7 +184,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP0002 | Interceptors are not enabled for `KetPsi.EntityFrameworkCore.Generated` |
 | KP1001 | Query operator not supported |
 | KP1002 | Include path not supported: filtered include, a chain in one lambda, or a string path |
-| KP1004 | Raw SQL not supported |
+| KP1004 | `SqlQuery<T>` result type not supported: navigations, a collection, or no constructor generated code can use |
 | KP1005 | A lambda must be written at the call site |
 | KP1006 | Operator overload not supported |
 | KP1007 | Operator not supported after `Select` |

@@ -33,8 +33,8 @@ internal static class DiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor RawSqlNotSupported = Error(
         "KP1004",
-        "Raw SQL not supported",
-        "Raw SQL ('{0}') is not supported by KetPsi.EntityFrameworkCore");
+        "Raw SQL result type not supported",
+        "The result type '{0}' of '{1}' cannot be read: {2}");
 
     public static readonly DiagnosticDescriptor LambdaRequired = Error(
         "KP1005",

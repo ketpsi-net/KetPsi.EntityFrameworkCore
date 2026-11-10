@@ -441,6 +441,32 @@ public static class SqlQuery
         where T : class
         => QueryRunner.AnyAsync(ToSqlQueryable(source), cancellationToken);
 
+    /// <summary>
+    /// Starts a query from SQL: <c>FromSql</c> and <c>FromSqlInterpolated</c>. Each interpolated value becomes a
+    /// parameter, or is the <see cref="System.Data.Common.DbParameter"/> it is.
+    /// </summary>
+    public static IQueryable<T> FromSql<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(DbSet<T> set, FormattableString sql)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        ArgumentNullException.ThrowIfNull(sql);
+
+        return new SqlQueryable<T>(set.GetService<ICurrentDbContext>().Context, new RootNode(typeof(T), new RawSql(sql.Format, sql.GetArguments(), alwaysFormat: true)));
+    }
+
+    /// <summary>
+    /// Starts a query from SQL: <c>FromSqlRaw</c>. Each <c>{0}</c> placeholder becomes a parameter for its value, or the
+    /// name of its <see cref="System.Data.Common.DbParameter"/>; parameters the SQL names itself are passed as they are.
+    /// </summary>
+    public static IQueryable<T> FromSqlRaw<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(DbSet<T> set, string sql, object?[]? parameters)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        ArgumentException.ThrowIfNullOrEmpty(sql);
+
+        return new SqlQueryable<T>(set.GetService<ICurrentDbContext>().Context, new RootNode(typeof(T), new RawSql(sql, parameters ?? [], alwaysFormat: false)));
+    }
+
     /// <summary>Deletes the rows the query selects and returns how many were deleted: <c>ExecuteDelete</c>.</summary>
     public static int ExecuteDelete<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source)
         where T : class

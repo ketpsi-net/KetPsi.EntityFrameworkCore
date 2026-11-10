@@ -31,6 +31,8 @@ internal static class QuerySources
             public Blog Blog { get; set; } = null!;
         }
 
+        public sealed record BlogRow(int Id, string Name);
+
         public sealed class ShopDb(DbConnection connection) : DbContext
         {
             public DbSet<Blog> Blogs => Set<Blog>();
@@ -74,6 +76,16 @@ internal static class QuerySources
             public Blog Single() => db.Blogs.AsNoTracking().Single();
 
             public Blog? Find(int id) => db.Blogs.Find(id);
+
+            public List<int> Ratings(int min) => db.Database.SqlQuery<int>($"SELECT Rating AS Value FROM Blogs WHERE Id > {min}").Where(v => v > 2).ToList();
+
+            public List<int> RatingsAsWritten() => db.Database.SqlQuery<int>($"EXEC GetRatings").ToList();
+
+            public List<BlogRow> BlogRows() => db.Database.SqlQuery<BlogRow>($"EXEC GetRows").ToList();
+
+            public List<Blog> FromSqlComposed(int min) => db.Blogs.FromSql($"SELECT * FROM Blogs WHERE Rating >= {min}").AsNoTracking().Where(b => b.IsActive).ToList();
+
+            public Blog[] FromSqlAsWritten(string name) => db.Blogs.FromSqlRaw("EXEC GetBlogs {0}", name).AsNoTracking().ToArray();
 
             public int DeleteBelow(int rating) => db.Blogs.Where(b => b.Rating < rating).ExecuteDelete();
 
