@@ -12,10 +12,11 @@ namespace KetPsi.EntityFrameworkCore.Generator.Discovery;
 /// <param name="MemberPath">The member chain from the parameter, such as <c>"b"</c>; <c>""</c> for the parameter itself.</param>
 /// <param name="Path">The query path it stands for: <c>""</c>, <c>"$0"</c> or <c>"Blog"</c> for an entity, <c>"$0.Name"</c> for a column.</param>
 /// <param name="Entity">The entity, or the entity that has the column.</param>
-/// <param name="Property">The column's property, or <see langword="null"/> for an entity.</param>
-internal sealed record Alias(string MemberPath, string Path, INamedTypeSymbol Entity, IPropertySymbol? Property = null)
+/// <param name="Property">The column's property, or <see langword="null"/> for an entity or a scalar result's column.</param>
+/// <param name="ScalarType">For the column of a scalar result of <c>Database.SqlQuery</c>, its type.</param>
+internal sealed record Alias(string MemberPath, string Path, INamedTypeSymbol Entity, IPropertySymbol? Property = null, ITypeSymbol? ScalarType = null)
 {
-    public bool IsEntity => Property is null;
+    public bool IsEntity => Property is null && ScalarType is null;
 
     /// <summary>A parameter that is the entity at <paramref name="path"/>.</summary>
     public static IReadOnlyList<Alias> At(string path, INamedTypeSymbol entity) => [new Alias("", path, entity)];
@@ -53,7 +54,7 @@ internal sealed record Alias(string MemberPath, string Path, INamedTypeSymbol En
                 return new AliasedPath(alias.Path, alias.Entity, [.. chain.Skip(count)], Column: null);
             }
 
-            return count == chain.Count ? new AliasedPath(alias.Path, alias.Entity, [], alias.Property) : null;
+            return count == chain.Count ? new AliasedPath(alias.Path, alias.Entity, [], alias.Property, alias.ScalarType) : null;
         }
 
         return null;
@@ -68,9 +69,14 @@ internal sealed record Alias(string MemberPath, string Path, INamedTypeSymbol En
 /// <param name="Prefix">The query path of the alias.</param>
 /// <param name="Owner">The aliased entity, or the entity that has the aliased column.</param>
 /// <param name="Rest">The entity properties read after an aliased entity; empty for a column.</param>
-/// <param name="Column">The aliased column's property, or <see langword="null"/> for an entity.</param>
-internal readonly record struct AliasedPath(string Prefix, INamedTypeSymbol Owner, List<IPropertySymbol> Rest, IPropertySymbol? Column)
+/// <param name="Column">The aliased column's property, or <see langword="null"/> for an entity or a scalar result's column.</param>
+/// <param name="ScalarType">For the column of a scalar result, its type.</param>
+internal readonly record struct AliasedPath(
+    string Prefix, INamedTypeSymbol Owner, List<IPropertySymbol> Rest, IPropertySymbol? Column, ITypeSymbol? ScalarType = null)
 {
+    /// <summary>Whether the alias is a column, of an entity or of a scalar result.</summary>
+    public bool IsColumn => Column is not null || ScalarType is not null;
+
     /// <summary>The query path the chain reads, such as <c>"$0.Name"</c>.</summary>
     public string Path => Alias.Combine(Prefix, Rest.Select(static p => p.Name));
 

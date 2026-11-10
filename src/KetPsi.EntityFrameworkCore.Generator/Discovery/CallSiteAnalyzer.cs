@@ -57,7 +57,7 @@ internal static partial class CallSiteAnalyzer
         "ExecuteDelete", "ExecuteDeleteAsync", "ExecuteUpdate", "ExecuteUpdateAsync", "Find", "FindAsync", "FirstAsync",
         "FirstOrDefaultAsync", "ForEachAsync", "FromSql", "FromSqlInterpolated", "FromSqlRaw", "IgnoreAutoIncludes",
         "IgnoreQueryFilters", "Include", "LastAsync", "LastOrDefaultAsync", "Load", "LoadAsync", "LongCountAsync", "MaxAsync",
-        "MinAsync", "SingleAsync", "SingleOrDefaultAsync", "SumAsync", "TagWith", "TagWithCallSite", "TemporalAll",
+        "MinAsync", "SingleAsync", "SingleOrDefaultAsync", "SqlQuery", "SqlQueryRaw", "SumAsync", "TagWith", "TagWithCallSite", "TemporalAll",
         "TemporalAsOf", "TemporalBetween", "TemporalContainedIn", "TemporalFromTo", "ThenInclude", "ToArrayAsync",
         "ToDictionaryAsync", "ToHashSetAsync", "ToListAsync", "ToQueryString",
 
@@ -77,6 +77,7 @@ internal static partial class CallSiteAnalyzer
         Queryable,
         EntityFramework,
         Relational,
+        Database,
         SqlServer,
         KetPsi,
         Enumerable,
@@ -124,6 +125,11 @@ internal static partial class CallSiteAnalyzer
         if (family == Family.None)
         {
             return null;
+        }
+
+        if (family == Family.Database)
+        {
+            return method.Name is "SqlQuery" or "SqlQueryRaw" ? ClassifySqlQuery(operation, invocation, semanticModel, cancellationToken) : null;
         }
 
         var sourceType = GetSourceType(operation);
@@ -355,6 +361,11 @@ internal static partial class CallSiteAnalyzer
                 case IParenthesizedOperation parenthesized:
                     source = parenthesized.Operand;
                     break;
+                case IInvocationOperation invocation when GetFamily(invocation.TargetMethod.ContainingType) == Family.Database
+                    && invocation.TargetMethod.Name is "SqlQuery" or "SqlQueryRaw":
+                    // The root of a query of a scalar or an unmapped type, read through its result's columns.
+                    var (rows, _) = SqlQueryTranslator.Translate(invocation.TargetMethod.TypeArguments[0], semanticModel.Compilation, location);
+                    return new ProjectionSource(SqlQueryRoot, rows?.Projection, isPaged, rows?.Aliases);
                 case IInvocationOperation invocation when GetFamily(invocation.TargetMethod.ContainingType) is var family
                     && family is Family.Queryable or Family.EntityFramework or Family.Relational or Family.KetPsi:
                     var name = invocation.TargetMethod.Name;
@@ -599,6 +610,7 @@ internal static partial class CallSiteAnalyzer
         KnownTypes.Queryable => Family.Queryable,
         KnownTypes.EntityFrameworkQueryableExtensions => Family.EntityFramework,
         KnownTypes.RelationalQueryableExtensions => Family.Relational,
+        KnownTypes.RelationalDatabaseFacadeExtensions => Family.Database,
         KnownTypes.SqlServerQueryableExtensions or KnownTypes.SqlServerDbSetExtensions => Family.SqlServer,
         KnownTypes.KetPsiQueryableExtensions => Family.KetPsi,
         KnownTypes.Enumerable => Family.Enumerable,

@@ -174,9 +174,9 @@ internal sealed partial class ProjectionTranslator
 
         if (value is IPropertyReferenceOperation && MemberPath(value) is { } path && IsReadable(path, value.Syntax))
         {
-            if (path.Column is not null)
+            if (path.IsColumn)
             {
-                return [new Alias(memberPath, path.Prefix, path.Owner, path.Column)];
+                return [new Alias(memberPath, path.Prefix, path.Owner, path.Column, path.ScalarType)];
             }
 
             var owner = path.Owner;
@@ -328,7 +328,7 @@ internal sealed partial class ProjectionTranslator
     /// <exception cref="TranslationException">The path goes through a collection navigation, or a navigation of a joined entity.</exception>
     private static bool IsReadable(AliasedPath path, SyntaxNode syntax)
     {
-        if (path.Column is not null)
+        if (path.IsColumn)
         {
             return true;
         }
@@ -447,9 +447,12 @@ internal sealed partial class ProjectionTranslator
             var path = Alias.Combine(prefix, [property.Name]);
             if (aliases.FirstOrDefault(a => a.MemberPath == path) is { } alias)
             {
-                members.Add(property.Name + " = " + (alias.Property is { } column
-                    ? Column(alias.Entity, column, alias.Path, syntax, asNullable: false)
-                    : Entity(alias.Entity, alias.Path, syntax)));
+                members.Add(property.Name + " = " + alias switch
+                {
+                    { Property: { } column } => Column(alias.Entity, column, alias.Path, syntax, asNullable: false),
+                    { ScalarType: { } scalar } => ScalarColumn(scalar, alias.Path, syntax, asNullable: false),
+                    _ => Entity(alias.Entity, alias.Path, syntax),
+                });
             }
             else if (property.Type is INamedTypeSymbol { IsAnonymousType: true } nested && aliases.Any(a => a.MemberPath.StartsWith(path + ".", StringComparison.Ordinal)))
             {
@@ -490,6 +493,11 @@ internal sealed partial class ProjectionTranslator
             return Column(path.Owner, column, path.Prefix, syntax, asNullable);
         }
 
+        if (path.ScalarType is { } scalar)
+        {
+            return ScalarColumn(scalar, path.Prefix, syntax, asNullable);
+        }
+
         var entity = path.Owner;
         var rest = path.Rest;
         for (var i = 0; i < rest.Count; i++)
@@ -521,6 +529,15 @@ internal sealed partial class ProjectionTranslator
         return ReadColumn(shape, ordinal, throughNavigation: ThroughNavigation(path), asNullable);
     }
 
+    // The column of a scalar result of SqlQuery: a null in it throws for a value type, as Nullable<T> does in EF Core.
+    private string ScalarColumn(ITypeSymbol type, string path, SyntaxNode syntax, bool asNullable)
+    {
+        var shape = EntityShapeBuilder.ScalarShape(type, path) ?? throw Fail(syntax, $"the type '{type.ToDisplayString()}' cannot be read");
+        var ordinal = Ordinal(_propertyPaths.Count);
+        _propertyPaths.Add(path);
+        return ReadColumn(shape, ordinal, throughNavigation: true, asNullable);
+    }
+
     // Whether a column path goes through a navigation, which can be missing; a joined entity always exists.
     private static bool ThroughNavigation(string path)
     {
@@ -540,7 +557,7 @@ internal sealed partial class ProjectionTranslator
     /// <param name="ordinal">The C# of the ordinal.</param>
     /// <param name="throughNavigation">Whether the column is read through a navigation, which can be missing.</param>
     /// <param name="asNullable">Whether the value is read as a nullable type, null for a database null.</param>
-    private static string ReadColumn(PropertyShape shape, string ordinal, bool throughNavigation, bool asNullable)
+    internal static string ReadColumn(PropertyShape shape, string ordinal, bool throughNavigation, bool asNullable)
     {
         var call = shape.Read == ReadMethod.GetFieldValue
             ? $"{Reader}.GetFieldValue<{shape.ValueTypeName}>({ordinal})"
@@ -810,7 +827,7 @@ internal sealed partial class ProjectionTranslator
             => Model.GetOperation(expression, CancellationToken) is IPropertyReferenceOperation operation
                 && translator.MemberPath(operation) is { } path
                 && IsReadable(path, expression)
-                && (path.Column is not null || path.Rest.Count > 0 && EntityShapeBuilder.IsReadableScalar(path.Rest[path.Rest.Count - 1].Type));
+                && (path.IsColumn || path.Rest.Count > 0 && EntityShapeBuilder.IsReadableScalar(path.Rest[path.Rest.Count - 1].Type));
 
         // The name after the dot in a member access, which belongs to the expression before it.
         private static bool IsMemberName(ExpressionSyntax expression)

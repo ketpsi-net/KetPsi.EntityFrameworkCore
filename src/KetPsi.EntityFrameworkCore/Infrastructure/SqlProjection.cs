@@ -1,10 +1,13 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using KetPsi.EntityFrameworkCore.Binding;
 using KetPsi.EntityFrameworkCore.Execution;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.Query;
 using KetPsi.EntityFrameworkCore.Sql;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace KetPsi.EntityFrameworkCore.Infrastructure;
 
@@ -172,6 +175,74 @@ public static class SqlProjection
         => ProjectionRunner.AnyAsync(ToProjected(source), cancellationToken);
 
     /// <summary>
+    /// Starts a query of a scalar or an unmapped type from SQL: <c>Database.SqlQuery</c>. The result columns are a
+    /// scalar's <c>Value</c>, or the type's properties, which the operators after it read as any projection's.
+    /// </summary>
+    /// <param name="database">The context's database.</param>
+    /// <param name="sql">The SQL; each interpolated value becomes a parameter.</param>
+    /// <param name="columns">The result columns, which the reader reads in order.</param>
+    /// <param name="columnTypes">The CLR type of each column, which types the parameters it is compared with.</param>
+    /// <param name="readsFirstColumn">Whether the result is a scalar, read from the first column of SQL sent as it is.</param>
+    /// <param name="reader">Builds each result.</param>
+    public static IQueryable<T> SqlQuery<T>(
+        DatabaseFacade database,
+        FormattableString sql,
+        IReadOnlyList<string> columns,
+        IReadOnlyList<Type> columnTypes,
+        bool readsFirstColumn,
+        ProjectionReader<T> reader)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+
+        return FromSqlColumns(database, new RawSql(sql.Format, sql.GetArguments(), alwaysFormat: true), columns, columnTypes, readsFirstColumn, reader);
+    }
+
+    /// <summary>Starts a query of a scalar or an unmapped type from SQL with placeholders: <c>Database.SqlQueryRaw</c>.</summary>
+    public static IQueryable<T> SqlQueryRaw<T>(
+        DatabaseFacade database,
+        string sql,
+        object?[]? parameters,
+        IReadOnlyList<string> columns,
+        IReadOnlyList<Type> columnTypes,
+        bool readsFirstColumn,
+        ProjectionReader<T> reader)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(sql);
+
+        return FromSqlColumns(database, new RawSql(sql, parameters ?? [], alwaysFormat: false), columns, columnTypes, readsFirstColumn, reader);
+    }
+
+    private static ProjectedQueryable<T> FromSqlColumns<T>(
+        DatabaseFacade database, RawSql sql, IReadOnlyList<string> columns, IReadOnlyList<Type> columnTypes, bool readsFirstColumn, ProjectionReader<T> reader)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        ArgumentNullException.ThrowIfNull(columns);
+        ArgumentNullException.ThrowIfNull(columnTypes);
+        ArgumentNullException.ThrowIfNull(reader);
+        if (columns.Count == 0 || columns.Count != columnTypes.Count)
+        {
+            throw new ArgumentException(
+                string.Format(CultureInfo.InvariantCulture, ExceptionMessages.SqlQueryColumnsMismatch, columns.Count, columnTypes.Count), nameof(columnTypes));
+        }
+
+        var context = database.GetService<ICurrentDbContext>().Context;
+        var mappings = context.GetService<IRelationalTypeMappingSource>();
+        var properties = new List<BoundProperty>(columns.Count);
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var type = columnTypes[i];
+            var storeType = mappings.FindMapping(type)?.StoreType;
+            var nullable = !type.IsValueType || Nullable.GetUnderlyingType(type) is not null;
+            properties.Add(new BoundProperty(columns[i], columns[i], storeType ?? "", nullable, type, IsShadow: false));
+        }
+
+        // An entity the model doesn't have, so it has no key, is never tracked and has no query filters, as in EF Core.
+        var unmapped = new BoundEntity(typeof(T), table: "", schema: null, properties, primaryKey: null, filterKeys: []);
+        var root = new RootNode(typeof(T), sql, unmapped, readsFirstColumn);
+        return new ProjectedQueryable<T>(context, new ProjectionNode(root, columns, [], readsTheSqlColumns: true), reader);
+    }
+
+    /// <summary>
     /// Appends <c>Where</c> on a projection the generator reads through: the predicate's names are paths of the
     /// queried entity and of the joined ones, such as <c>"$0.Name"</c>, written through the projected members.
     /// </summary>
@@ -240,7 +311,7 @@ public static class SqlProjection
         where TInner : class
     {
         var query = ToProjected(outer);
-        return SqlQuery.Joined(query.Context, query.Tail, inner, outerKeys, innerKeys, propertyNames, entityPaths, reader);
+        return Infrastructure.SqlQuery.Joined(query.Context, query.Tail, inner, outerKeys, innerKeys, propertyNames, entityPaths, reader);
     }
 
     private static ProjectedQueryable<T> AppendOrder<T>(IQueryable<T> source, string propertyPath, bool descending, bool isThenBy)

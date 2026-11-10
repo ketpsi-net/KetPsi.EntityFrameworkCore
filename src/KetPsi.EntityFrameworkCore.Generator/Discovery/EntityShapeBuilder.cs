@@ -218,6 +218,12 @@ internal static class EntityShapeBuilder
             setter);
     }
 
+    /// <summary>The shape of a column of a scalar type that no property declares, such as a scalar result's; null when it can't be read.</summary>
+    internal static PropertyShape? ScalarShape(ITypeSymbol type, string name)
+        => Classify(type) is { IsScalar: true, Read: { } read } classified
+            ? new PropertyShape(name, EntityDiscovery.TypeName(type), "", read, classified.ValueType, classified.CanBeNull, Setter.Direct)
+            : null;
+
     /// <summary>Whether a property of this type is a column the reader can read: a scalar, not a navigation.</summary>
     internal static bool IsReadableScalar(ITypeSymbol type) => Classify(type) is { IsScalar: true, Read: not null };
 

@@ -65,6 +65,7 @@ internal sealed class SqlBuilder
     // The SQL of FromSql at the root, and whether an operator composes over it.
     private string? _rootSql;
     private bool _composed;
+    private bool _readsFirstColumn;
     private SelectState? _state;
 
     private SqlBuilder(
@@ -126,10 +127,12 @@ internal sealed class SqlBuilder
             throw new ArgumentNullException(nameof(aggregate));
         }
 
-        // SQL of FromSql that nothing composes over runs as it is, and its columns are read by name, as in EF Core.
+        // SQL of FromSql that nothing composes over runs as it is, and its columns are read by name, as in EF Core; that of
+        // SqlQuery of a scalar is read from its first column.
         if (terminal == QueryTerminal.Rows && rowLimit is null && builder.RunsAsWritten)
         {
-            return new SqlStatement(builder._rootSql!, builder._parameters, [.. entity.Properties.Select(static p => p.ColumnName)]);
+            var byName = builder._readsFirstColumn ? null : entity.Properties.Select(static p => p.ColumnName).ToList();
+            return new SqlStatement(builder._rootSql!, builder._parameters, byName);
         }
 
         var commandText = builder.Finish(terminal, rowLimit, aggregate);
@@ -350,7 +353,7 @@ internal sealed class SqlBuilder
 
     private void Apply(QueryNode node)
     {
-        _composed |= node is not (RootNode or TrackingNode or IgnoreQueryFiltersNode);
+        _composed |= node is not (RootNode or TrackingNode or IgnoreQueryFiltersNode or ProjectionNode { ReadsTheSqlColumns: true });
         switch (node)
         {
             case RootNode root:
@@ -679,6 +682,7 @@ internal sealed class SqlBuilder
         {
             // Rendered first, so its values are @p0, @p1, ... as in EF Core; checked when a statement composes over it.
             _rootSql = RenderRawSql(sql);
+            _readsFirstColumn = root.ReadsFirstColumn;
             _state = new SelectState("(\n" + _rootSql + "\n)", NextAlias(), isDerived: true);
         }
         else

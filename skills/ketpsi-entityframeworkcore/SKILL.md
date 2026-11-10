@@ -44,7 +44,7 @@ var page = await db.Blogs
 - `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below without a predicate (see
   Projections below).
 - `FromSql($"...")`, `FromSqlInterpolated($"...")` and `FromSqlRaw("...", args)` on a `DbSet`, with any operator after
-  them (see Raw SQL below).
+  them, and `db.Database.SqlQuery<T>($"...")` and `SqlQueryRaw<T>` for scalars and unmapped types (see Raw SQL below).
 - `Join(inner, outerKey, innerKey, (o, i) => ...)`, inner joins in method syntax (see Join below).
 - `Distinct()` on the entities or on a projection.
 - `GroupBy(x => key)`, with an element or result selector too, then `Where`, `OrderBy`/`ThenBy`, `Select` of keys and
@@ -222,6 +222,25 @@ var fromProcedure = db.Blogs.FromSqlRaw("EXEC dbo.GetBlogs {0}", minimum).AsNoTr
 - It composes with everything: `Where` (navigations too), `Include`, `Select`, `GroupBy`, `First`, `Count`,
   `ExecuteDelete` (by the keys the SQL selects) and `Join`, whose inner side can be `FromSql` too.
 
+`db.Database.SqlQuery<T>($"...")` and `SqlQueryRaw<T>("...", args)` read scalars and types that aren't entities, with
+the same rules for parameters, composing and non-composable SQL:
+
+```csharp
+var ids = db.Database.SqlQuery<int>($"SELECT Id AS Value FROM dbo.Blogs").Where(id => id > minimum).ToList();
+var rows = db.Database.SqlQuery<BlogRow>($"EXEC dbo.BlogRows").ToList();   // public sealed record BlogRow(int Id, string Name);
+```
+
+- A scalar (`int`, `string`, `int?`, an enum, ...) is read from the first column when the SQL runs as written, and from
+  the column named `Value` when something composes over it, as in EF Core; name the column `Value` to compose.
+- A class or record is read from the columns named like its properties, ignoring case and order, through an object
+  initializer or a constructor whose parameters are its properties. A missing column throws "The required column 'X'
+  was not present". A null in a non-nullable column throws, as in EF Core: "Nullable object must have a value." for a
+  scalar, the provider's error for a property; use `int?` or `string?` for columns that can be null.
+- `Where`, `OrderBy`, `Select`, paging, `Distinct`, aggregates and the terminals work on the result's members, such as
+  `rows.Where(r => r.Id > 1).Select(r => r.Name)`. Results are never tracked.
+- Not supported (KP1004): a type with navigation properties (EF Core rejects it too; use `FromSql` on its set), a
+  collection, or a type without an accessible parameterless constructor or one whose parameters are its properties.
+
 ## Join
 
 ```csharp
@@ -337,6 +356,7 @@ Same behavior as EF Core:
 | KP0002 | Keep `KetPsi.EntityFrameworkCore.Generated` in `InterceptorsNamespaces` |
 | KP1001 | Rewrite without the operator, or load and finish in memory after `ToList()` |
 | KP1002 | Include one navigation per lambda, chain with `ThenInclude`, filter collections in a separate query |
+| KP1004 | Make the `SqlQuery<T>` result a scalar, or a class or record of column properties without navigations, constructible by generated code |
 | KP1005 | Write the lambda inline at the call |
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
 | KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate, plus `Where`, `OrderBy`, `Select` and `Join` that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |

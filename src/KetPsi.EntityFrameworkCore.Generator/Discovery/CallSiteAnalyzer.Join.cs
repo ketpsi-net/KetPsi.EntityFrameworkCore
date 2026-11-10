@@ -19,6 +19,54 @@ internal static partial class CallSiteAnalyzer
     private const string ReasonInnerKey = "an inner key must be a property of the inner entity itself, or an anonymous type of them";
     private const string ReasonAliasAfterPaging = "filter, order, project and join before Skip, Take and Distinct";
 
+    /// <summary>
+    /// What the calls after <c>Database.SqlQuery</c> are projected from instead of an entity type: their sites are kept
+    /// although no entity is involved.
+    /// </summary>
+    internal const string SqlQueryRoot = "<SqlQuery>";
+
+    /// <summary>
+    /// <c>Database.SqlQuery</c> or <c>SqlQueryRaw</c>: a query of a scalar or an unmapped type from SQL, read through its
+    /// result's columns. A result type that cannot be read is KP1004.
+    /// </summary>
+    private static CallSite ClassifySqlQuery(
+        IInvocationOperation operation, InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
+    {
+        var method = operation.TargetMethod;
+        var result = method.TypeArguments[0];
+        var location = LocationInfo.From(((MemberAccessExpressionSyntax)invocation.Expression).Name.Identifier.GetLocation());
+        var (rows, reason) = SqlQueryTranslator.Translate(result, model.Compilation, location);
+        if (rows is not { } translation)
+        {
+            return new CallSite(
+                EntityDiscovery.TypeName(result),
+                location,
+                Operator: null,
+                IsAsync: false,
+                HasPredicate: false,
+                DiagnosticInfo.Create(DiagnosticDescriptors.RawSqlNotSupported, location, result.ToDisplayString(), method.Name, reason!),
+                ProjectedFrom: SqlQueryRoot);
+        }
+
+        var declared = method.ReducedFrom is null ? method : method.GetConstructedReducedFrom() ?? method;
+        return new CallSite(
+            EntityDiscovery.TypeName(result),
+            location,
+            method.Name == "SqlQuery" ? OperatorKind.SqlQuery : OperatorKind.SqlQueryRaw,
+            IsAsync: false,
+            HasPredicate: false,
+            Diagnostic: null,
+            Interception: model.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax(),
+            Signature: new InterceptorSignature(
+                declared.Name,
+                EntityDiscovery.TypeName(declared.ContainingType),
+                declared.ReturnType.ToDisplayString(SignatureFormat),
+                declared.Parameters.Select(static p => new ParameterSignature(p.Type.ToDisplayString(SignatureFormat), p.Name)).ToEquatableArray()),
+            Projection: translation.Projection,
+            ProjectedFrom: SqlQueryRoot,
+            SqlQuery: translation.Model);
+    }
+
     /// <summary>The operator a call on a projection is when it reads through the projection's members, or null.</summary>
     private static OperatorKind? AliasOperator(IMethodSymbol method)
     {
@@ -123,7 +171,7 @@ internal static partial class CallSiteAnalyzer
             }
 
             if (value is null || Alias.Resolve(value, parameters) is not { } path || ColumnOf(path) is not var (column, _)
-                || innerSide && (path.Column is not null || path.Rest.Count != 1))
+                || innerSide && (path.IsColumn || path.Rest.Count != 1))
             {
                 return null;
             }
@@ -140,6 +188,11 @@ internal static partial class CallSiteAnalyzer
         if (path.Column is { } column)
         {
             return (path.Prefix, column.Type);
+        }
+
+        if (path.ScalarType is { } scalar)
+        {
+            return (path.Prefix, scalar);
         }
 
         var rest = path.Rest;

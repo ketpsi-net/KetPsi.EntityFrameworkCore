@@ -177,6 +177,8 @@ internal static class ExceptionMessages
     public const string NonComposableSql =
         "'FromSql' or 'SqlQuery' was called with non-composable SQL and with a query composing over it. Consider calling 'AsEnumerable' after the method to perform the composition on the client side.";
 
+    public const string SqlQueryColumnsMismatch = "SqlQuery needs one CLR type per result column; there are {0} columns and {1} types.";
+
     public const string FromSqlMissingColumn = "The required column '{0}' was not present in the results of a 'FromSql' operation.";
 
     public const string LastWithoutOrdering =

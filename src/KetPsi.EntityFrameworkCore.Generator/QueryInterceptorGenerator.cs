@@ -180,6 +180,7 @@ public sealed class QueryInterceptorGenerator : IIncrementalGenerator
         return sites
             .Where(site => site is not null
                 && (site.ElementType == CallSiteAnalyzer.UnknownElementType
+                    || site.ProjectedFrom == CallSiteAnalyzer.SqlQueryRoot
                     || entitySet.Contains(site.ProjectedFrom ?? site.ElementType)))
             .Select(static site => site!)
             .ToEquatableArray();

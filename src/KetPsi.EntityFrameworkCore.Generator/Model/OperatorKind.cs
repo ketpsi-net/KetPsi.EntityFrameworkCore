@@ -42,4 +42,6 @@ internal enum OperatorKind
     Join,
     FromSql,
     FromSqlRaw,
+    SqlQuery,
+    SqlQueryRaw,
 }

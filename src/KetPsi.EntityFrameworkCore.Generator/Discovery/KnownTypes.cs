@@ -12,6 +12,7 @@ internal static class KnownTypes
     public const string QueryableInterface = "System.Linq.IQueryable`1";
     public const string EntityFrameworkQueryableExtensions = "Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions";
     public const string RelationalQueryableExtensions = "Microsoft.EntityFrameworkCore.RelationalQueryableExtensions";
+    public const string RelationalDatabaseFacadeExtensions = "Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions";
     public const string SqlServerQueryableExtensions = "Microsoft.EntityFrameworkCore.SqlServerQueryableExtensions";
     public const string SqlServerDbSetExtensions = "Microsoft.EntityFrameworkCore.SqlServerDbSetExtensions";
     public const string DbSetDefinition = "Microsoft.EntityFrameworkCore.DbSet<TEntity>";

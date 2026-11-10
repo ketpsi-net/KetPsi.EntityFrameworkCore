@@ -41,6 +41,7 @@ internal static class InterceptorEmitter
             && (kind is not (OperatorKind.Include or OperatorKind.ThenInclude) || site.Include is not null)
             && (kind != OperatorKind.Select || site.Projection is not null)
             && (kind != OperatorKind.Join || site.Join is not null && site.Projection is not null)
+            && (kind is not (OperatorKind.SqlQuery or OperatorKind.SqlQueryRaw) || site.SqlQuery is not null && site.Projection is not null)
             && (!IsAggregate(kind) || site.Aggregate is not null);
 
     public static string Emit(IReadOnlyList<CallSite> sites)
@@ -68,7 +69,7 @@ internal static class InterceptorEmitter
             WriteInterceptor(writer, sites[i], i);
         }
 
-        if (sites.Any(static s => s.Operator is OperatorKind.Select or OperatorKind.Join || s.Group is not null))
+        if (sites.Any(static s => s.Operator is OperatorKind.Select or OperatorKind.Join or OperatorKind.SqlQuery or OperatorKind.SqlQueryRaw || s.Group is not null))
         {
             // Converts a reader lambda to its delegate type, inferring the projected type, which can be anonymous.
             writer
@@ -131,6 +132,12 @@ internal static class InterceptorEmitter
         if (site.Group is { } group)
         {
             WriteGroup(writer, site, group, source, fallback, template, "Values" + number);
+            return;
+        }
+
+        if (site.Operator is OperatorKind.SqlQuery or OperatorKind.SqlQueryRaw)
+        {
+            WriteSqlQuery(writer, site);
             return;
         }
 
@@ -219,6 +226,26 @@ internal static class InterceptorEmitter
             .Line($"    query,")
             .Line($"    {Strings(projection.PropertyPaths)},")
             .Line($"    {Strings(projection.EntityPaths)},")
+            .Line($"    {ReaderHelper}({projection.ReaderCode}));")
+            .Close();
+    }
+
+    // Database.SqlQuery: the result's columns and their CLR types, and the reader that builds each result from them.
+    private static void WriteSqlQuery(CodeWriter writer, CallSite site)
+    {
+        var parameters = site.Signature!.Parameters;
+        var model = site.SqlQuery!;
+        var projection = site.Projection!;
+        var arguments = site.Operator == OperatorKind.SqlQuery
+            ? $"{parameters[0].Name}, {parameters[1].Name}"
+            : $"{parameters[0].Name}, {parameters[1].Name}, {parameters[2].Name}";
+        var types = $"new global::System.Type[] {{ {string.Join(", ", model.ColumnTypes.Select(static t => $"typeof({t})"))} }}";
+        writer
+            .Line($"return {SqlProjection}.{site.Operator}(")
+            .Line($"    {arguments},")
+            .Line($"    {Strings(projection.PropertyPaths)},")
+            .Line($"    {types},")
+            .Line($"    {(model.ReadsFirstColumn ? "true" : "false")},")
             .Line($"    {ReaderHelper}({projection.ReaderCode}));")
             .Close();
     }
