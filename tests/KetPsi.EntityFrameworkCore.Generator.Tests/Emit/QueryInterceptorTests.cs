@@ -195,6 +195,24 @@ public sealed class QueryInterceptorTests : IDisposable
     }
 
     [Fact]
+    public void FromSql_ComposedWrapsTheSqlAndAsWrittenSendsIt()
+    {
+        var composed = AsList(Invoke("FromSqlComposed", 3));
+
+        Assert.Equal(
+            "SELECT " + Columns + " FROM (\nSELECT * FROM Blogs WHERE Rating >= @p0\n) AS [t0] WHERE [t0].[IsActive] = CAST(1 AS bit)",
+            _connection.LastCommand.CommandText);
+        Assert.Equal([3], Parameters());
+        Assert.Equal(2, composed.Count);
+
+        var asWritten = (Array)Invoke("FromSqlAsWritten", "alpha")!;
+
+        Assert.Equal("EXEC GetBlogs @p0", _connection.LastCommand.CommandText);
+        Assert.Equal(["alpha"], Parameters());
+        Assert.Equal("beta", Get(asWritten.GetValue(1)!, "Name"));
+    }
+
+    [Fact]
     public void Single_TwoRows_ThrowsLikeLinq()
     {
         var exception = Assert.Throws<TargetInvocationException>(() => Invoke("Single"));

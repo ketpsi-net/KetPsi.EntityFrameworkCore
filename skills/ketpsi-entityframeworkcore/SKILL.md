@@ -43,6 +43,8 @@ var page = await db.Blogs
 - `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`, `AsSplitQuery()`, `AsSingleQuery()` (see Include below).
 - `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below without a predicate (see
   Projections below).
+- `FromSql($"...")`, `FromSqlInterpolated($"...")` and `FromSqlRaw("...", args)` on a `DbSet`, with any operator after
+  them (see Raw SQL below).
 - `Join(inner, outerKey, innerKey, (o, i) => ...)`, inner joins in method syntax (see Join below).
 - `Distinct()` on the entities or on a projection.
 - `GroupBy(x => key)`, with an element or result selector too, then `Where`, `OrderBy`/`ThenBy`, `Select` of keys and
@@ -71,8 +73,7 @@ var page = await db.Blogs
   The SQL and the empty-set behavior are EF Core's: `Sum` of no rows is 0, a nullable or reference result is null, and
   `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
-**Not supported yet** (build error): `GroupJoin`, `SelectMany`,
-`FromSql*` (KP1004), `TagWith`, `ExecuteUpdate`, `AsAsyncEnumerable`.
+**Not supported yet** (build error): `GroupJoin`, `SelectMany`, `TagWith`, `ExecuteUpdate`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
 on a `DbSet`, but after any KetPsi operator they run the query and finish in memory:
@@ -193,6 +194,33 @@ var rows = await db.Posts
   first), types or members the generated code cannot reach (private nested types and methods), and aggregate
   selectors that compute (`Sum(o => o.Price * o.Quantity)`).
 - The indexed overload `Select((x, i) => ...)` is not supported (KP1006).
+
+## Raw SQL
+
+```csharp
+var blogs = await db.Blogs
+    .FromSql($"SELECT * FROM dbo.Blogs WHERE Rating >= {minimum}")   // each value becomes a parameter
+    .Where(b => b.IsActive)
+    .Include(b => b.Posts)
+    .ToListAsync(ct);
+
+var fromProcedure = db.Blogs.FromSqlRaw("EXEC dbo.GetBlogs {0}", minimum).AsNoTracking().ToList();
+```
+
+- The SQL is a runtime value, so nothing about it is checked at build time; the operators after it are translated as
+  on any query.
+- As in EF Core, SQL that nothing composes over runs exactly as written, and its columns are read by name, ignoring
+  case and order; extra columns are ignored and a missing one throws "The required column 'X' was not present".
+  Tracking operators and `IgnoreQueryFilters` don't compose. Anything else does, and so does a query filter on the
+  entity: the SQL becomes a derived table, `SELECT ... FROM (your SQL) AS [t0] WHERE ...`.
+- Only SQL that starts with `SELECT` (after whitespace and comments) can be composed over. A stored procedure call
+  (`EXEC`), `WITH ...` or a leading `(` runs only as written; composing over it throws EF Core's "non-composable SQL"
+  error. Call `AsEnumerable()` after an uncomposed `ToList()` to filter in memory instead.
+- Interpolated values and `{0}` placeholders become parameters `@p0`, `@p1`, ... in order, never concatenated into
+  the SQL; a `DbParameter` argument is sent as it is, and the query's own parameters never take its name.
+  `FromSqlRaw` without arguments sends braces as written.
+- It composes with everything: `Where` (navigations too), `Include`, `Select`, `GroupBy`, `First`, `Count`,
+  `ExecuteDelete` (by the keys the SQL selects) and `Join`, whose inner side can be `FromSql` too.
 
 ## Join
 

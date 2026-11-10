@@ -12,7 +12,7 @@ namespace KetPsi.EntityFrameworkCore.Generator.Discovery;
 internal static partial class CallSiteAnalyzer
 {
     private const string ReasonInner =
-        "the inner sequence must be a DbSet of the same context, optionally with Where, WhereIf, the tracking operators and IgnoreQueryFilters";
+        "the inner sequence must be a DbSet of the same context or FromSql on one, optionally with Where, WhereIf, the tracking operators and IgnoreQueryFilters";
     private const string ReasonInnerEntity = "the inner sequence must be of an entity class";
     private const string ReasonKey =
         "a key must be a property of the entity, or one through reference navigations on the outer side, or an anonymous type of them";
@@ -185,6 +185,11 @@ internal static partial class CallSiteAnalyzer
                     source = conversion.Operand;
                     break;
                 case IInvocationOperation invocation when IsDbSet(invocation.Type!):
+                    return true;
+
+                // SQL of FromSql, which only a set has, is the inner query's root.
+                case IInvocationOperation invocation when GetFamily(invocation.TargetMethod.ContainingType) == Family.Relational
+                    && invocation.TargetMethod.Name is "FromSql" or "FromSqlInterpolated" or "FromSqlRaw":
                     return true;
                 case IInvocationOperation invocation:
                     var method = invocation.TargetMethod;

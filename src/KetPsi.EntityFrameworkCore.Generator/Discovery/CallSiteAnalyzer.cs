@@ -167,7 +167,9 @@ internal static partial class CallSiteAnalyzer
                 // EF Core 8 declares ExecuteDelete with the relational extensions, EF Core 9 and later with the others.
                 "ExecuteDelete" => site.Supported(OperatorKind.ExecuteDelete),
                 "ExecuteDeleteAsync" => site.Supported(OperatorKind.ExecuteDelete, isAsync: true),
-                _ when method.Name.StartsWith("FromSql", StringComparison.Ordinal) => site.Reject(DiagnosticDescriptors.RawSqlNotSupported, method.Name),
+                // The SQL is a value of the call, read when the query runs; the operators after it compose over it.
+                "FromSql" or "FromSqlInterpolated" => site.Supported(OperatorKind.FromSql),
+                "FromSqlRaw" => site.Supported(OperatorKind.FromSqlRaw),
                 _ => site.Unsupported(),
             },
             Family.KetPsi => method.Name == WhereIfMethod ? site.Supported(OperatorKind.WhereIf, lambdaOrdinal: 2) : null,

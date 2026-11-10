@@ -103,17 +103,21 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Theory]
-    [InlineData("var r = db.Blogs.FromSqlRaw(\"SELECT * FROM Blogs\").ToList();", "FromSqlRaw")]
-    [InlineData("var r = db.Blogs.FromSql($\"SELECT * FROM Blogs\").ToList();", "FromSql")]
-    [InlineData("var r = db.Blogs.FromSqlInterpolated($\"SELECT * FROM Blogs\").ToList();", "FromSqlInterpolated")]
-    public void RawSql_ReportsKP1004(string body, string operatorName)
+    [InlineData("var r = db.Blogs.FromSqlRaw(\"SELECT * FROM Blogs\").ToList();")]
+    [InlineData("var r = db.Blogs.FromSqlRaw(\"SELECT * FROM Blogs WHERE Rating > {0}\", 3).Where(b => b.IsActive).OrderBy(b => b.Name).ToList();")]
+    [InlineData("var min = 3; var r = await db.Blogs.FromSql($\"SELECT * FROM Blogs WHERE Rating > {min}\").AsNoTracking().FirstOrDefaultAsync(ct);")]
+    [InlineData("var name = \"x\"; var r = db.Blogs.FromSqlInterpolated($\"SELECT * FROM Blogs WHERE Name = {name}\").Count();")]
+    [InlineData("var r = db.Blogs.FromSql($\"SELECT * FROM Blogs\").Include(b => b.Posts).Select(b => new { b.Name, b.Author }).ToList();")]
+    [InlineData("var r = db.Posts.FromSql($\"SELECT * FROM Posts\").Where(p => p.Blog.Rating > 2).ExecuteDelete();")]
+    [InlineData("var r = db.Posts.Join(db.Blogs.FromSql($\"SELECT * FROM Blogs\").Where(b => b.IsActive), p => p.BlogId, b => b.Id, (p, b) => b.Name).ToList();")]
+    [InlineData("IQueryable<Blog> q = db.Blogs.FromSqlRaw(\"SELECT * FROM Blogs\"); q = q.Where(b => b.IsActive); var r = q.ToList();")]
+    [InlineData("var r = db.Blogs.FromSql($\"SELECT * FROM Blogs\").GroupBy(b => b.Status).Select(g => g.Count()).ToList();")]
+    public void RawSql_IsInterceptedAndComposes(string body)
     {
         var run = GeneratorHost.Run(TestSources.WithBody(body));
 
-        var diagnostic = Assert.Single(run.Diagnostics);
-        Assert.Equal("KP1004", diagnostic.Id);
-        Assert.Equal(operatorName, run.TextAt(diagnostic));
-        Assert.Equal($"Raw SQL ('{operatorName}') is not supported by KetPsi.EntityFrameworkCore", diagnostic.GetMessage());
+        Assert.Empty(run.Diagnostics);
+        Assert.Empty(run.OutputProblems());
     }
 
     [Theory]

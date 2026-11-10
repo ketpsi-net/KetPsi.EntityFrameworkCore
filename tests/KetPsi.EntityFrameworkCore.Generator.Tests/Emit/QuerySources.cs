@@ -75,6 +75,10 @@ internal static class QuerySources
 
             public Blog? Find(int id) => db.Blogs.Find(id);
 
+            public List<Blog> FromSqlComposed(int min) => db.Blogs.FromSql($"SELECT * FROM Blogs WHERE Rating >= {min}").AsNoTracking().Where(b => b.IsActive).ToList();
+
+            public Blog[] FromSqlAsWritten(string name) => db.Blogs.FromSqlRaw("EXEC GetBlogs {0}", name).AsNoTracking().ToArray();
+
             public int DeleteBelow(int rating) => db.Blogs.Where(b => b.Rating < rating).ExecuteDelete();
 
             public Task<int> DeletePageAsync(CancellationToken ct) => db.Blogs.OrderBy(b => b.Id).Take(2).ExecuteDeleteAsync(ct);

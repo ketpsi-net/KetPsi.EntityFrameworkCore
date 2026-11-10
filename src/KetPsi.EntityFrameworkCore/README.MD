@@ -52,6 +52,7 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Aggregates | `Sum`, `Average`, `Min`, `Max` and their `Async` versions, over one property (through reference navigations too) or a projection of one property |
 | Joins | `Join` of a filtered `DbSet` on properties or anonymous types of them, with a result selector; then `Where`, `OrderBy`, `Select` and further joins through its result, paging and terminals |
 | Grouping | `GroupBy` on properties, ones through reference navigations, or an anonymous type of them, with an element or result selector too; then `Where`, `OrderBy`/`ThenBy`, a `Select` of keys and aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups |
+| Raw SQL | `FromSql`, `FromSqlInterpolated` and `FromSqlRaw` on a set, sent as written or composed over with any operator |
 | Bulk delete | `ExecuteDelete` and `ExecuteDeleteAsync` after the filtering, ordering and paging operators, without loading or tracking the rows |
 | Lookup by key | `Find` and `FindAsync`, which return a tracked entity without a query, as EF Core does |
 | Terminals | `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault` (after an `OrderBy`, as in EF Core), `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`, their `Async` versions, the predicate overloads, and `foreach` / `await foreach` |
@@ -105,6 +106,17 @@ are read each time the query runs. Following C# rather than SQL, `Math.Round` ro
 use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are
 allowed, and `Where`, `OrderBy`, `Select` and `Join` that read only its entity and column members, before any paging.
 Collection navigations in projections are not supported yet.
+
+### Raw SQL
+
+`FromSql`, `FromSqlInterpolated` and `FromSqlRaw` start a query from your SQL, as in EF Core: each value becomes a
+parameter, SQL that nothing composes over runs as written (a stored procedure too) and is read by column name, and
+any other operator, or a query filter, wraps it in a derived table. Composing over SQL that doesn't start with
+`SELECT` throws EF Core's "non-composable SQL" error.
+
+```csharp
+var blogs = db.Blogs.FromSql($"SELECT * FROM dbo.Blogs WHERE Rating >= {minimum}").Where(b => b.IsActive).ToList();
+```
 
 ### Join
 

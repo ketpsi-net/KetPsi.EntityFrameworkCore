@@ -152,6 +152,13 @@ internal static class InterceptorEmitter
             return;
         }
 
+        if (site.Operator is OperatorKind.FromSql or OperatorKind.FromSqlRaw)
+        {
+            // FromSql is an extension of the set, which is always a KetPsi query's root.
+            writer.Line($"return {SqlQuery}.{site.Operator}({arguments});").Close();
+            return;
+        }
+
         if (site.Operator == OperatorKind.Find)
         {
             // Find is a method of the set, so there is no other source to fall back for.

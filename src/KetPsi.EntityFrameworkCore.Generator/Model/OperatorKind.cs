@@ -40,4 +40,6 @@ internal enum OperatorKind
     Find,
     ExecuteDelete,
     Join,
+    FromSql,
+    FromSqlRaw,
 }
