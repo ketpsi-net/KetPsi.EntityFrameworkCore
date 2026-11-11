@@ -314,6 +314,18 @@ await CheckAsync(
     "Dune:4,Dune:5,Kind of Blue:5|4");
 
 await CheckAsync(
+    "Terminals whose predicate reads through a projection",
+    async db =>
+    {
+        var books = db.Reviews.Join(db.Products, r => r.ProductId, p => p.Id, (r, p) => new { r, p })
+            .Count(x => x.r.Stars >= 4 && x.p.Category == Category.Books);
+        var name = await db.Products.Select(p => p.Name).OrderBy(n => n).FirstOrDefaultAsync(n => n != "Abbey Road", cancellationToken);
+        var belowFive = db.Database.SqlQuery<int>($"SELECT Stars AS Value FROM shop.Reviews").Count(s => s < 5);
+        return $"{books}|{name}|{belowFive}";
+    },
+    "2|Celeste|2");
+
+await CheckAsync(
     "FromSql sent as written, and composed over",
     async db =>
     {

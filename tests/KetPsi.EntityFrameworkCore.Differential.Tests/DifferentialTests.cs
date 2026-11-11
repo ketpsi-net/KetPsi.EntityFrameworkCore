@@ -357,6 +357,18 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "JoinIgnoringInnerFilters", [] },
             { "SelectEntitiesThenWhere", [2] },
             { "SelectColumnThenWhere", [3] },
+            { "JoinCountThroughThePair", [4] },
+            { "JoinCountThroughThePair", [9] },
+            { "JoinAnyAsync", ["alpha"] },
+            { "JoinAnyAsync", ["nobody"] },
+            { "JoinFirstOrDefault", [3] },
+            { "JoinFirstOrDefault", [10] },
+            { "JoinFirstWithoutMatch", [] },
+            { "SelectColumnSingle", [3] },
+            { "SelectColumnSingleOfMany", [] },
+            { "SelectColumnLongCount", [40] },
+            { "SelectEntitiesLastAsync", [5] },
+            { "SqlQueryRecordFirstOrDefault", [] },
 
             // FromSql.
             { "FromSqlUnderFilters", [4] },

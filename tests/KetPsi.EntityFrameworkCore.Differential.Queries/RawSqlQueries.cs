@@ -90,7 +90,7 @@ public static partial class Queries
     public static List<int?> SqlQueryNullable(DiffDb db) => db.Database.SqlQuery<int?>($"SELECT Views AS Value FROM diff.Blogs").ToList();
 
     public static int SqlQueryNullableCount(DiffDb db, int views)
-        => db.Database.SqlQuery<int?>($"SELECT Views AS Value FROM diff.Blogs").Where(v => v > views).Count();
+        => db.Database.SqlQuery<int?>($"SELECT Views AS Value FROM diff.Blogs").Count(v => v > views);
 
     public static List<int> SqlQueryNullIntoInt(DiffDb db) => db.Database.SqlQuery<int>($"SELECT Views AS Value FROM diff.Blogs").ToList();
 
