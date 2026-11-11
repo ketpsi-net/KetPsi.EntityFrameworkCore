@@ -14,8 +14,6 @@ internal static class SqlQueryTranslator
     /// <summary>The column a scalar result is read from when a query composes over the SQL.</summary>
     public const string ScalarColumn = "Value";
 
-    private const string NullableObjectMustHaveAValue = "Nullable object must have a value.";
-
     public static (SqlQueryTranslation? Translation, string? Reason) Translate(ITypeSymbol result, Compilation compilation, LocationInfo location)
     {
         if (!compilation.IsSymbolAccessibleWithin(result, compilation.Assembly))

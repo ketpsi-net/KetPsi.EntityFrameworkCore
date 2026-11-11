@@ -4,7 +4,7 @@
   <Import Project="..\..\src\KetPsi.EntityFrameworkCore.Generator\build\KetPsi.EntityFrameworkCore.Generator.props" />
 
   <PropertyGroup>
-    <Description>Native AOT sample: published with PublishAot on net9.0 and net10.0, its trim and AOT warnings checked against a baseline, then run against SQL Server to check queries, tracking and Include.</Description>
+    <Description>Native AOT sample: published with PublishAot on net9.0, net10.0 and net11.0, its trim and AOT warnings checked against a baseline, then run against SQL Server to check queries, tracking and Include.</Description>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>$(KetPsiTargetFrameworks)</TargetFrameworks>
     <PublishAot>true</PublishAot>
@@ -35,6 +35,7 @@
   <PropertyGroup>
     <CompiledModelFolder Condition="'$(TargetFramework)' == 'net9.0'">Net9</CompiledModelFolder>
     <CompiledModelFolder Condition="'$(TargetFramework)' == 'net10.0'">Net10</CompiledModelFolder>
+    <CompiledModelFolder Condition="'$(TargetFramework)' == 'net11.0'">Net11</CompiledModelFolder>
   </PropertyGroup>
 
   <ItemGroup>

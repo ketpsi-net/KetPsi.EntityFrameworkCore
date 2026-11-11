@@ -14,7 +14,7 @@ param()
 $ErrorActionPreference = 'Continue'
 
 $project = Join-Path $PSScriptRoot '..\samples\KetPsi.EntityFrameworkCore.AotSample\KetPsi.EntityFrameworkCore.AotSample.csproj'
-$folders = @{ 'net9.0' = 'Net9'; 'net10.0' = 'Net10' }
+$folders = @{ 'net9.0' = 'Net9'; 'net10.0' = 'Net10'; 'net11.0' = 'Net11' }
 
 # The project file reads this to reference the Design package and leave out the models being regenerated.
 $env:KetPsiDesignTime = 'true'

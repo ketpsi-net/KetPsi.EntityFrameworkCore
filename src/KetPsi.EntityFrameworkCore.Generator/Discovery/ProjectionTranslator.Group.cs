@@ -411,7 +411,7 @@ internal sealed partial class ProjectionTranslator
         var ordinal = Ordinal(index);
         var read = ReadColumn(shape, ordinal, throughNavigation: part.Path.Count > 1, asNullable: false);
         return shape.TypeName.EndsWith("?", StringComparison.Ordinal)
-            ? $"({Reader}.IsDBNull({ordinal}) ? throw new global::System.InvalidOperationException(\"{NullableObjectMustHaveAValue}\") : {read})"
+            ? $"({Reader}.IsDBNull({ordinal}) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : {read})"
             : read;
     }
 

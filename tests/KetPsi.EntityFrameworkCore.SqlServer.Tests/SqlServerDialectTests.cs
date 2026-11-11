@@ -75,10 +75,12 @@ public sealed class SqlServerDialectTests
     public void Exists_MissingSubquery_Throws(string? subquery)
         => Assert.ThrowsAny<ArgumentException>(() => Dialect.Exists(subquery!));
 
+    // EF Core 11 sends SET NOCOUNT OFF first, so the row count is right on a server that has NOCOUNT on.
     [Fact]
     public void Delete_DeletesFromTheAliasedTable()
         => Assert.Equal(
-            "DELETE FROM [b] FROM [Blogs] AS [b] WHERE [b].[Id] = @p0",
+            (typeof(DbContext).Assembly.GetName().Version!.Major >= 11 ? "SET NOCOUNT OFF; " : "")
+                + "DELETE FROM [b] FROM [Blogs] AS [b] WHERE [b].[Id] = @p0",
             Dialect.Delete("[b]", "[Blogs] AS [b] WHERE [b].[Id] = @p0"));
 
     [Theory]

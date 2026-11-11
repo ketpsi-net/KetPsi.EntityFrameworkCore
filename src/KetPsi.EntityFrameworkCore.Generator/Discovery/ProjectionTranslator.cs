@@ -35,8 +35,6 @@ internal sealed partial class ProjectionTranslator
     private const string ReasonThis = "the enclosing instance itself cannot be projected; capture the values it holds instead";
     private const string ReasonCollection = "collection navigations cannot be projected yet; Include them on a projected entity instead";
     private const string ReasonInitializer = "only property and field assignments are supported in object initializers";
-    private const string NullableObjectMustHaveAValue = "Nullable object must have a value.";
-
     private static readonly SymbolDisplayFormat AnnotatedFormat = SymbolDisplayFormat.FullyQualifiedFormat
         .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
@@ -586,7 +584,7 @@ internal sealed partial class ProjectionTranslator
 
         // A value read through an optional navigation is null when there is no related entity, which EF Core reports.
         return throughNavigation
-            ? $"({Reader}.IsDBNull({ordinal}) ? throw new global::System.InvalidOperationException(\"{NullableObjectMustHaveAValue}\") : {call})"
+            ? $"({Reader}.IsDBNull({ordinal}) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : {call})"
             : call;
     }
 

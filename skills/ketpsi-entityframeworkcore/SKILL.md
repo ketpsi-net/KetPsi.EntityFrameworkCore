@@ -173,7 +173,7 @@ var rows = await db.Posts
   (`p`, `p.Blog`). Each navigation is joined like an included reference: `INNER JOIN` when required, `LEFT JOIN`
   when optional, with the target's query filters in the join.
 - A value read through an optional navigation is null when there is no related entity. For a non-nullable value
-  type that throws "Nullable object must have a value.", as in EF Core; cast it, `(int?)p.Blog.Owner.Id`, to get null.
+  type that throws what `Nullable<T>.Value` throws, as in EF Core; cast it, `(int?)p.Blog.Owner.Id`, to get null.
 - Projected entities are tracked, identity-resolved and get the includes below them, as in EF Core:
   `Include(p => p.Blog).ThenInclude(b => b.Posts).Select(p => p.Blog)` loads each blog's posts. Includes of
   entities the projection doesn't select are ignored. Without tracking or identity resolution, every projected
@@ -236,7 +236,7 @@ var rows = db.Database.SqlQuery<BlogRow>($"EXEC dbo.BlogRows").ToList();   // pu
   the column named `Value` when something composes over it, as in EF Core; name the column `Value` to compose.
 - A class or record is read from the columns named like its properties, ignoring case and order, through an object
   initializer or a constructor whose parameters are its properties. A missing column throws "The required column 'X'
-  was not present". A null in a non-nullable column throws, as in EF Core: "Nullable object must have a value." for a
+  was not present". A null in a non-nullable column throws, as in EF Core: what `Nullable<T>.Value` throws for a
   scalar, the provider's error for a property; use `int?` or `string?` for columns that can be null.
 - `Where`, `OrderBy`, `Select`, paging, `Distinct`, aggregates and the terminals, with or without a predicate, work
   on the result's members, such as `rows.Where(r => r.Id > 1).Select(r => r.Name)` or `ids.Count(v => v > 1)`.
@@ -303,7 +303,7 @@ var stats = await db.Posts
   where the key changes, so the order inside a group is the database's, as in EF Core. Elements are tracked and
   identity-resolved like any queried entity, and get the includes before the `GroupBy`. After `Where` or `OrderBy` on
   the groups, they can only be selected from (KP1008). As in EF Core, a null in a nullable value-type key (`int?`)
-  throws "Nullable object must have a value." when the groups are returned directly; a `Select` on the groups reads
+  throws what `Nullable<T>.Value` throws when the groups are returned directly; a `Select` on the groups reads
   the null key.
 - Not supported yet (KP2011): `g.First()`, `g.ToList()`, `g.Select(...).ToList()` and other uses of the group's rows,
   aggregates through navigations (`g.Max(p => p.Blog.Rating)`, a correlated subquery in EF Core), aggregate selectors

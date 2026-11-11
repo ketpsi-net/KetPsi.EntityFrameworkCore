@@ -397,7 +397,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 new string[] { "Value" },
                 new global::System.Type[] { typeof(int) },
                 true,
-                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : reader.GetInt32(ordinals[0]))));
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : reader.GetInt32(ordinals[0]))));
         }
 
         private static readonly global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate Template34 = new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("Value", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.GreaterThan, 0);
@@ -433,7 +433,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 new string[] { "Value" },
                 new global::System.Type[] { typeof(int) },
                 true,
-                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : reader.GetInt32(ordinals[0]))));
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : reader.GetInt32(ordinals[0]))));
         }
 
         [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "+FqK/hA/oGiPiFeA0TGQkcILAABRdWVyaWVzLmNz")]

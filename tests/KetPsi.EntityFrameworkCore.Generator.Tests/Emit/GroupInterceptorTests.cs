@@ -81,7 +81,7 @@ public sealed class GroupInterceptorTests : IDisposable
 
         var exception = Assert.Throws<TargetInvocationException>(() => Invoke("IdsByViews"));
 
-        Assert.Equal("Nullable object must have a value.", Assert.IsType<InvalidOperationException>(exception.InnerException).Message);
+        Assert.Equal(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message, Assert.IsType<InvalidOperationException>(exception.InnerException).Message);
     }
 
     [Fact]
