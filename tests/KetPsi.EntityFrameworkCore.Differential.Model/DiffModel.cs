@@ -1,6 +1,7 @@
 using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace KetPsi.EntityFrameworkCore.Differential;
 
@@ -78,6 +79,52 @@ public sealed class Comment
     public string Text { get; set; } = "";
 }
 
+/// <summary>A strongly typed key, stored as its number through a value converter.</summary>
+public readonly record struct TicketId(int Value);
+
+public enum Priority
+{
+    Low,
+    Normal,
+    High,
+}
+
+/// <summary>
+/// An entity whose properties go through value converters: a strongly typed key, enums stored as strings, bools stored
+/// as 'Y' or 'N', a nullable number stored as text, a string stored upper case and a date read back as UTC.
+/// </summary>
+public sealed class Ticket
+{
+    public TicketId Id { get; set; }
+
+    public string Code { get; set; } = "";
+
+    public Priority Priority { get; set; }
+
+    public Priority? Escalated { get; set; }
+
+    public bool IsOpen { get; set; }
+
+    public bool IsArchived { get; set; }
+
+    public int? Points { get; set; }
+
+    public DateTime DueAt { get; set; }
+
+    public List<TicketNote> Notes { get; set; } = [];
+}
+
+public sealed class TicketNote
+{
+    public int Id { get; set; }
+
+    public TicketId TicketId { get; set; }
+
+    public Ticket Ticket { get; set; } = null!;
+
+    public string Text { get; set; } = "";
+}
+
 /// <summary>The context both query builds run on: stock EF Core and KetPsi.</summary>
 public sealed class DiffDb(string connectionString, int tenantId, CommandCounter? counter = null) : DbContext
 {
@@ -96,6 +143,10 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
     public DbSet<Post> Posts => Set<Post>();
 
     public DbSet<Comment> Comments => Set<Comment>();
+
+    public DbSet<Ticket> Tickets => Set<Ticket>();
+
+    public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -146,6 +197,30 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
             c.Property(x => x.Id).ValueGeneratedNever();
             c.Property(x => x.Text).HasMaxLength(50);
             c.HasOne(x => x.Post).WithMany(p => p.Comments).HasForeignKey(x => x.PostId);
+        });
+
+        // A filter on a converted bool, so filters send the stored value too.
+        modelBuilder.Entity<Ticket>(t =>
+        {
+            t.ToTable("Tickets", "diff");
+            t.Property(x => x.Id).HasConversion(id => id.Value, value => new TicketId(value)).ValueGeneratedNever();
+            t.Property(x => x.Code).HasConversion(v => v.ToUpperInvariant(), v => v.ToLowerInvariant()).HasMaxLength(10);
+            t.Property(x => x.Priority).HasConversion<string>().HasMaxLength(10);
+            t.Property(x => x.Escalated).HasConversion<string>().HasMaxLength(10);
+            t.Property(x => x.IsOpen).HasConversion(new BoolToStringConverter("N", "Y")).HasMaxLength(1);
+            t.Property(x => x.IsArchived).HasConversion(new BoolToStringConverter("N", "Y")).HasMaxLength(1);
+            t.Property(x => x.Points).HasConversion(v => v.ToString(), v => int.Parse(v!, System.Globalization.CultureInfo.InvariantCulture)).HasMaxLength(10);
+            t.Property(x => x.DueAt).HasConversion(v => v, v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+            t.HasQueryFilter(x => !x.IsArchived);
+        });
+
+        modelBuilder.Entity<TicketNote>(n =>
+        {
+            n.ToTable("TicketNotes", "diff");
+            n.Property(x => x.Id).ValueGeneratedNever();
+            n.Property(x => x.TicketId).HasConversion(id => id.Value, value => new TicketId(value));
+            n.Property(x => x.Text).HasMaxLength(50);
+            n.HasOne(x => x.Ticket).WithMany(t => t.Notes).HasForeignKey(x => x.TicketId);
         });
     }
 }

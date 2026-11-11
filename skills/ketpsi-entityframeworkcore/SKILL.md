@@ -353,7 +353,9 @@ Same behavior as EF Core:
 3. With a `--nativeaot` compiled model, tracking queries, `Find`, `Include`, `FromSql` and `SaveChanges` all work
    under Native AOT, as do no-tracking queries and `ExecuteDelete`.
 4. Keep `InvariantGlobalization` off; SqlClient needs culture data.
-5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor; KetPsi itself adds none.
+5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor, and an IL3050 on
+   `Enum.GetValues(Type)` in the compiled model of an entity with an enum stored as a string; KetPsi itself adds none.
+   Value converters, built-in and custom, run under Native AOT.
 6. Decimal comparisons in predicates (`p.Price < 20m`) are safe: the compiler builds them by reflection, and the
    generated interceptor keeps decimal's operator methods for it. Nothing to configure.
 7. A `Select` or `GroupBy` key to an anonymous type, or a `Select` to an object initializer, warns IL2026 in your code

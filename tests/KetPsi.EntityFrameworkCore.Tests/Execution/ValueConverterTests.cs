@@ -50,6 +50,17 @@ public sealed class ValueConverterTests : IDisposable
         Assert.Equal(20, parameter.Size);
     }
 
+    // The compiler writes an enum constant into the expression tree as its number.
+    [Fact]
+    public void Comparison_WithAnEnumConstantsNumber_SendsTheStoredValue()
+    {
+        _connection.Rows = _db.Table<Ticket>();
+
+        SqlQuery.ToList(Where(new ComparisonTemplate(nameof(Ticket.State), ComparisonOperator.NotEqual, 0), (int)TicketState.Closed));
+
+        Assert.Equal("Closed", Assert.Single(_connection.LastCommand.Parameters.Cast<SqlParameter>()).Value);
+    }
+
     [Fact]
     public void Comparison_StronglyTypedKey_SendsItsNumber()
     {

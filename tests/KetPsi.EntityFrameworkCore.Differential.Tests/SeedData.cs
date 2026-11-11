@@ -61,6 +61,27 @@ internal static class SeedData
         Comment(6, 901, "c6"),
     ];
 
+    // Every priority and none escalated, open and closed, points that order differently as text than as numbers, an
+    // archived ticket the filter hides, and a ticket without notes.
+    public static IEnumerable<Ticket> Tickets() =>
+    [
+        Ticket(1, "abc", Priority.High, Priority.High, true, false, 10),
+        Ticket(2, "bcd", Priority.Low, null, false, false, 9),
+        Ticket(3, "cde", Priority.Normal, Priority.High, true, false, null),
+        Ticket(4, "def", Priority.High, null, false, false, 100),
+        Ticket(5, "efg", Priority.Normal, Priority.Low, true, true, 7),
+        Ticket(6, "fgh", Priority.Low, null, true, false, 2),
+    ];
+
+    public static IEnumerable<TicketNote> TicketNotes() =>
+    [
+        new() { Id = 12, TicketId = new(1), Text = "n12" },
+        new() { Id = 11, TicketId = new(1), Text = "n11" },
+        new() { Id = 31, TicketId = new(3), Text = "n31" },
+        new() { Id = 41, TicketId = new(4), Text = "n41" },
+        new() { Id = 51, TicketId = new(5), Text = "n51" },
+    ];
+
     public static Guid ExternalId(int id) => new($"00000000-0000-0000-0000-{id:D12}");
 
     public static int Revision(int id) => id * 10;
@@ -96,4 +117,17 @@ internal static class SeedData
         => new() { Id = id, BlogId = blogId, Title = title, IsDeleted = isDeleted };
 
     private static Comment Comment(int id, int postId, string text) => new() { Id = id, PostId = postId, Text = text };
+
+    private static Ticket Ticket(int id, string code, Priority priority, Priority? escalated, bool isOpen, bool isArchived, int? points)
+        => new()
+        {
+            Id = new(id),
+            Code = code,
+            Priority = priority,
+            Escalated = escalated,
+            IsOpen = isOpen,
+            IsArchived = isArchived,
+            Points = points,
+            DueAt = new DateTime(2024, 2, id, 9, 30, 0, DateTimeKind.Utc),
+        };
 }

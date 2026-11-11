@@ -22,7 +22,15 @@ internal sealed record BoundProperty(
 {
     /// <summary>The value the column holds for <paramref name="value"/>, as EF Core sends it.</summary>
     public object? ToProvider(object? value)
-        => Converter is null || value is null && !Converter.ConvertsNulls ? value : Converter.ConvertToProvider(value);
+        => Converter is null || value is null && !Converter.ConvertsNulls ? value : Converter.ConvertToProvider(AsModelValue(value));
+
+    // The compiler writes an enum constant into an expression tree as its number, which the converter must get as the
+    // enum: EF Core 10 and later convert it themselves, EF Core 9's converters throw.
+    private object? AsModelValue(object? value)
+    {
+        var model = Nullable.GetUnderlyingType(Converter!.ModelClrType) ?? Converter.ModelClrType;
+        return model.IsEnum && value is not null && value.GetType() != model ? Enum.ToObject(model, value) : value;
+    }
 
     /// <summary>The CLR value for a value read from the column, as EF Core materializes it.</summary>
     public object? FromProvider(object? value)
