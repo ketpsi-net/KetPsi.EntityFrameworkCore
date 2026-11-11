@@ -32,9 +32,6 @@ internal static class ExceptionMessages
     public const string ComplexPropertyNotSupported =
         "The entity type '{0}' has complex properties, which KetPsi.EntityFrameworkCore does not support yet.";
 
-    public const string ValueConverterNotSupported =
-        "The property '{0}.{1}' has a value converter, which KetPsi.EntityFrameworkCore does not support yet.";
-
     public const string PropertyColumnMissing =
         "The property '{0}.{1}' has no column in table '{2}'.";
 

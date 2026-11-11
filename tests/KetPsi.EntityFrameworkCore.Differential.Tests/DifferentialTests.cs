@@ -409,6 +409,56 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "SqlQueryClass", [4] },
             { "SqlQueryMissingColumn", [] },
             { "SqlQueryNullIntoProperty", [] },
+            { "TicketsAll", [] },
+            { "TicketsTracked", [] },
+            { "TicketsIgnoringFilters", [] },
+            { "TicketById", [2] },
+            { "TicketById", [5] },
+            { "TicketsAfterId", [3] },
+            { "TicketsByPriority", [Priority.High] },
+            { "TicketsNotHigh", [] },
+            { "TicketsPriorityAbove", [Priority.Low] },
+            { "TicketsEscalated", [Priority.High] },
+            { "TicketsEscalated", [null] },
+            { "TicketsOpen", [] },
+            { "TicketsClosedOrHigh", [] },
+            { "TicketsOpenIs", [true] },
+            { "TicketsOpenIs", [false] },
+            { "TicketsPointsAbove", [9] },
+            { "TicketsWithoutPoints", [] },
+            { "TicketsByCode", ["abc"] },
+            { "TicketsByCode", ["ABC"] },
+            { "TicketsByIds", [1, 6] },
+            { "TicketsByPriorities", [] },
+            { "TicketsOrderedByPriority", [] },
+            { "TicketsOrderedByPoints", [] },
+            { "TicketFirstById", [] },
+            { "FindTicket", [2] },
+            { "FindTicket", [5] },
+            { "FindTicketTwice", [3] },
+            { "TicketsWithNotes", [] },
+            { "TicketsWithNotesTracked", [] },
+            { "NotesWithTicket", [] },
+            { "NotesOfOpenTickets", [] },
+            { "NotesOfTicket", [1] },
+            { "SelectTicketIds", [] },
+            { "SelectTicketValues", [] },
+            { "SelectNotePriorities", [] },
+            { "DistinctPriorities", [] },
+            { "GroupTicketsByPriority", [] },
+            { "GroupNotesByTicket", [] },
+            { "GroupTicketsHavingHigh", [] },
+            { "MaxPoints", [] },
+            { "MinPriority", [] },
+            { "MaxTicketIdAsync", [] },
+            { "CountOpen", [] },
+            { "AnyEscalatedLow", [] },
+            { "JoinNotesTickets", [] },
+            { "TicketsFromSql", [7] },
+            { "NotesFromSqlAsWritten", [] },
+            { "DeleteNotesOfTicket", [1] },
+            { "DeleteNotesOfHighTickets", [] },
+            { "LoadModifySaveTicket", [3] },
         };
 
 #if NET10_0_OR_GREATER
@@ -449,6 +499,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "SelectNavigationWithInclude()", "SelectEntityFirst()", "Groups()",
         "FindBlog(1)", "FindPostAsync(101)", "FindTrackedTwice(3)", "DeleteTrackedComment()", "JoinEntities()",
         "FromSqlTracked()", "FromSqlAsWrittenTracked()",
+        "TicketsTracked()", "FindTicket(2)", "FindTicketTwice(3)", "TicketsWithNotesTracked()", "LoadModifySaveTicket(3)",
     };
 
     // Queries whose results have a defined order; other results are compared sorted by Id.
@@ -463,6 +514,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "GroupOrderByKey", "GroupOrderByAggregate", "GroupOrderAfterSelect", "GroupPaged", "GroupElementAndResultSelector",
         "PostsOrderedByBlog", "BlogsOrderedByAuthor", "JoinThroughThePair", "JoinAfterPaging", "JoinPagedAfter", "SelectEntitiesThenWhere",
         "FromSqlComposed", "SqlQueryRawAsync", "SqlQueryRecordComposed",
+        "TicketsOrderedByPriority", "TicketsOrderedByPoints", "SelectNotePriorities",
     };
 
     private static string Key(string query, object?[] arguments)
@@ -522,7 +574,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         if (value is IEnumerable rows and not string && !OrderedQueries.Contains(query))
         {
             var items = rows.Cast<object?>().ToList();
-            value = items.TrueForAll(static r => r is Blog or Author or Post or Comment)
+            value = items.TrueForAll(static r => r is Blog or Author or Post or Comment or Ticket or TicketNote)
                 ? items.OrderBy(r => KeyOf(r!)).ToList()
                 : items.OrderBy(SortKey, StringComparer.Ordinal).ToList();
         }
@@ -558,7 +610,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
     private static string SortKey(object? value) => value switch
     {
         null => "",
-        Blog or Author or Post or Comment => value.GetType().Name + "#" + KeyOf(value).ToString("D6", CultureInfo.InvariantCulture),
+        Blog or Author or Post or Comment or Ticket or TicketNote => value.GetType().Name + "#" + KeyOf(value).ToString("D6", CultureInfo.InvariantCulture),
         _ when IsScalar(value) => Scalar(value),
         System.Runtime.CompilerServices.ITuple tuple => string.Join("|", Enumerable.Range(0, tuple.Length).Select(i => SortKey(tuple[i]))),
         _ when GroupingKey(value) is { } grouping => "group|" + SortKey(grouping.Key),
@@ -601,6 +653,8 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         Author author => author.Id,
         Post post => post.Id,
         Comment comment => comment.Id,
+        Ticket ticket => ticket.Id.Value,
+        TicketNote note => note.Id,
         _ => throw new ArgumentException(entity.GetType().Name, nameof(entity)),
     };
 
@@ -609,7 +663,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
     // point at each other, which collection types hold them, and in what order.
     private static string Describe(object? value)
     {
-        if (value is null or Blog or Author or Post or Comment)
+        if (value is null or Blog or Author or Post or Comment or Ticket or TicketNote)
         {
             return value is null ? "null" : new Graph().Describe([value]);
         }
@@ -632,6 +686,10 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         Author author => string.Create(CultureInfo.InvariantCulture, $"{author.Id}|{author.Name}"),
         Post post => string.Create(CultureInfo.InvariantCulture, $"{post.Id}|{post.BlogId}|{post.Title}|{post.IsDeleted}"),
         Comment comment => string.Create(CultureInfo.InvariantCulture, $"{comment.Id}|{comment.PostId}|{comment.Text}"),
+        Ticket t => string.Create(
+            CultureInfo.InvariantCulture,
+            $"{t.Id.Value}|{t.Code}|{t.Priority}|{t.Escalated?.ToString() ?? "null"}|{t.IsOpen}|{t.IsArchived}|{t.Points?.ToString(CultureInfo.InvariantCulture) ?? "null"}|{t.DueAt:O}"),
+        TicketNote note => string.Create(CultureInfo.InvariantCulture, $"{note.Id}|{note.TicketId.Value}|{note.Text}"),
         _ => throw new ArgumentException(entity.GetType().Name, nameof(entity)),
     };
 
@@ -658,6 +716,8 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             Author author => $"|blogs={Collection(author.Blogs)}",
             Post post => $"|blog={Ref(post.Blog)}|comments={Collection(post.Comments)}",
             Comment comment => $"|post={Ref(comment.Post)}",
+            Ticket ticket => $"|notes={Collection(ticket.Notes)}",
+            TicketNote note => $"|ticket={Ref(note.Ticket)}",
             _ => "",
         };
 
@@ -666,7 +726,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         private string Value(object? value) => value switch
         {
             null => "null",
-            Blog or Author or Post or Comment => Ref(value),
+            Blog or Author or Post or Comment or Ticket or TicketNote => Ref(value),
             _ when IsScalar(value) => Scalar(value),
             System.Runtime.CompilerServices.ITuple tuple => "(" + string.Join(",", Enumerable.Range(0, tuple.Length).Select(i => Value(tuple[i]))) + ")",
             _ when GroupingKey(value) is { } grouping => "group " + Value(grouping.Key) + "[" + string.Join(",", grouping.Elements.Select(Value)) + "]",

@@ -69,7 +69,7 @@ internal static class QueryExecutor
         try
         {
             using var command = CreateCommand(database, dialect, statement);
-            return command.ExecuteScalar();
+            return Scalar(command.ExecuteScalar(), statement);
         }
         finally
         {
@@ -87,7 +87,7 @@ internal static class QueryExecutor
             var command = CreateCommand(database, dialect, statement);
             await using (command.ConfigureAwait(false))
             {
-                return await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+                return Scalar(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false), statement);
             }
         }
         finally
@@ -162,9 +162,17 @@ internal static class QueryExecutor
         return command;
     }
 
-    // SQL of FromSql sent as it is returns its columns in its own order, so they are read by name.
+    // SQL of FromSql sent as it is returns its columns in its own order, so they are read by name. Columns of properties
+    // with a value converter are read as their CLR values.
     private static DbDataReader Columns(DbDataReader reader, SqlStatement statement)
-        => statement.ColumnsByName is { } names ? new ColumnMappedReader(reader, names) : reader;
+    {
+        var columns = statement.ColumnsByName is { } names ? new ColumnMappedReader(reader, names) : reader;
+        return statement.ConvertedColumns is { } converted ? new ConvertingReader(columns, converted) : columns;
+    }
+
+    // Min or Max of a converted column returns its stored value, which the converter reads, as in EF Core.
+    private static object? Scalar(object? value, SqlStatement statement)
+        => statement.ConvertedColumns is [{ } property] && value is not (null or DBNull) ? property.FromProvider(value) : value;
 
     // Enums without a value converter are stored as their underlying number, which providers expect as that type.
     internal static object ToProviderValue(object value)

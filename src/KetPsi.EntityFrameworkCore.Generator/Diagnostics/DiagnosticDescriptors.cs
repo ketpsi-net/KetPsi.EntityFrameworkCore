@@ -132,7 +132,7 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor ValueConverterNotSupported = Error(
         "KP3002",
         "Value converter not supported",
-        "'{0}' configures a value converter, which KetPsi.EntityFrameworkCore does not support yet");
+        "'{0}' configures a value converter KetPsi.EntityFrameworkCore cannot read yet: {1}");
 
     public static readonly DiagnosticDescriptor OwnedOrComplexNotSupported = Error(
         "KP3003",

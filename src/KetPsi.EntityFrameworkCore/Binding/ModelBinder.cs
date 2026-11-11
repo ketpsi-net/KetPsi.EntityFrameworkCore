@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace KetPsi.EntityFrameworkCore.Binding;
 
@@ -116,11 +117,6 @@ internal static class ModelBinder
 
     private static BoundProperty BindProperty(IProperty property, StoreObjectIdentifier storeObject, Type entityClrType, string table)
     {
-        if (property.GetValueConverter() is not null)
-        {
-            throw new NotSupportedException(Format(ExceptionMessages.ValueConverterNotSupported, entityClrType, property.Name));
-        }
-
         var column = property.GetColumnName(storeObject);
         var storeType = property.GetColumnType(storeObject);
         if (column is null || storeType is null)
@@ -130,7 +126,28 @@ internal static class ModelBinder
         }
 
         return new BoundProperty(
-            property.Name, column, storeType, property.IsColumnNullable(storeObject), property.ClrType, property.IsShadowProperty());
+            property.Name,
+            column,
+            storeType,
+            property.IsColumnNullable(storeObject),
+            property.ClrType,
+            property.IsShadowProperty(),
+            Converter(property));
+    }
+
+    // The converter is on the type mapping: HasConversion<string>() on an enum sets no converter on the property itself.
+    // An enum stored as its underlying number needs none, since KetPsi reads and sends those natively.
+    private static ValueConverter? Converter(IProperty property)
+    {
+        var converter = property.GetTypeMapping().Converter;
+        if (converter is null)
+        {
+            return null;
+        }
+
+        var model = Nullable.GetUnderlyingType(converter.ModelClrType) ?? converter.ModelClrType;
+        var provider = Nullable.GetUnderlyingType(converter.ProviderClrType) ?? converter.ProviderClrType;
+        return model.IsEnum && provider == Enum.GetUnderlyingType(model) ? null : converter;
     }
 
     private static string Format(string format, Type clrType) => string.Format(CultureInfo.InvariantCulture, format, clrType);

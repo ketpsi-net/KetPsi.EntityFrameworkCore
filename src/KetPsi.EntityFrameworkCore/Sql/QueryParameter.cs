@@ -5,7 +5,7 @@ namespace KetPsi.EntityFrameworkCore.Sql;
 /// <summary>A value passed to the statement as a parameter.</summary>
 /// <param name="Name">The placeholder used in the SQL.</param>
 /// <param name="Value">
-/// The value. Never <see langword="null"/>: null comparisons are written as <c>IS NULL</c> instead, and a null argument
+/// The value, as the column holds it: a value compared with a property that has a value converter is already converted. Never <see langword="null"/>: null comparisons are written as <c>IS NULL</c> instead, and a null argument
 /// of <c>FromSql</c> is <see cref="DBNull.Value"/>. A <see cref="System.Data.Common.DbParameter"/> argument of
 /// <c>FromSql</c> is the parameter itself, sent as it is.
 /// </param>

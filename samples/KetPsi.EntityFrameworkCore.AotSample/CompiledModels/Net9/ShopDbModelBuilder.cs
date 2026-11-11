@@ -16,17 +16,20 @@ namespace AotSample.CompiledModel
     public partial class ShopDbModel
     {
         private ShopDbModel()
-            : base(skipDetectChanges: false, modelId: new Guid("279b7222-15ac-4c4f-ae8a-e087e896f042"), entityTypeCount: 2)
+            : base(skipDetectChanges: false, modelId: new Guid("f4b93f24-e43e-447f-a459-b26b22e487b8"), entityTypeCount: 3)
         {
         }
 
         partial void Initialize()
         {
+            var coupon = CouponEntityType.Create(this);
             var product = ProductEntityType.Create(this);
             var review = ReviewEntityType.Create(this);
 
+            CouponEntityType.CreateForeignKey1(coupon, product);
             ReviewEntityType.CreateForeignKey1(review, product);
 
+            CouponEntityType.CreateAnnotations(coupon);
             ProductEntityType.CreateAnnotations(product);
             ReviewEntityType.CreateAnnotations(review);
 
@@ -40,19 +43,90 @@ namespace AotSample.CompiledModel
         {
             var relationalModel = new RelationalModel(this);
 
-            var product = FindEntityType("AotSample.Product")!;
+            var coupon = FindEntityType("AotSample.Coupon")!;
 
             var defaultTableMappings = new List<TableMappingBase<ColumnMappingBase>>();
-            product.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings);
+            coupon.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings);
+            var aotSampleCouponTableBase = new TableBase("AotSample.Coupon", null, relationalModel);
+            var codeColumnBase = new ColumnBase<ColumnMappingBase>("Code", "nvarchar(20)", aotSampleCouponTableBase);
+            aotSampleCouponTableBase.Columns.Add("Code", codeColumnBase);
+            var discountColumnBase = new ColumnBase<ColumnMappingBase>("Discount", "nvarchar(10)", aotSampleCouponTableBase);
+            aotSampleCouponTableBase.Columns.Add("Discount", discountColumnBase);
+            var idColumnBase = new ColumnBase<ColumnMappingBase>("Id", "int", aotSampleCouponTableBase);
+            aotSampleCouponTableBase.Columns.Add("Id", idColumnBase);
+            var isActiveColumnBase = new ColumnBase<ColumnMappingBase>("IsActive", "nvarchar(1)", aotSampleCouponTableBase);
+            aotSampleCouponTableBase.Columns.Add("IsActive", isActiveColumnBase);
+            var productIdColumnBase = new ColumnBase<ColumnMappingBase>("ProductId", "int", aotSampleCouponTableBase);
+            aotSampleCouponTableBase.Columns.Add("ProductId", productIdColumnBase);
+            relationalModel.DefaultTables.Add("AotSample.Coupon", aotSampleCouponTableBase);
+            var aotSampleCouponMappingBase = new TableMappingBase<ColumnMappingBase>(coupon, aotSampleCouponTableBase, null);
+            aotSampleCouponTableBase.AddTypeMapping(aotSampleCouponMappingBase, false);
+            defaultTableMappings.Add(aotSampleCouponMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase, coupon.FindProperty("Id")!, aotSampleCouponMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)codeColumnBase, coupon.FindProperty("Code")!, aotSampleCouponMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)discountColumnBase, coupon.FindProperty("Discount")!, aotSampleCouponMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isActiveColumnBase, coupon.FindProperty("IsActive")!, aotSampleCouponMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)productIdColumnBase, coupon.FindProperty("ProductId")!, aotSampleCouponMappingBase);
+
+            var tableMappings = new List<TableMapping>();
+            coupon.SetRuntimeAnnotation("Relational:TableMappings", tableMappings);
+            var couponsTable = new Table("Coupons", "shop", relationalModel);
+            var idColumn = new Column("Id", "int", couponsTable);
+            couponsTable.Columns.Add("Id", idColumn);
+            idColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(idColumn);
+            var codeColumn = new Column("Code", "nvarchar(20)", couponsTable);
+            couponsTable.Columns.Add("Code", codeColumn);
+            codeColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(codeColumn);
+            var discountColumn = new Column("Discount", "nvarchar(10)", couponsTable);
+            couponsTable.Columns.Add("Discount", discountColumn);
+            discountColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(discountColumn);
+            var isActiveColumn = new Column("IsActive", "nvarchar(1)", couponsTable);
+            couponsTable.Columns.Add("IsActive", isActiveColumn);
+            isActiveColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(isActiveColumn);
+            var productIdColumn = new Column("ProductId", "int", couponsTable);
+            couponsTable.Columns.Add("ProductId", productIdColumn);
+            productIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(productIdColumn);
+            relationalModel.Tables.Add(("Coupons", "shop"), couponsTable);
+            var couponsTableMapping = new TableMapping(coupon, couponsTable, null);
+            couponsTable.AddTypeMapping(couponsTableMapping, false);
+            tableMappings.Add(couponsTableMapping);
+            RelationalModel.CreateColumnMapping(idColumn, coupon.FindProperty("Id")!, couponsTableMapping);
+            RelationalModel.CreateColumnMapping(codeColumn, coupon.FindProperty("Code")!, couponsTableMapping);
+            RelationalModel.CreateColumnMapping(discountColumn, coupon.FindProperty("Discount")!, couponsTableMapping);
+            RelationalModel.CreateColumnMapping(isActiveColumn, coupon.FindProperty("IsActive")!, couponsTableMapping);
+            RelationalModel.CreateColumnMapping(productIdColumn, coupon.FindProperty("ProductId")!, couponsTableMapping);
+            var pK_Coupons = new UniqueConstraint("PK_Coupons", couponsTable, new[] { idColumn });
+            couponsTable.PrimaryKey = pK_Coupons;
+            pK_Coupons.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<int>(pK_Coupons));
+            var pK_CouponsKey = RelationalModel.GetKey(this,
+                "AotSample.Coupon",
+                new[] { "Id" });
+            pK_Coupons.MappedKeys.Add(pK_CouponsKey);
+            RelationalModel.GetOrCreateUniqueConstraints(pK_CouponsKey).Add(pK_Coupons);
+            couponsTable.UniqueConstraints.Add("PK_Coupons", pK_Coupons);
+            var iX_Coupons_ProductId = new TableIndex(
+            "IX_Coupons_ProductId", couponsTable, new[] { productIdColumn }, false);
+            iX_Coupons_ProductId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_Coupons_ProductId));
+            var iX_Coupons_ProductIdIx = RelationalModel.GetIndex(this,
+                "AotSample.Coupon",
+                new[] { "ProductId" });
+            iX_Coupons_ProductId.MappedIndexes.Add(iX_Coupons_ProductIdIx);
+            RelationalModel.GetOrCreateTableIndexes(iX_Coupons_ProductIdIx).Add(iX_Coupons_ProductId);
+            couponsTable.Indexes.Add("IX_Coupons_ProductId", iX_Coupons_ProductId);
+
+            var product = FindEntityType("AotSample.Product")!;
+
+            var defaultTableMappings0 = new List<TableMappingBase<ColumnMappingBase>>();
+            product.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings0);
             var aotSampleProductTableBase = new TableBase("AotSample.Product", null, relationalModel);
             var categoryColumnBase = new ColumnBase<ColumnMappingBase>("Category", "int", aotSampleProductTableBase);
             aotSampleProductTableBase.Columns.Add("Category", categoryColumnBase);
             var createdAtColumnBase = new ColumnBase<ColumnMappingBase>("CreatedAt", "datetime2", aotSampleProductTableBase);
             aotSampleProductTableBase.Columns.Add("CreatedAt", createdAtColumnBase);
-            var idColumnBase = new ColumnBase<ColumnMappingBase>("Id", "int", aotSampleProductTableBase);
-            aotSampleProductTableBase.Columns.Add("Id", idColumnBase);
-            var isActiveColumnBase = new ColumnBase<ColumnMappingBase>("IsActive", "bit", aotSampleProductTableBase);
-            aotSampleProductTableBase.Columns.Add("IsActive", isActiveColumnBase);
+            var idColumnBase0 = new ColumnBase<ColumnMappingBase>("Id", "int", aotSampleProductTableBase);
+            aotSampleProductTableBase.Columns.Add("Id", idColumnBase0);
+            var isActiveColumnBase0 = new ColumnBase<ColumnMappingBase>("IsActive", "bit", aotSampleProductTableBase);
+            aotSampleProductTableBase.Columns.Add("IsActive", isActiveColumnBase0);
             var nameColumnBase = new ColumnBase<ColumnMappingBase>("Name", "nvarchar(100)", aotSampleProductTableBase);
             aotSampleProductTableBase.Columns.Add("Name", nameColumnBase);
             var priceColumnBase = new ColumnBase<ColumnMappingBase>("Price", "decimal(10,2)", aotSampleProductTableBase);
@@ -67,31 +141,31 @@ namespace AotSample.CompiledModel
             relationalModel.DefaultTables.Add("AotSample.Product", aotSampleProductTableBase);
             var aotSampleProductMappingBase = new TableMappingBase<ColumnMappingBase>(product, aotSampleProductTableBase, null);
             aotSampleProductTableBase.AddTypeMapping(aotSampleProductMappingBase, false);
-            defaultTableMappings.Add(aotSampleProductMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase, product.FindProperty("Id")!, aotSampleProductMappingBase);
+            defaultTableMappings0.Add(aotSampleProductMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase0, product.FindProperty("Id")!, aotSampleProductMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)categoryColumnBase, product.FindProperty("Category")!, aotSampleProductMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)createdAtColumnBase, product.FindProperty("CreatedAt")!, aotSampleProductMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isActiveColumnBase, product.FindProperty("IsActive")!, aotSampleProductMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)isActiveColumnBase0, product.FindProperty("IsActive")!, aotSampleProductMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)nameColumnBase, product.FindProperty("Name")!, aotSampleProductMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)priceColumnBase, product.FindProperty("Price")!, aotSampleProductMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)revisionColumnBase, product.FindProperty("Revision")!, aotSampleProductMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)stockColumnBase, product.FindProperty("Stock")!, aotSampleProductMappingBase);
 
-            var tableMappings = new List<TableMapping>();
-            product.SetRuntimeAnnotation("Relational:TableMappings", tableMappings);
+            var tableMappings0 = new List<TableMapping>();
+            product.SetRuntimeAnnotation("Relational:TableMappings", tableMappings0);
             var productsTable = new Table("Products", "shop", relationalModel);
-            var idColumn = new Column("Id", "int", productsTable);
-            productsTable.Columns.Add("Id", idColumn);
-            idColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(idColumn);
+            var idColumn0 = new Column("Id", "int", productsTable);
+            productsTable.Columns.Add("Id", idColumn0);
+            idColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(idColumn0);
             var categoryColumn = new Column("Category", "int", productsTable);
             productsTable.Columns.Add("Category", categoryColumn);
             categoryColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(categoryColumn);
             var createdAtColumn = new Column("CreatedAt", "datetime2", productsTable);
             productsTable.Columns.Add("CreatedAt", createdAtColumn);
             createdAtColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<DateTime>(createdAtColumn);
-            var isActiveColumn = new Column("IsActive", "bit", productsTable);
-            productsTable.Columns.Add("IsActive", isActiveColumn);
-            isActiveColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<bool>(isActiveColumn);
+            var isActiveColumn0 = new Column("IsActive", "bit", productsTable);
+            productsTable.Columns.Add("IsActive", isActiveColumn0);
+            isActiveColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<bool>(isActiveColumn0);
             var nameColumn = new Column("Name", "nvarchar(100)", productsTable);
             productsTable.Columns.Add("Name", nameColumn);
             nameColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<string>(nameColumn);
@@ -110,16 +184,16 @@ namespace AotSample.CompiledModel
             relationalModel.Tables.Add(("Products", "shop"), productsTable);
             var productsTableMapping = new TableMapping(product, productsTable, null);
             productsTable.AddTypeMapping(productsTableMapping, false);
-            tableMappings.Add(productsTableMapping);
-            RelationalModel.CreateColumnMapping(idColumn, product.FindProperty("Id")!, productsTableMapping);
+            tableMappings0.Add(productsTableMapping);
+            RelationalModel.CreateColumnMapping(idColumn0, product.FindProperty("Id")!, productsTableMapping);
             RelationalModel.CreateColumnMapping(categoryColumn, product.FindProperty("Category")!, productsTableMapping);
             RelationalModel.CreateColumnMapping(createdAtColumn, product.FindProperty("CreatedAt")!, productsTableMapping);
-            RelationalModel.CreateColumnMapping(isActiveColumn, product.FindProperty("IsActive")!, productsTableMapping);
+            RelationalModel.CreateColumnMapping(isActiveColumn0, product.FindProperty("IsActive")!, productsTableMapping);
             RelationalModel.CreateColumnMapping(nameColumn, product.FindProperty("Name")!, productsTableMapping);
             RelationalModel.CreateColumnMapping(priceColumn, product.FindProperty("Price")!, productsTableMapping);
             RelationalModel.CreateColumnMapping(revisionColumn, product.FindProperty("Revision")!, productsTableMapping);
             RelationalModel.CreateColumnMapping(stockColumn, product.FindProperty("Stock")!, productsTableMapping);
-            var pK_Products = new UniqueConstraint("PK_Products", productsTable, new[] { idColumn });
+            var pK_Products = new UniqueConstraint("PK_Products", productsTable, new[] { idColumn0 });
             productsTable.PrimaryKey = pK_Products;
             pK_Products.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<int>(pK_Products));
             var pK_ProductsKey = RelationalModel.GetKey(this,
@@ -131,43 +205,43 @@ namespace AotSample.CompiledModel
 
             var review = FindEntityType("AotSample.Review")!;
 
-            var defaultTableMappings0 = new List<TableMappingBase<ColumnMappingBase>>();
-            review.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings0);
+            var defaultTableMappings1 = new List<TableMappingBase<ColumnMappingBase>>();
+            review.SetRuntimeAnnotation("Relational:DefaultMappings", defaultTableMappings1);
             var aotSampleReviewTableBase = new TableBase("AotSample.Review", null, relationalModel);
-            var idColumnBase0 = new ColumnBase<ColumnMappingBase>("Id", "int", aotSampleReviewTableBase);
-            aotSampleReviewTableBase.Columns.Add("Id", idColumnBase0);
-            var productIdColumnBase = new ColumnBase<ColumnMappingBase>("ProductId", "int", aotSampleReviewTableBase);
-            aotSampleReviewTableBase.Columns.Add("ProductId", productIdColumnBase);
+            var idColumnBase1 = new ColumnBase<ColumnMappingBase>("Id", "int", aotSampleReviewTableBase);
+            aotSampleReviewTableBase.Columns.Add("Id", idColumnBase1);
+            var productIdColumnBase0 = new ColumnBase<ColumnMappingBase>("ProductId", "int", aotSampleReviewTableBase);
+            aotSampleReviewTableBase.Columns.Add("ProductId", productIdColumnBase0);
             var starsColumnBase = new ColumnBase<ColumnMappingBase>("Stars", "int", aotSampleReviewTableBase);
             aotSampleReviewTableBase.Columns.Add("Stars", starsColumnBase);
             relationalModel.DefaultTables.Add("AotSample.Review", aotSampleReviewTableBase);
             var aotSampleReviewMappingBase = new TableMappingBase<ColumnMappingBase>(review, aotSampleReviewTableBase, null);
             aotSampleReviewTableBase.AddTypeMapping(aotSampleReviewMappingBase, false);
-            defaultTableMappings0.Add(aotSampleReviewMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase0, review.FindProperty("Id")!, aotSampleReviewMappingBase);
-            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)productIdColumnBase, review.FindProperty("ProductId")!, aotSampleReviewMappingBase);
+            defaultTableMappings1.Add(aotSampleReviewMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)idColumnBase1, review.FindProperty("Id")!, aotSampleReviewMappingBase);
+            RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)productIdColumnBase0, review.FindProperty("ProductId")!, aotSampleReviewMappingBase);
             RelationalModel.CreateColumnMapping((ColumnBase<ColumnMappingBase>)starsColumnBase, review.FindProperty("Stars")!, aotSampleReviewMappingBase);
 
-            var tableMappings0 = new List<TableMapping>();
-            review.SetRuntimeAnnotation("Relational:TableMappings", tableMappings0);
+            var tableMappings1 = new List<TableMapping>();
+            review.SetRuntimeAnnotation("Relational:TableMappings", tableMappings1);
             var reviewsTable = new Table("Reviews", "shop", relationalModel);
-            var idColumn0 = new Column("Id", "int", reviewsTable);
-            reviewsTable.Columns.Add("Id", idColumn0);
-            idColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(idColumn0);
-            var productIdColumn = new Column("ProductId", "int", reviewsTable);
-            reviewsTable.Columns.Add("ProductId", productIdColumn);
-            productIdColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(productIdColumn);
+            var idColumn1 = new Column("Id", "int", reviewsTable);
+            reviewsTable.Columns.Add("Id", idColumn1);
+            idColumn1.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(idColumn1);
+            var productIdColumn0 = new Column("ProductId", "int", reviewsTable);
+            reviewsTable.Columns.Add("ProductId", productIdColumn0);
+            productIdColumn0.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(productIdColumn0);
             var starsColumn = new Column("Stars", "int", reviewsTable);
             reviewsTable.Columns.Add("Stars", starsColumn);
             starsColumn.Accessors = ColumnAccessorsFactory.CreateGeneric<int>(starsColumn);
             relationalModel.Tables.Add(("Reviews", "shop"), reviewsTable);
             var reviewsTableMapping = new TableMapping(review, reviewsTable, null);
             reviewsTable.AddTypeMapping(reviewsTableMapping, false);
-            tableMappings0.Add(reviewsTableMapping);
-            RelationalModel.CreateColumnMapping(idColumn0, review.FindProperty("Id")!, reviewsTableMapping);
-            RelationalModel.CreateColumnMapping(productIdColumn, review.FindProperty("ProductId")!, reviewsTableMapping);
+            tableMappings1.Add(reviewsTableMapping);
+            RelationalModel.CreateColumnMapping(idColumn1, review.FindProperty("Id")!, reviewsTableMapping);
+            RelationalModel.CreateColumnMapping(productIdColumn0, review.FindProperty("ProductId")!, reviewsTableMapping);
             RelationalModel.CreateColumnMapping(starsColumn, review.FindProperty("Stars")!, reviewsTableMapping);
-            var pK_Reviews = new UniqueConstraint("PK_Reviews", reviewsTable, new[] { idColumn0 });
+            var pK_Reviews = new UniqueConstraint("PK_Reviews", reviewsTable, new[] { idColumn1 });
             reviewsTable.PrimaryKey = pK_Reviews;
             pK_Reviews.SetRowKeyValueFactory(new SimpleRowKeyValueFactory<int>(pK_Reviews));
             var pK_ReviewsKey = RelationalModel.GetKey(this,
@@ -177,7 +251,7 @@ namespace AotSample.CompiledModel
             RelationalModel.GetOrCreateUniqueConstraints(pK_ReviewsKey).Add(pK_Reviews);
             reviewsTable.UniqueConstraints.Add("PK_Reviews", pK_Reviews);
             var iX_Reviews_ProductId = new TableIndex(
-            "IX_Reviews_ProductId", reviewsTable, new[] { productIdColumn }, false);
+            "IX_Reviews_ProductId", reviewsTable, new[] { productIdColumn0 }, false);
             iX_Reviews_ProductId.SetRowIndexValueFactory(new SimpleRowIndexValueFactory<int>(iX_Reviews_ProductId));
             var iX_Reviews_ProductIdIx = RelationalModel.GetIndex(this,
                 "AotSample.Review",
@@ -185,9 +259,23 @@ namespace AotSample.CompiledModel
             iX_Reviews_ProductId.MappedIndexes.Add(iX_Reviews_ProductIdIx);
             RelationalModel.GetOrCreateTableIndexes(iX_Reviews_ProductIdIx).Add(iX_Reviews_ProductId);
             reviewsTable.Indexes.Add("IX_Reviews_ProductId", iX_Reviews_ProductId);
+            var fK_Coupons_Products_ProductId = new ForeignKeyConstraint(
+                "FK_Coupons_Products_ProductId", couponsTable, productsTable,
+                new[] { productIdColumn },
+                productsTable.FindUniqueConstraint("PK_Products")!, ReferentialAction.Cascade);
+            fK_Coupons_Products_ProductId.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_Coupons_Products_ProductId));
+            var fK_Coupons_Products_ProductIdFk = RelationalModel.GetForeignKey(this,
+                "AotSample.Coupon",
+                new[] { "ProductId" },
+                "AotSample.Product",
+                new[] { "Id" });
+            fK_Coupons_Products_ProductId.MappedForeignKeys.Add(fK_Coupons_Products_ProductIdFk);
+            RelationalModel.GetOrCreateForeignKeyConstraints(fK_Coupons_Products_ProductIdFk).Add(fK_Coupons_Products_ProductId);
+            couponsTable.ForeignKeyConstraints.Add(fK_Coupons_Products_ProductId);
+            productsTable.ReferencingForeignKeyConstraints.Add(fK_Coupons_Products_ProductId);
             var fK_Reviews_Products_ProductId = new ForeignKeyConstraint(
                 "FK_Reviews_Products_ProductId", reviewsTable, productsTable,
-                new[] { productIdColumn },
+                new[] { productIdColumn0 },
                 productsTable.FindUniqueConstraint("PK_Products")!, ReferentialAction.Cascade);
             fK_Reviews_Products_ProductId.SetRowForeignKeyValueFactory(RowForeignKeyValueFactoryFactory.CreateSimpleNonNullableFactory<int, int>(fK_Reviews_Products_ProductId));
             var fK_Reviews_Products_ProductIdFk = RelationalModel.GetForeignKey(this,

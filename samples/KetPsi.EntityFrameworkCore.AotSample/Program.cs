@@ -325,6 +325,19 @@ await CheckAsync(
     },
     "2|Celeste|2");
 
+var percent = Discount.Percent;
+var couponIds = new List<CouponId> { new(2), new(4) };
+await CheckAsync(
+    "Value converters: an enum stored as a string, a bool as 'Y' or 'N', a strongly typed key",
+    async db =>
+    {
+        var active = db.Coupons.AsNoTracking().Where(c => c.IsActive && c.Discount == percent).Select(c => c.Code).ToList();
+        var byKey = await db.Coupons.Where(c => couponIds.Contains(c.Id)).OrderByDescending(c => c.Id).Select(c => new { c.Id, c.Discount }).ToListAsync(cancellationToken);
+        var products = db.Coupons.AsNoTracking().Include(c => c.Product).Where(c => !c.IsActive).Select(c => c.Product.Name).ToList();
+        return $"{string.Join(",", active)}|{string.Join(",", byKey.Select(x => $"{x.Id.Value}:{x.Discount}"))}|{string.Join(",", products)}";
+    },
+    "SPRING|4:Fixed,2:Fixed|Dune");
+
 await CheckAsync(
     "FromSql sent as written, and composed over",
     async db =>
@@ -443,6 +456,16 @@ await CheckAsync(
         return Task.FromResult($"{product.Name}|{entry.State}|{entry.Property<int>(ShopDb.Revision).CurrentValue}");
     },
     "Neuromancer|Unchanged|50");
+
+await CheckAsync(
+    "Find by a strongly typed key tracks the entity with its converted values",
+    db =>
+    {
+        var coupon = db.Coupons.Find(new CouponId(3))!;
+        var entry = db.Entry(coupon);
+        return Task.FromResult($"{coupon.Code}|{coupon.Discount}|{coupon.IsActive}|{entry.State}|{ReferenceEquals(coupon, db.Coupons.Find(new CouponId(3)))}");
+    },
+    "OLD|Percent|False|Unchanged|True");
 
 await CheckAsync(
     "Tracked groups attach their entities",

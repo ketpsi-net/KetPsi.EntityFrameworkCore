@@ -227,6 +227,12 @@ internal static class EntityShapeBuilder
     /// <summary>Whether a property of this type is a column the reader can read: a scalar, not a navigation.</summary>
     internal static bool IsReadableScalar(ITypeSymbol type) => Classify(type) is { IsScalar: true, Read: not null };
 
+    /// <summary>
+    /// Whether the type is a struct only a value converter can store, such as a strongly typed key: it is read with
+    /// <c>GetFieldValue&lt;T&gt;</c>, and the runtime converts the column's value through the property's converter.
+    /// </summary>
+    internal static bool NeedsConverter(ITypeSymbol type) => ClassifyNative(type).Read is null && Classify(type).Read is not null;
+
     private static Setter GetSetter(IMethodSymbol setMethod, Compilation compilation)
     {
         if (!compilation.IsSymbolAccessibleWithin(setMethod, compilation.Assembly))
@@ -240,6 +246,25 @@ internal static class EntityShapeBuilder
     /// <summary>How to read a property type: the reader call, the value type it reads, and whether DBNull is possible.</summary>
     /// <returns><c>isScalar</c> is false for types that are not columns; <c>read</c> is null for scalar types that cannot be read yet.</returns>
     private static (ReadMethod? Read, string? ValueType, bool CanBeNull, bool IsScalar) Classify(ITypeSymbol type)
+    {
+        var native = ClassifyNative(type);
+        if (native.Read is not null || !native.IsScalar)
+        {
+            return native;
+        }
+
+        // A struct of the application's, such as a strongly typed key, is stored through a value converter: EF Core
+        // cannot map it otherwise. Primitives and enums the provider can't read stay unsupported.
+        var underlying = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable
+            ? nullable.TypeArguments[0]
+            : type;
+        return underlying is INamedTypeSymbol { TypeKind: TypeKind.Struct, SpecialType: SpecialType.None }
+            ? (ReadMethod.GetFieldValue, EntityDiscovery.TypeName(underlying), native.CanBeNull, true)
+            : native;
+    }
+
+    // The types a provider reads as they are.
+    private static (ReadMethod? Read, string? ValueType, bool CanBeNull, bool IsScalar) ClassifyNative(ITypeSymbol type)
     {
         var canBeNull = !type.IsValueType;
         if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
@@ -285,7 +310,7 @@ internal static class EntityShapeBuilder
                 return (ReadMethod.GetFieldValue, EntityDiscovery.TypeName(type), canBeNull, true);
         }
 
-        // Other value types are scalar columns this milestone cannot read; reference types are navigations.
+        // Other value types are scalar columns a provider cannot read as they are; reference types are navigations.
         return (null, null, canBeNull, type.IsValueType);
     }
 

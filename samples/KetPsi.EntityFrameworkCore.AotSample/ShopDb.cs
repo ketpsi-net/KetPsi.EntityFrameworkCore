@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace AotSample;
 
@@ -40,6 +41,31 @@ public sealed class Review
     public int Stars { get; set; }
 }
 
+/// <summary>A strongly typed key, stored as its number through a value converter.</summary>
+public readonly record struct CouponId(int Value);
+
+public enum Discount
+{
+    Percent,
+    Fixed,
+}
+
+/// <summary>Properties stored through value converters: the key, an enum as a string and a bool as 'Y' or 'N'.</summary>
+public sealed class Coupon
+{
+    public CouponId Id { get; set; }
+
+    public string Code { get; set; } = "";
+
+    public Discount Discount { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public int ProductId { get; set; }
+
+    public Product Product { get; set; } = null!;
+}
+
 /// <summary>A projection target built through its constructor.</summary>
 public sealed record ProductPrice(int Id, decimal Price);
 
@@ -62,6 +88,8 @@ public sealed class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options
     public DbSet<Product> Products => Set<Product>();
 
     public DbSet<Review> Reviews => Set<Review>();
+
+    public DbSet<Coupon> Coupons => Set<Coupon>();
 
     public static DbContextOptions<ShopDb> Options(string connectionString)
     {
@@ -90,6 +118,16 @@ public sealed class ShopDb(DbContextOptions<ShopDb> options) : DbContext(options
             b.ToTable("Reviews", "shop");
             b.Property(r => r.Id).ValueGeneratedNever();
             b.HasOne(r => r.Product).WithMany(p => p.Reviews).HasForeignKey(r => r.ProductId);
+        });
+
+        modelBuilder.Entity<Coupon>(b =>
+        {
+            b.ToTable("Coupons", "shop");
+            b.Property(c => c.Id).HasConversion(id => id.Value, value => new CouponId(value)).ValueGeneratedNever();
+            b.Property(c => c.Code).HasMaxLength(20);
+            b.Property(c => c.Discount).HasConversion<string>().HasMaxLength(10);
+            b.Property(c => c.IsActive).HasConversion(new BoolToStringConverter("N", "Y")).HasMaxLength(1);
+            b.HasOne(c => c.Product).WithMany().HasForeignKey(c => c.ProductId);
         });
     }
 }
