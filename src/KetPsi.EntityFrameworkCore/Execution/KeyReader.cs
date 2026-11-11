@@ -53,8 +53,9 @@ internal sealed class KeyReader
             return null;
         }
 
+        // A converted column is read as its CLR value already.
         var type = Nullable.GetUnderlyingType(clrType) ?? clrType;
-        return type.IsEnum ? Enum.ToObject(type, value) : value;
+        return type.IsEnum && value.GetType() != type ? Enum.ToObject(type, value) : value;
     }
 
     /// <summary>The statement selects every bound property in model order, so a property's ordinal is its index.</summary>

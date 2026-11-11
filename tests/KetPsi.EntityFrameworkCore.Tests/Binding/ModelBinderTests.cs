@@ -118,11 +118,12 @@ public sealed class ModelBinderTests
     }
 
     [Fact]
-    public void GetEntity_ValueConverter_ThrowsNamingProperty()
+    public void GetEntity_ValueConverter_IsBoundWithItsProperty()
     {
-        var exception = Assert.Throws<NotSupportedException>(Bind<ConverterContext, Product>);
+        var name = Bind<ConverterContext, Product>().GetProperty(nameof(Product.Name));
 
-        Assert.Contains($"{typeof(Product)}.{nameof(Product.Name)}", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("ABC", name.ToProvider("abc"));
+        Assert.Null(Bind<PlainProductContext, Product>().GetProperty(nameof(Product.Name)).Converter);
     }
 
     [Fact]

@@ -68,6 +68,9 @@ internal sealed class SqlBuilder
     private bool _readsFirstColumn;
     private SelectState? _state;
 
+    // The properties whose converters read the statement's columns, set when the select list is final.
+    private IReadOnlyList<BoundProperty?>? _converted;
+
     private SqlBuilder(
         BoundEntity entity,
         ISqlDialect dialect,
@@ -132,11 +135,12 @@ internal sealed class SqlBuilder
         if (terminal == QueryTerminal.Rows && rowLimit is null && builder.RunsAsWritten)
         {
             var byName = builder._readsFirstColumn ? null : entity.Properties.Select(static p => p.ColumnName).ToList();
-            return new SqlStatement(builder._rootSql!, builder._parameters, byName);
+            var converted = builder._readsFirstColumn ? null : Converted(entity.Properties.Select(static p => p.Converter is null ? null : p));
+            return new SqlStatement(builder._rootSql!, builder._parameters, byName, converted);
         }
 
         var commandText = builder.Finish(terminal, rowLimit, aggregate);
-        return new SqlStatement(commandText, builder._parameters);
+        return new SqlStatement(commandText, builder._parameters, ConvertedColumns: builder._converted);
     }
 
     /// <summary>
@@ -609,7 +613,9 @@ internal sealed class SqlBuilder
             case GroupValueKind.Aggregate:
                 var property = _entity.GetProperty(value.PropertyName!);
                 var aggregate = _dialect.Aggregate(value.Function, Column(property, State.Alias), value.ValueType);
-                return (Computed(aggregate), AggregateValue(value, property));
+                // Min and Max return a column value, which the converter reads, as in EF Core.
+                var converted = value.Function is AggregateFunction.Min or AggregateFunction.Max && property.Converter is not null ? property : null;
+                return (Computed(aggregate) with { Converted = converted }, AggregateValue(value, property));
 
             default:
                 throw new UnreachableException(value.Kind.ToString());
@@ -711,6 +717,7 @@ internal sealed class SqlBuilder
 
                 Materialize();
                 ApplyRowLimit(rowLimit);
+                _converted = ConvertedColumns(State);
                 return RenderSelect(State, SelectList(State), includeOrdering: true);
 
             case QueryTerminal.Count or QueryTerminal.LongCount:
@@ -723,7 +730,14 @@ internal sealed class SqlBuilder
                 // Like Count, an aggregate works on the rows the operators selected, and over groups on a derived table.
                 WrapIf(State.HasPaging || State.Distinct || State.Keys is not null);
                 var column = AggregatedColumn(aggregate!);
-                return RenderSelect(State, _dialect.Aggregate(aggregate!.Function, column, aggregate.ValueType), includeOrdering: false);
+
+                // Min and Max return a column value, which the converter reads, as in EF Core.
+                if (aggregate!.Function is AggregateFunction.Min or AggregateFunction.Max && column.Converted is not null)
+                {
+                    _converted = [column.Converted];
+                }
+
+                return RenderSelect(State, _dialect.Aggregate(aggregate.Function, column.Sql, aggregate.ValueType), includeOrdering: false);
 
             case QueryTerminal.Any:
                 // ORDER BY is only valid in a subquery that pages, and only matters there.
@@ -758,7 +772,20 @@ internal sealed class SqlBuilder
 
         Materialize();
         ApplyRowLimit(rowLimit);
+        _converted = ConvertedColumns(State);
         return RenderSelect(State, SelectList(State), includeOrdering: true);
+    }
+
+    // The converted properties of the columns a select list reads: the projected columns, or every entity column.
+    private IReadOnlyList<BoundProperty?>? ConvertedColumns(SelectState state)
+        => Converted(state.Columns is { } columns
+            ? columns.Select(static c => c.Converted)
+            : _entity.Properties.Select(static p => p.Converter is null ? null : p));
+
+    private static IReadOnlyList<BoundProperty?>? Converted(IEnumerable<BoundProperty?> columns)
+    {
+        var list = columns.ToList();
+        return list.Exists(static p => p is not null) ? list : null;
     }
 
     private string FinishDelete()
@@ -804,7 +831,7 @@ internal sealed class SqlBuilder
     }
 
     private IncludeStatement ToIncludeStatement(string commandText)
-        => new(new SqlStatement(commandText, _parameters), _segments, _collections, _roots);
+        => new(new SqlStatement(commandText, _parameters, ConvertedColumns: _converted), _segments, _collections, _roots);
 
     private void ApplyRowLimit(int? rowLimit)
     {
@@ -1104,11 +1131,14 @@ internal sealed class SqlBuilder
         var columns = navigation.TargetKey.Select(_entity.GetProperty).ToArray();
         if (columns.Length == 1)
         {
-            var list = AddParameter(_dialect.CreateListParameterValue(parentKeys.Select(static k => k[0])), property: null);
+            var list = AddParameter(_dialect.CreateListParameterValue(parentKeys.Select(k => columns[0].ToProvider(k[0]))), property: null);
             return _dialect.InList(Column(columns[0], State.Alias), list, columns[0].StoreType);
         }
 
-        var tuples = AddParameter(_dialect.CreateTupleListParameterValue(parentKeys), property: null);
+        var converted = columns.Any(static c => c.Converter is not null)
+            ? parentKeys.Select(k => (IReadOnlyList<object?>)k.Select((v, i) => columns[i].ToProvider(v)).ToArray())
+            : parentKeys;
+        var tuples = AddParameter(_dialect.CreateTupleListParameterValue(converted), property: null);
         return _dialect.InTupleList([.. columns.Select(c => Column(c, State.Alias))], tuples, [.. columns.Select(static c => c.StoreType)]);
     }
 
@@ -1148,7 +1178,7 @@ internal sealed class SqlBuilder
         var source = "(" + RenderSelect(inner, selectList, includeOrdering: true) + ")";
 
         var outer = new SelectState(source, NextAlias(), isDerived: true) { Pending = inner.Pending };
-        SqlColumn Outer(int index) => new(outer.Alias + "." + _dialect.QuoteIdentifier(names[index]), names[index]);
+        SqlColumn Outer(int index) => new(outer.Alias + "." + _dialect.QuoteIdentifier(names[index]), names[index], Converted: selected[index].Converted);
         if (inner.Columns is not null || inner.Keys is not null)
         {
             outer.Columns = [.. Enumerable.Range(0, inner.Columns?.Count ?? inner.Keys!.Count).Select(Outer)];
@@ -1274,6 +1304,8 @@ internal sealed class SqlBuilder
             negated ? "AND" : "OR", RenderPredicate(or.Left, values, negated, column), RenderPredicate(or.Right, values, negated, column)),
         BoundNot not => RenderPredicate(not.Operand, values, !negated, column),
         BoundComparison comparison => RenderComparison(comparison, values[comparison.ValueIndex], negated, column),
+        // A converted bool, such as one stored as 'Y' or 'N', is compared with the stored value of true or false.
+        BoundBooleanProperty { Property.Converter: not null } boolean => column(boolean.Property) + " = " + AddParameter(!negated, boolean.Property),
         BoundBooleanProperty boolean =>
             column(boolean.Property) + " = " + (negated ? _dialect.FalseLiteral : _dialect.TrueLiteral),
         BoundNullCheck nullCheck => column(nullCheck.Property) + (nullCheck.IsNull != negated ? " IS NULL" : " IS NOT NULL"),
@@ -1325,7 +1357,7 @@ internal sealed class SqlBuilder
             }
             else
             {
-                nonNullValues.Add(item);
+                nonNullValues.Add(inList.Property.ToProvider(item));
             }
         }
 
@@ -1366,12 +1398,12 @@ internal sealed class SqlBuilder
     };
 
     // The column the selector's property path reads, or the one column a projection selects.
-    private string AggregatedColumn(SqlAggregate aggregate)
+    private SqlColumn AggregatedColumn(SqlAggregate aggregate)
     {
         if (aggregate.PropertyName is { } path)
         {
             EnsureNotProjected();
-            return ResolveColumn(path).Sql;
+            return ResolveColumn(path);
         }
 
         Materialize();
@@ -1381,7 +1413,7 @@ internal sealed class SqlBuilder
         }
 
         return State.Columns is [var single]
-            ? single.Sql
+            ? single
             : throw new InvalidOperationException(ExceptionMessages.AggregateNeedsOneColumn);
     }
 
@@ -1391,7 +1423,8 @@ internal sealed class SqlBuilder
 
     private string EntityColumns(string alias) => string.Join(", ", _entity.Properties.Select(p => Column(p, alias)));
 
-    private SqlColumn RootColumn(BoundProperty property, string alias) => new(Column(property, alias), property.ColumnName);
+    private SqlColumn RootColumn(BoundProperty property, string alias)
+        => new(Column(property, alias), property.ColumnName, Converted: property.Converter is null ? null : property);
 
     private string Column(BoundProperty property, string alias) => alias + "." + _dialect.QuoteIdentifier(property.ColumnName);
 
@@ -1406,7 +1439,8 @@ internal sealed class SqlBuilder
         }
         while (_givenParameterNames.Contains(name.TrimStart('@')));
 
-        _parameters.Add(new QueryParameter(name, value, property));
+        // A value compared with a converted property is sent as the column holds it, as EF Core sends it.
+        _parameters.Add(new QueryParameter(name, property?.Converter is null ? value : property.ToProvider(value) ?? DBNull.Value, property));
         return name;
     }
 
@@ -1416,7 +1450,11 @@ internal sealed class SqlBuilder
     /// A selected column: its SQL, and its name in the rows, which is the column name unless renamed. A computed
     /// column, such as an aggregate, always needs its name given in a derived table.
     /// </summary>
-    private readonly record struct SqlColumn(string Sql, string Name, bool IsComputed = false);
+    /// <param name="Sql">The column's SQL.</param>
+    /// <param name="Name">The column's name in the rows.</param>
+    /// <param name="IsComputed">Whether the column is computed, such as an aggregate.</param>
+    /// <param name="Converted">The property whose value converter the column's values go through, if any.</param>
+    private readonly record struct SqlColumn(string Sql, string Name, bool IsComputed = false, BoundProperty? Converted = null);
 
     /// <summary>A part of a group's key: its column, and the property it reads, nullable when its navigation can be missing.</summary>
     private sealed record GroupKey(SqlColumn Column, BoundProperty Value);
