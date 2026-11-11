@@ -18,7 +18,7 @@ dotnet add package KetPsi.EntityFrameworkCore.SqlServer --prerelease
 - That package depends on `KetPsi.EntityFrameworkCore` (runtime + generator + MSBuild props/targets). Nothing else to
   register: the dialect and the generated readers register themselves at module load.
 - Configure the context as usual (`UseSqlServer(...)`).
-- The build needs the .NET 9 SDK (9.0.100) or later, also for `net8.0` targets.
+- The build needs the .NET 9 SDK (9.0.100) or later. EF Core 9 and 10 are supported; EF Core 8 is not.
 - If the build reports **KP0002**, the project overrides `InterceptorsNamespaces` without keeping
   `KetPsi.EntityFrameworkCore.Generated`; append it instead of replacing the list.
 
@@ -293,7 +293,7 @@ var stats = await db.Posts
   property, `g.Sum()`, `g.Max()` and the rest work without a selector. The SQL is EF Core's.
 - A `Select` on the groups can compute in C# from those values (`g.Key + "!"`, `g.Count() * 2`), as projections do.
   EF Core 10 computes some of these in SQL instead: `g.Key + "!"` on an enum key gives `"0!"` there and `"Draft!"`
-  in KetPsi, EF Core 8 and EF Core 9.
+  in KetPsi and EF Core 9.
 - `Where` on the groups, before or after the `Select`, becomes `HAVING`; `OrderBy`/`ThenBy` on keys and aggregates,
   before or after it, becomes `ORDER BY`. After the `Select` they read members that are a key part or an aggregate as
   they are. Then page, `Distinct`, aggregate (`Select(g => g.Count()).Max()`) and take the first, as after any `Select`.
@@ -336,12 +336,10 @@ Same behavior as EF Core:
 ## Native AOT checklist
 
 1. Generate a compiled model: `dotnet ef dbcontext optimize --output-dir CompiledModels --namespace MyApp.CompiledModel`,
-   adding `--nativeaot` on EF Core 9 and 10, and call `options.UseModel(MyApp.CompiledModel.MyDbModel.Instance)`.
+   adding `--nativeaot`, and call `options.UseModel(MyApp.CompiledModel.MyDbModel.Instance)`.
 2. Compiled models cannot hold query filters; filters only work under JIT.
-3. EF Core 8 cannot track or save changes under Native AOT. KetPsi throws a clear `InvalidOperationException` for
-   tracking queries there, `Find` and `FromSql` on a tracking context included; use `AsNoTracking()` (or set the context's
-   `QueryTrackingBehavior` to `NoTracking`), or move to EF Core 9+. `ExecuteDelete` never tracks, so it works on all
-   three. No-tracking queries with `Include` work under Native AOT on EF Core 8, 9 and 10.
+3. With a `--nativeaot` compiled model, tracking queries, `Find`, `Include`, `FromSql` and `SaveChanges` all work
+   under Native AOT, as do no-tracking queries and `ExecuteDelete`.
 4. Keep `InvariantGlobalization` off; SqlClient needs culture data.
 5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor; KetPsi itself adds none.
 6. Decimal comparisons in predicates (`p.Price < 20m`) are safe: the compiler builds them by reflection, and the
@@ -351,7 +349,7 @@ Same behavior as EF Core:
    reflection over the result type's properties. KetPsi never reads that tree, so the warning is harmless and the
    query runs under Native AOT. Records, other constructors, single members and `ValueTuple.Create` don't warn; use one
    of them where trim warnings must stay at zero.
-8. `FromSql`, `FromSqlRaw`, `Database.SqlQuery<T>` and `SqlQueryRaw<T>` run under Native AOT on EF Core 8, 9 and 10:
+8. `FromSql`, `FromSqlRaw`, `Database.SqlQuery<T>` and `SqlQueryRaw<T>` run under Native AOT:
    their readers are generated, and `SqlQuery<T>` needs no entity in the model. `Database.ExecuteSql` and
    `ExecuteSqlRaw` are EF Core's own (no LINQ to translate) and work under Native AOT too.
 

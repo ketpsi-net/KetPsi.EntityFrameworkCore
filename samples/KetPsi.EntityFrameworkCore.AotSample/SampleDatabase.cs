@@ -3,8 +3,7 @@ using Microsoft.Data.SqlClient;
 namespace AotSample;
 
 /// <summary>
-/// Creates and seeds the sample database with plain SQL: EF Core migrations are not available under Native AOT, and
-/// EF Core 8 cannot save changes there.
+/// Creates and seeds the sample database with plain SQL: EF Core migrations are not available under Native AOT.
 /// </summary>
 internal static class SampleDatabase
 {

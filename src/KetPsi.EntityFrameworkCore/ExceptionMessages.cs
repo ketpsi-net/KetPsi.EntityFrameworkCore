@@ -142,10 +142,6 @@ internal static class ExceptionMessages
         "No generated accessor is registered for the navigation '{0}.{1}'. Make sure the project that declares the query " +
         "references KetPsi.EntityFrameworkCore.Generator.";
 
-    public const string TrackingRequiresEfCore9UnderAot =
-        "Tracking queries need EF Core 9 or later under Native AOT; EF Core 8 cannot track entities there. Add " +
-        "AsNoTracking() to the query, or set the context's QueryTrackingBehavior to NoTracking.";
-
     // Same messages as LINQ and EF Core, so callers see the same exceptions.
     public const string SequenceContainsNoElements = "Sequence contains no elements";
 

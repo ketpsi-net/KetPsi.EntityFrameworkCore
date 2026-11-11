@@ -170,9 +170,6 @@ internal static partial class CallSiteAnalyzer
                 "AsSplitQuery" => site.Supported(OperatorKind.AsSplitQuery),
                 "AsSingleQuery" => site.Supported(OperatorKind.AsSingleQuery),
 
-                // EF Core 8 declares ExecuteDelete with the relational extensions, EF Core 9 and later with the others.
-                "ExecuteDelete" => site.Supported(OperatorKind.ExecuteDelete),
-                "ExecuteDeleteAsync" => site.Supported(OperatorKind.ExecuteDelete, isAsync: true),
                 // The SQL is a value of the call, read when the query runs; the operators after it compose over it.
                 "FromSql" or "FromSqlInterpolated" => site.Supported(OperatorKind.FromSql),
                 "FromSqlRaw" => site.Supported(OperatorKind.FromSqlRaw),

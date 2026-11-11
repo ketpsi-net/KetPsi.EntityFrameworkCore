@@ -424,16 +424,6 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         var (stock, stockTracking, stockReads) = await RunAsync(StockQueries, query, arguments);
         var (intercepted, interceptedTracking, interceptedReads) = await RunAsync(InterceptedQueries, query, arguments);
 
-#if NET8_0
-        if (EfCore8NullSemantics.TryGetValue(Key(query, arguments), out var csharpPredicate))
-        {
-            // EF Core 8 translates these negations with SQL null semantics and drops rows with null Views; EF Core 9
-            // and 10 follow C#, and so does KetPsi. Here the result is checked against C# instead of EF Core 8.
-            Assert.NotEqual(stock, intercepted);
-            stock = Describe(SeedData.Blogs().Where(b => !b.IsDeleted && b.TenantId == SqlServerFixture.Tenant).Where(csharpPredicate).ToList());
-        }
-#endif
-
         Assert.Equal(stock, intercepted);
         Assert.Equal(stockTracking, interceptedTracking);
 
@@ -460,16 +450,6 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "FindBlog(1)", "FindPostAsync(101)", "FindTrackedTwice(3)", "DeleteTrackedComment()", "JoinEntities()",
         "FromSqlTracked()", "FromSqlAsWrittenTracked()",
     };
-
-#if NET8_0
-    private static readonly Dictionary<string, Func<Blog, bool>> EfCore8NullSemantics = new(StringComparer.Ordinal)
-    {
-        [Key("NotViewsAbove", [40])] = b => !(b.Views > 40),
-        // In C#, a comparison with null is false, so its negation is true for every row.
-        [Key("NotViewsAbove", [null])] = _ => true,
-        [Key("NotAnd", [50])] = b => !(b.IsActive && b.Views > 50),
-    };
-#endif
 
     // Queries whose results have a defined order; other results are compared sorted by Id.
     private static readonly HashSet<string> OrderedQueries = new(StringComparer.Ordinal)

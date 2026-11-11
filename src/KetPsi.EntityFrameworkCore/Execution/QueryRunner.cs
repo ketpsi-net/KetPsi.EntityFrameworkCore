@@ -28,9 +28,6 @@ internal static class QueryRunner
 
     internal const string LastOrDefaultMethod = "LastOrDefault";
 
-    // EF Core 9 is the first version that can track entities under Native AOT, with a --nativeaot compiled model.
-    private const int MinimumEfCoreMajorForAotTracking = 9;
-
     internal static readonly int EfCoreMajorVersion = typeof(DbContext).Assembly.GetName().Version?.Major ?? 0;
 
     public static IEnumerable<T> Enumerate<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query)
@@ -178,15 +175,6 @@ internal static class QueryRunner
         return contextDefault;
     }
 
-    /// <summary>Throws when entities would be tracked where EF Core cannot track them: under Native AOT before EF Core 9.</summary>
-    internal static void EnsureTrackingSupported(bool isDynamicCodeSupported, int efCoreMajorVersion)
-    {
-        if (!isDynamicCodeSupported && efCoreMajorVersion < MinimumEfCoreMajorForAotTracking)
-        {
-            throw new InvalidOperationException(ExceptionMessages.TrackingRequiresEfCore9UnderAot);
-        }
-    }
-
     // Last is the first row of the query read in reverse.
     private static SqlQueryable<T> Reversed<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, string method)
         where T : class
@@ -274,11 +262,7 @@ internal static class QueryRunner
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
         var filtersFor = FiltersFor(context, query.Tail);
         var tracking = ResolveTracking(query.Tail, context.ChangeTracker.QueryTrackingBehavior);
-        if (tracking == QueryTrackingBehavior.TrackAll)
-        {
-            EnsureTrackingSupported(RuntimeFeature.IsDynamicCodeSupported, EfCoreMajorVersion);
-        }
-        else if (tracking == QueryTrackingBehavior.NoTracking)
+        if (tracking == QueryTrackingBehavior.NoTracking)
         {
             includes.EnsureNoCycle();
         }
@@ -343,7 +327,6 @@ internal static class QueryRunner
         var untracked = materialize;
         if (tracking == QueryTrackingBehavior.TrackAll && entity.PrimaryKey is not null)
         {
-            EnsureTrackingSupported(RuntimeFeature.IsDynamicCodeSupported, EfCoreMajorVersion);
             var tracker = new EntityTracker<T>(query.Context, entity);
             materialize = row => tracker.Track(row, untracked);
         }

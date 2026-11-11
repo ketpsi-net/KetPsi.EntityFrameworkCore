@@ -277,22 +277,6 @@ public sealed class TrackingTests : IDisposable
         Assert.Equal(QueryTrackingBehavior.TrackAll, QueryRunner.ResolveTracking(tail, QueryTrackingBehavior.NoTracking));
     }
 
-    [Theory]
-    [InlineData(true, 8)]
-    [InlineData(true, 10)]
-    [InlineData(false, 9)]
-    [InlineData(false, 10)]
-    public void EnsureTrackingSupported_Supported_DoesNotThrow(bool isDynamicCodeSupported, int efCoreMajorVersion)
-        => QueryRunner.EnsureTrackingSupported(isDynamicCodeSupported, efCoreMajorVersion);
-
-    [Fact]
-    public void EnsureTrackingSupported_AotBeforeEfCore9_Throws()
-    {
-        var exception = Assert.Throws<InvalidOperationException>(() => QueryRunner.EnsureTrackingSupported(false, 8));
-
-        Assert.Contains("AsNoTracking", exception.Message, StringComparison.Ordinal);
-    }
-
     // Statements select the key first, then the other properties in name order, shadow properties included.
     private static DataTable Table(params (int Id, string Name, Priority? Priority, int? Revision)[] rows)
     {

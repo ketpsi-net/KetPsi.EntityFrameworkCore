@@ -33,8 +33,8 @@ dotnet add package KetPsi.EntityFrameworkCore.SqlServer --prerelease
 ```
 
 The SQL Server package brings in `KetPsi.EntityFrameworkCore`, which contains the runtime, the source generator and the
-MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.0.100) or later, even when targeting
-`net8.0`.
+MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.0.100) or later. It
+targets `net9.0` and `net10.0` with EF Core 9 and 10; EF Core 8 is not supported.
 
 ## What is supported
 
@@ -160,11 +160,11 @@ through navigations, and computed or constant keys.
 
 KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things under Native AOT:
 
-- **A compiled model.** Generate it with `dotnet ef dbcontext optimize` (add `--nativeaot` on EF Core 9 and 10) and
+- **A compiled model.** Generate it with `dotnet ef dbcontext optimize` (add `--nativeaot`) and
   register it with `options.UseModel(...)`.
 - **No query filters under AOT.** EF Core compiled models cannot contain query filters. Query filters work under JIT.
-- **EF Core 8 cannot track or save under Native AOT.** KetPsi rejects tracking queries there with a clear error; use
-  `AsNoTracking()` or move to EF Core 9 or later. No-tracking queries, `Include` included, work on every version.
+- **Tracking needs `--nativeaot`.** With it, tracking queries, `Include`, `Find` and `SaveChanges` work under Native
+  AOT.
 - **No `InvariantGlobalization`.** SqlClient fails with it enabled.
 - **Decimal operators are handled.** The compiler builds decimal comparisons such as `p.Price < 20m` by reflection,
   which trimming would break; queries that use them keep decimal's operator methods, so they work without relying on

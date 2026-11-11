@@ -5,11 +5,6 @@
   </PropertyGroup>
 
   <!-- Framework-aligned packages: each target framework uses the latest patch of its own major version. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.33" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.33" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.33" />
-  </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.22" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.22" />

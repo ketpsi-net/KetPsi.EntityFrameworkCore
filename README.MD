@@ -34,7 +34,7 @@ to EF Core's runtime pipeline.
 dotnet add package KetPsi.EntityFrameworkCore.SqlServer --prerelease
 ```
 
-Targets `net8.0`, `net9.0` and `net10.0`, each with its own EF Core major version.
+Targets `net9.0` and `net10.0`, each with its own EF Core major version.
 
 ---
 
