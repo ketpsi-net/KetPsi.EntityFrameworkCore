@@ -326,10 +326,21 @@ Same behavior as EF Core:
 
 - Supported property types: `bool`, `byte`, `short`, `int`, `long`, `float`, `double`, `decimal`, `string`,
   `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`, `Guid`, `byte[]`, enums, and their nullable forms.
+- Value converters work as in EF Core, under Native AOT too: `HasConversion` on a property, `HaveConversion` in
+  `ConfigureConventions`, built-in converters such as `HasConversion<string>()` on an enum, and custom ones. Values
+  sent to SQL are converted (a converted enum compares as `[State] = @p0` with `'Closed'`, a bool stored as `'Y'`/`'N'`
+  as `= 'Y'`), and columns are converted back when read. Structs of your own, such as strongly typed keys
+  (`readonly record struct BlogId(int Value)`), need a converter, as EF Core requires; they work as keys, foreign
+  keys, in `Include`, `Find`, `Join`, `GroupBy`, `Contains` and projections.
+- Comparisons and ordering on a converted column use the stored values, as in EF Core: an enum stored as a string
+  orders by name, and `Score > 9` on an `int` stored as text compares text. Members of a converted value
+  (`b.Id.Value == 1`) can't be translated, as in EF Core (KP2003); compare the whole value (`b.Id == id`).
 - Entities need a non-abstract class with an accessible parameterless constructor (private setters/constructors are
   fine, KP3004). Shadow properties work.
-- Not supported yet: value converters (KP3002), owned/complex types and JSON columns (KP3003), inheritance, entities
-  not mapped to a table (views count as unsupported).
+- Not supported yet: converters on class types other than `string` and `byte[]`, on a non-generic
+  `Property("Name")`, and in `DefaultTypeMapping` for `SqlQuery` (KP3002); owned/complex types and JSON columns
+  (KP3003), inheritance, entities not mapped to a table (views count as unsupported). `SqlQuery<T>` applies no
+  converters, so a result or property only a converter can store is KP1004.
 - Query filters (`HasQueryFilter`) are translated at build time with the same predicate rules (KP3005 otherwise) and
   always apply unless `IgnoreQueryFilters()` is used. Values read from the context (for example a tenant id field)
   are fine.
@@ -375,5 +386,5 @@ Same behavior as EF Core:
 | KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
 | KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
 | KP2012 | Join a filtered `DbSet` on properties: properties or navigations on the outer side, the inner entity's own properties on the inner side |
-| KP3001–KP3004 | Change the mapping to a supported type and shape |
+| KP3001–KP3004 | Change the mapping to a supported type and shape; for KP3002, convert a struct, `string` or `byte[]` property, configured with the generic `Property(x => x.Name)` or `Properties<T>()` |
 | KP3005 | Make the query filter a translatable predicate |

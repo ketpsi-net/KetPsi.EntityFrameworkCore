@@ -77,7 +77,9 @@ internal static class ModelConfigurationAnalyzer
         var name = LocationInfo.From(((MemberAccessExpressionSyntax)invocation.Expression).Name.Identifier.GetLocation());
         if (ConverterMethods.Contains(method.Name))
         {
-            return new ModelConfiguration(null, DiagnosticInfo.Create(DiagnosticDescriptors.ValueConverterNotSupported, name, method.Name));
+            return ConverterProblem(method) is { } reason
+                ? new ModelConfiguration(null, DiagnosticInfo.Create(DiagnosticDescriptors.ValueConverterNotSupported, name, method.Name, reason))
+                : null;
         }
 
         if (OwnedOrComplexMethods.Contains(method.Name))
@@ -86,6 +88,33 @@ internal static class ModelConfigurationAnalyzer
         }
 
         return method.Name == HasQueryFilter ? AnalyzeQueryFilter(invocation, method, model, cancellationToken) : null;
+    }
+
+    /// <summary>
+    /// Why KetPsi cannot read a property this converter is configured on, or null when it can. The runtime applies the
+    /// converter of every property; the generated reader must only know the property is a column, which it does for
+    /// value types, strings and byte arrays. Another class would be read as a navigation.
+    /// </summary>
+    private static string? ConverterProblem(IMethodSymbol method)
+    {
+        // PropertyBuilder<TProperty>.HasConversion and PropertiesConfigurationBuilder<TProperty>.HaveConversion.
+        var builder = method.ContainingType;
+        switch (builder?.Name)
+        {
+            case "PropertyBuilder" or "PropertiesConfigurationBuilder" when !builder.IsGenericType:
+                return "configure the property with the generic Property(x => x.Name) or Properties<T>(), so its type is known at build time";
+            case "TypeMappingConfigurationBuilder":
+                return "a default type mapping converts the results of SqlQuery, which KetPsi.EntityFrameworkCore reads without converters";
+            case not ("PropertyBuilder" or "PropertiesConfigurationBuilder"):
+                return "only the properties of an entity can be converted yet";
+        }
+
+        var type = builder.TypeArguments[0];
+        return type.IsValueType || type.SpecialType == SpecialType.System_String
+            || type is IArrayTypeSymbol { ElementType.SpecialType: SpecialType.System_Byte }
+            || type is ITypeParameterSymbol
+            ? null
+            : $"the property type '{type.ToDisplayString()}' is a class, which KetPsi.EntityFrameworkCore reads as a navigation; only value types, strings and byte arrays can be converted yet";
     }
 
     private static ModelConfiguration AnalyzeQueryFilter(

@@ -21,6 +21,12 @@ internal static class SqlQueryTranslator
             return (null, "the type must be accessible to generated code in the same assembly");
         }
 
+        // SqlQuery<T> applies no value converter, so a type only a converter can store can't be read, as in EF Core.
+        if (EntityShapeBuilder.NeedsConverter(result))
+        {
+            return (null, $"'{result.ToDisplayString()}' is stored through a value converter, which SqlQuery does not apply");
+        }
+
         if (EntityShapeBuilder.IsReadableScalar(result))
         {
             return (Scalar(result, compilation), null);
@@ -47,6 +53,10 @@ internal static class SqlQueryTranslator
         }
 
         var properties = shape.Properties.Select(p => (Shape: p, Symbol: FindProperty(type, p.Name)!)).ToList();
+        if (properties.FirstOrDefault(static p => EntityShapeBuilder.NeedsConverter(p.Symbol.Type)) is { Symbol: { } converted })
+        {
+            return (null, $"'{converted.Name}' has the type '{converted.Type.ToDisplayString()}', which only a value converter can store, and SqlQuery applies none");
+        }
         var reads = properties.Select((p, i) => Read(p.Shape, p.Symbol.Type, i)).ToList();
 
         string construction;

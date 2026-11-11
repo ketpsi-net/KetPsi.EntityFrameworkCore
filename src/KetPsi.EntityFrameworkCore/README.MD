@@ -84,7 +84,12 @@ query and tracks nothing.
 `DateOnly`, `TimeOnly`, `TimeSpan`, `Guid`, `byte[]`, enums, and nullable versions of all of them, on classes with an
 accessible parameterless constructor. Private setters and constructors are fine. Shadow properties are supported.
 
-Not supported yet: value converters, owned and complex types, JSON columns, inheritance, many-to-many navigations
+Value converters work as in EF Core, under Native AOT too: `HasConversion`, `HaveConversion` in `ConfigureConventions`,
+built-in and custom converters. Values sent to SQL and columns read back go through the converter, and structs of your
+own, such as strongly typed keys (`readonly record struct BlogId(int Value)`), work as keys, foreign keys and in every
+operator. Comparisons and ordering use the stored values, as in EF Core.
+
+Not supported yet: converters on class types other than `string` and `byte[]` (KP3002), owned and complex types, JSON columns, inheritance, many-to-many navigations
 without a join entity, collection navigations inside predicates (`b.Posts.Any()`), and navigations inside query
 filters.
 

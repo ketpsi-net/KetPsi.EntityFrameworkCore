@@ -47,20 +47,15 @@ public sealed class ModelConfigurationDiagnosticsTests
         Assert.Equal("_minimum", run.TextAt(diagnostic));
     }
 
+    // The runtime applies the converters; the generator only reports those it cannot read (ValueConverterGenerationTests).
     [Theory]
-    [InlineData("modelBuilder.Entity<Blog>().Property(b => b.Status).HasConversion<string>();", "HasConversion")]
-    [InlineData("modelBuilder.Entity<Blog>().Property(b => b.Name).HasConversion(v => v.ToUpperInvariant(), v => v);", "HasConversion")]
-    public void ValueConverter_ReportsKP3002(string body, string text)
-    {
-        var run = GeneratorHost.Run(Source(body));
-
-        var diagnostic = Assert.Single(run.Diagnostics);
-        Assert.Equal("KP3002", diagnostic.Id);
-        Assert.Equal(text, run.TextAt(diagnostic));
-    }
+    [InlineData("modelBuilder.Entity<Blog>().Property(b => b.Status).HasConversion<string>();")]
+    [InlineData("modelBuilder.Entity<Blog>().Property(b => b.Name).HasConversion(v => v.ToUpperInvariant(), v => v);")]
+    public void ValueConverter_OnAValueTypeOrString_IsAccepted(string body)
+        => Assert.Empty(GeneratorHost.Run(Source(body)).Diagnostics);
 
     [Fact]
-    public void ConventionConverter_ReportsKP3002()
+    public void ConventionConverter_IsAccepted()
     {
         var run = GeneratorHost.Run(Source("") + """
 
@@ -71,7 +66,7 @@ public sealed class ModelConfigurationDiagnosticsTests
             }
             """);
 
-        Assert.Equal("HaveConversion", run.TextAt(Assert.Single(run.Diagnostics, d => d.Id == "KP3002")));
+        Assert.DoesNotContain(run.Diagnostics, d => d.Id == "KP3002");
     }
 
     [Theory]
