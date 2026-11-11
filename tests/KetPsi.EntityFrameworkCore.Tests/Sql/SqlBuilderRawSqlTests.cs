@@ -113,7 +113,7 @@ public sealed class SqlBuilderRawSqlTests : IDisposable
     [Fact]
     public void ExecuteDelete_DeletesTheKeysTheSqlSelects()
         => Assert.Equal(
-            "DELETE FROM [t1] FROM [shop].[Items] AS [t1] WHERE [t1].[Id] IN (SELECT [t0].[Id] FROM (\nSELECT * FROM Items WHERE Id = @p0\n) AS [t0])",
+            $"{SqlBuilderDeleteTests.NoCountOff}DELETE FROM [t1] FROM [shop].[Items] AS [t1] WHERE [t1].[Id] IN (SELECT [t0].[Id] FROM (\nSELECT * FROM Items WHERE Id = @p0\n) AS [t0])",
             Delete(SqlQuery.FromSql(_items.Items, $"SELECT * FROM Items WHERE Id = {10}")));
 
     [Fact]

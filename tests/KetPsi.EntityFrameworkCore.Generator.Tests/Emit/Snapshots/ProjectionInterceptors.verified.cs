@@ -558,7 +558,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
                 query,
                 new string[] { "Owner.Id" },
                 global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : reader.GetInt32(ordinals[0]))));
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : reader.GetInt32(ordinals[0]))));
         }
 
         [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "tEN9Bv+ZaF3Qp1Rjl/1qDdYQAABRdWVyaWVzLmNz")]

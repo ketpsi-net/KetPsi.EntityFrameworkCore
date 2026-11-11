@@ -4,9 +4,8 @@
 
 .DESCRIPTION
     Native AOT cannot build the EF Core model at runtime, so the sample ships compiled models. Run this after changing
-    the sample's model. EF Core 9 and 10 models are generated with --nativeaot, which they need to track entities and
-    save changes under Native AOT. EF Core 8 has no such option, so under Native AOT it can neither track nor save, and
-    KetPsi rejects tracking queries there with a clear error. Requires the dotnet-ef tool.
+    the sample's model. The models are generated with --nativeaot, which EF Core needs to track entities and save
+    changes under Native AOT. Requires the dotnet-ef tool.
 #>
 [CmdletBinding()]
 param()
@@ -15,7 +14,7 @@ param()
 $ErrorActionPreference = 'Continue'
 
 $project = Join-Path $PSScriptRoot '..\samples\KetPsi.EntityFrameworkCore.AotSample\KetPsi.EntityFrameworkCore.AotSample.csproj'
-$folders = @{ 'net8.0' = 'Net8'; 'net9.0' = 'Net9'; 'net10.0' = 'Net10' }
+$folders = @{ 'net9.0' = 'Net9'; 'net10.0' = 'Net10'; 'net11.0' = 'Net11' }
 
 # The project file reads this to reference the Design package and leave out the models being regenerated.
 $env:KetPsiDesignTime = 'true'
@@ -34,10 +33,8 @@ try {
             '--framework', $framework,
             '--context', 'ShopDb',
             '--output-dir', $output,
-            '--namespace', 'AotSample.CompiledModel')
-        if ($framework -ne 'net8.0') {
-            $arguments += '--nativeaot'
-        }
+            '--namespace', 'AotSample.CompiledModel',
+            '--nativeaot')
 
         Write-Host "Generating the compiled model for $framework"
         & dotnet @arguments

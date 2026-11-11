@@ -59,6 +59,11 @@ internal static class JoinSources
                 .Join(db.Posts, x => x.b.Id, o => o.BlogId, (x, o) => new { x.p.Title, Other = o.Title })
                 .ToList();
 
+            public int CountThroughThePair(int min) => db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).Count(x => x.b.Rating > min);
+
+            public Task<string?> FirstColumnAsync(string name, CancellationToken ct)
+                => db.Blogs.Select(b => b.Name).OrderBy(n => n).FirstOrDefaultAsync(n => n != name, ct);
+
             public int CountJoined() => db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => p.Id).Count();
 
             public Task<string> FirstNameAsync(string suffix, CancellationToken ct)

@@ -142,10 +142,6 @@ internal static class ExceptionMessages
         "No generated accessor is registered for the navigation '{0}.{1}'. Make sure the project that declares the query " +
         "references KetPsi.EntityFrameworkCore.Generator.";
 
-    public const string TrackingRequiresEfCore9UnderAot =
-        "Tracking queries need EF Core 9 or later under Native AOT; EF Core 8 cannot track entities there. Add " +
-        "AsNoTracking() to the query, or set the context's QueryTrackingBehavior to NoTracking.";
-
     // Same messages as LINQ and EF Core, so callers see the same exceptions.
     public const string SequenceContainsNoElements = "Sequence contains no elements";
 
@@ -189,8 +185,9 @@ internal static class ExceptionMessages
 
     public const string SequenceContainsMoreThanOneElementAsync = "Sequence contains more than one element.";
 
-    // What EF Core 10 throws for Min, Max or Average of no rows into a non-nullable type.
-    public const string NullableObjectMustHaveAValue = "Nullable object must have a value.";
+    // What Nullable<T>.Value throws without a value, as EF Core's materializers do, and EF Core 10 and later for Min,
+    // Max or Average of no rows into a non-nullable type. Read from the runtime, since .NET 11 words it differently.
+    public static readonly string NullableObjectMustHaveAValue = ReadNullableValueMessage(null);
 
     public const string CapturedValueNotSupported =
         "The predicate value '{1}' ({0}) cannot be read. The generated interceptor does not match the expression tree " +
@@ -202,4 +199,16 @@ internal static class ExceptionMessages
     public const string DialectNotRegistered =
         "No KetPsi.EntityFrameworkCore SQL dialect is registered for the EF Core provider '{0}'. " +
         "Reference the dialect package for your database, such as KetPsi.EntityFrameworkCore.SqlServer.";
+
+    private static string ReadNullableValueMessage(int? none)
+    {
+        try
+        {
+            return none!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return exception.Message;
+        }
+    }
 }

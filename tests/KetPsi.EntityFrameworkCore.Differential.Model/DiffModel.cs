@@ -156,6 +156,8 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
 /// </summary>
 public sealed class CommandCounter : DbCommandInterceptor
 {
+    private const string NoCountOff = "SET NOCOUNT OFF;";
+
     /// <summary>The number of queries EF Core ran, ExecuteDelete and stored procedures included.</summary>
     public int Reads { get; private set; }
 
@@ -204,10 +206,16 @@ public sealed class CommandCounter : DbCommandInterceptor
         return ValueTask.FromResult(result);
     }
 
-    // ExecuteDelete runs as a query does, outside SaveChanges, and so does FromSql of a stored procedure.
+    // ExecuteDelete runs as a query does, outside SaveChanges, and so does FromSql of a stored procedure. EF Core 11
+    // sends ExecuteDelete after SET NOCOUNT OFF, so its row count is right on a server that has NOCOUNT on.
     private void Record(DbCommand command)
     {
         var text = command.CommandText.TrimStart();
+        if (text.StartsWith(NoCountOff, StringComparison.OrdinalIgnoreCase))
+        {
+            text = text[NoCountOff.Length..].TrimStart();
+        }
+
         if (text.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) || text.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase)
             || text.StartsWith("EXEC", StringComparison.OrdinalIgnoreCase))
         {

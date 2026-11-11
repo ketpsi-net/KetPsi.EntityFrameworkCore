@@ -108,6 +108,20 @@ public sealed class JoinInterceptorTests : IDisposable
         Assert.Equal($"SELECT TOP(1) [t1].[Name] {Join} ORDER BY [t0].[Id]", _connection.LastCommand.CommandText);
     }
 
+    [Fact]
+    public async Task PredicateTerminals_FilterThroughTheProjection()
+    {
+        _connection.Scalar = 2;
+        Assert.Equal(2, Invoke("CountThroughThePair", 3));
+        Assert.Equal($"SELECT COUNT(*) {Join} WHERE [t1].[Rating] > @p0", _connection.LastCommand.CommandText);
+        Assert.Equal([3], Parameters());
+
+        _connection.Rows = Table(["Name"], ["b"]);
+        Assert.Equal("b", await InvokeAsync("FirstColumnAsync", "a", Token));
+        Assert.Equal("SELECT TOP(1) [t0].[Name] FROM [Blogs] AS [t0] WHERE [t0].[Name] <> @p0 ORDER BY [t0].[Name]", _connection.LastCommand.CommandText);
+        Assert.Equal(["a"], Parameters());
+    }
+
     private object?[] Parameters() => [.. _connection.LastCommand.Parameters.Cast<DbParameter>().Select(static p => p.Value)];
 
     private static DataTable Table(string[] columns, params object[][] rows)

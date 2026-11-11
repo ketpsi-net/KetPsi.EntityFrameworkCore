@@ -320,7 +320,7 @@ internal static class InterceptorEmitter
             return;
         }
 
-        if (site.Operator == OperatorKind.Where && site.Predicate is { } predicate)
+        if (TakesPredicate(site) && site.Predicate is { } predicate)
         {
             writer.Open($"if ({source} is var query && {SqlProjection}.IsInterceptable(query))");
             if (predicate.ValuePaths.Count > 0)
@@ -328,8 +328,15 @@ internal static class InterceptorEmitter
                 writer.Line($"var {PredicateTranslator.BodyVariable} = {parameters[1].Name}.Body;");
             }
 
+            // A terminal's predicate is a Where before the terminal.
+            var filtered = $"{SqlProjection}.Where(query, {template}, {Values(predicate)})";
+            var result = site.Operator == OperatorKind.Where
+                ? filtered
+                : site.IsAsync
+                    ? $"{SqlProjection}.{site.Operator}{AsyncSuffix}({filtered}, {parameters[parameters.Count - 1].Name})"
+                    : $"{SqlProjection}.{site.Operator}({filtered})";
             writer
-                .Line($"return {SqlProjection}.Where(query, {template}, {Values(predicate)});")
+                .Line($"return {result};")
                 .Close()
                 .Line()
                 .Line($"return {fallback};")

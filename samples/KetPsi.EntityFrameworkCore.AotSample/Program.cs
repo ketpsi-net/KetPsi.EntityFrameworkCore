@@ -314,6 +314,18 @@ await CheckAsync(
     "Dune:4,Dune:5,Kind of Blue:5|4");
 
 await CheckAsync(
+    "Terminals whose predicate reads through a projection",
+    async db =>
+    {
+        var books = db.Reviews.Join(db.Products, r => r.ProductId, p => p.Id, (r, p) => new { r, p })
+            .Count(x => x.r.Stars >= 4 && x.p.Category == Category.Books);
+        var name = await db.Products.Select(p => p.Name).OrderBy(n => n).FirstOrDefaultAsync(n => n != "Abbey Road", cancellationToken);
+        var belowFive = db.Database.SqlQuery<int>($"SELECT Stars AS Value FROM shop.Reviews").Count(s => s < 5);
+        return $"{books}|{name}|{belowFive}";
+    },
+    "2|Celeste|2");
+
+await CheckAsync(
     "FromSql sent as written, and composed over",
     async db =>
     {
@@ -360,26 +372,7 @@ await CheckAsync(
     },
     "2|2");
 
-#if NET8_0
-// EF Core 8 cannot track entities under Native AOT: tracking queries fail with a clear error instead of EF Core's
-// "model building is not supported". Add AsNoTracking(), or move to EF Core 9 or later to track.
-await CheckAsync(
-    "Tracking query under Native AOT needs EF Core 9",
-    db =>
-    {
-        try
-        {
-            _ = db.Products.First(p => p.Id == 1);
-            return Task.FromResult("tracked");
-        }
-        catch (InvalidOperationException exception) when (exception.Message.Contains("EF Core 9", StringComparison.Ordinal))
-        {
-            return Task.FromResult("rejected");
-        }
-    },
-    RuntimeFeature.IsDynamicCodeSupported ? "tracked" : "rejected");
-#else
-// EF Core 9 and 10 can track and save changes under Native AOT with a --nativeaot compiled model; EF Core 8 cannot.
+// EF Core tracks and saves changes under Native AOT with a --nativeaot compiled model.
 await CheckAsync(
     "Tracked query attaches as Unchanged with its shadow value",
     db =>
@@ -479,7 +472,6 @@ await CheckAsync(
         return (await db.Products.AsNoTracking().SingleAsync(p => p.Id == 9, cancellationToken)).Name;
     },
     "Snow Crash");
-#endif
 
 Console.WriteLine(failures == 0 ? "All checks passed." : $"{failures} check(s) failed.");
 return failures == 0 ? Success : Failure;

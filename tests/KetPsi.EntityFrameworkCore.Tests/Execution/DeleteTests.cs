@@ -29,7 +29,7 @@ public sealed class DeleteTests : IDisposable
         var query = SqlQuery.Where(_db.Items, new ComparisonTemplate(nameof(Item.Score), ComparisonOperator.LessThan, 0), [5]);
 
         Assert.Equal(3, SqlQuery.ExecuteDelete(query));
-        Assert.Equal("DELETE FROM [t0] FROM [shop].[Items] AS [t0] WHERE [t0].[Score] < @p0", _connection.LastCommand.CommandText);
+        Assert.Equal($"{Sql.SqlBuilderDeleteTests.NoCountOff}DELETE FROM [t0] FROM [shop].[Items] AS [t0] WHERE [t0].[Score] < @p0", _connection.LastCommand.CommandText);
         Assert.Equal(ConnectionState.Closed, _connection.State);
     }
 

@@ -53,8 +53,11 @@ public static partial class Queries
     public static List<Blog> FromSqlDbParameter(DiffDb db, int rating, int views)
         => db.Blogs.FromSqlRaw("SELECT * FROM diff.Blogs WHERE Rating = @p0", new SqlParameter("p0", rating)).AsNoTracking().Where(b => b.Views > views).ToList();
 
+    // EF Core 11 makes FromSqlInterpolated obsolete in favor of FromSql; it still runs, so it stays covered.
+#pragma warning disable CS0618
     public static List<Blog> FromSqlInterpolatedWithComment(DiffDb db, int rating)
         => db.Blogs.FromSqlInterpolated($"-- the blogs\n/* rated */ SELECT * FROM diff.Blogs WHERE Rating > {rating}").AsNoTracking().ToList();
+#pragma warning restore CS0618
 
     public static List<Blog> FromSqlNonComposable(DiffDb db)
         => db.Blogs.FromSql($"EXEC sp_executesql N'SELECT * FROM diff.Blogs'").AsNoTracking().Where(b => b.IsActive).ToList();
@@ -90,7 +93,7 @@ public static partial class Queries
     public static List<int?> SqlQueryNullable(DiffDb db) => db.Database.SqlQuery<int?>($"SELECT Views AS Value FROM diff.Blogs").ToList();
 
     public static int SqlQueryNullableCount(DiffDb db, int views)
-        => db.Database.SqlQuery<int?>($"SELECT Views AS Value FROM diff.Blogs").Where(v => v > views).Count();
+        => db.Database.SqlQuery<int?>($"SELECT Views AS Value FROM diff.Blogs").Count(v => v > views);
 
     public static List<int> SqlQueryNullIntoInt(DiffDb db) => db.Database.SqlQuery<int>($"SELECT Views AS Value FROM diff.Blogs").ToList();
 

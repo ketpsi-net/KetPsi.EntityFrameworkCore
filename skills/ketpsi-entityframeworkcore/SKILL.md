@@ -18,7 +18,8 @@ dotnet add package KetPsi.EntityFrameworkCore.SqlServer --prerelease
 - That package depends on `KetPsi.EntityFrameworkCore` (runtime + generator + MSBuild props/targets). Nothing else to
   register: the dialect and the generated readers register themselves at module load.
 - Configure the context as usual (`UseSqlServer(...)`).
-- The build needs the .NET 9 SDK (9.0.100) or later, also for `net8.0` targets.
+- The build needs the .NET 9 SDK (9.0.100) or later. EF Core 9, 10 and 11 are supported (`net9.0`,
+  `net10.0`, `net11.0`); EF Core 8 is not.
 - If the build reports **KP0002**, the project overrides `InterceptorsNamespaces` without keeping
   `KetPsi.EntityFrameworkCore.Generated`; append it instead of replacing the list.
 
@@ -39,10 +40,10 @@ var page = await db.Blogs
   then `q = q.Where(...)`).
 - `Where`, `WhereIf`, `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending`, `Skip`, `Take`.
 - `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`,
-  `IgnoreQueryFilters()` (EF Core 10 also `IgnoreQueryFilters(["name"])`).
+  `IgnoreQueryFilters()` (EF Core 10 and later also `IgnoreQueryFilters(["name"])`).
 - `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`, `AsSplitQuery()`, `AsSingleQuery()` (see Include below).
-- `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below without a predicate (see
-  Projections below).
+- `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below, with a predicate when it
+  reads the projection's entity and column members (see Projections below).
 - `FromSql($"...")`, `FromSqlInterpolated($"...")` and `FromSqlRaw("...", args)` on a `DbSet`, with any operator after
   them, and `db.Database.SqlQuery<T>($"...")` and `SqlQueryRaw<T>` for scalars and unmapped types (see Raw SQL below).
 - `Join(inner, outerKey, innerKey, (o, i) => ...)`, inner joins in method syntax (see Join below).
@@ -173,16 +174,17 @@ var rows = await db.Posts
   (`p`, `p.Blog`). Each navigation is joined like an included reference: `INNER JOIN` when required, `LEFT JOIN`
   when optional, with the target's query filters in the join.
 - A value read through an optional navigation is null when there is no related entity. For a non-nullable value
-  type that throws "Nullable object must have a value.", as in EF Core; cast it, `(int?)p.Blog.Owner.Id`, to get null.
+  type that throws what `Nullable<T>.Value` throws, as in EF Core; cast it, `(int?)p.Blog.Owner.Id`, to get null.
 - Projected entities are tracked, identity-resolved and get the includes below them, as in EF Core:
   `Include(p => p.Blog).ThenInclude(b => b.Posts).Select(p => p.Blog)` loads each blog's posts. Includes of
   entities the projection doesn't select are ignored. Without tracking or identity resolution, every projected
   entity is its own instance and nothing is connected.
 - A projection with entities reads every row before returning any; one with only columns streams them.
-- After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are allowed.
+- After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals are allowed.
   `Skip`/`Take` after `Select` page the entity rows, so they give the same rows as before it.
-- `Where`, `OrderBy`/`ThenBy`, another `Select` and `Join` can follow a `Select` when they read only its members that
-  are entities or columns as they are, before any paging: `Select(p => new { p, p.Blog }).Where(x => x.Blog.Rating > 1)`
+- `Where`, `OrderBy`/`ThenBy`, another `Select`, `Join` and the terminals' predicates (`Count(x => ...)`,
+  `First(x => ...)`, ...) can follow a `Select` when they read only its members that are entities or columns as they
+  are, before any paging: `Select(p => new { p, p.Blog }).Where(x => x.Blog.Rating > 1)`
   is `WHERE` on the blog's column. A member that is computed, or anything after `Skip`, `Take` or `Distinct`, is
   KP1007; filter and order before the `Select` instead.
 - `Distinct` after `Select` compares the projected columns in SQL, so it can't follow computed members (KP1007).
@@ -235,11 +237,11 @@ var rows = db.Database.SqlQuery<BlogRow>($"EXEC dbo.BlogRows").ToList();   // pu
   the column named `Value` when something composes over it, as in EF Core; name the column `Value` to compose.
 - A class or record is read from the columns named like its properties, ignoring case and order, through an object
   initializer or a constructor whose parameters are its properties. A missing column throws "The required column 'X'
-  was not present". A null in a non-nullable column throws, as in EF Core: "Nullable object must have a value." for a
+  was not present". A null in a non-nullable column throws, as in EF Core: what `Nullable<T>.Value` throws for a
   scalar, the provider's error for a property; use `int?` or `string?` for columns that can be null.
-- `Where`, `OrderBy`, `Select`, paging, `Distinct`, aggregates and the terminals without a predicate work on the
-  result's members, such as `rows.Where(r => r.Id > 1).Select(r => r.Name)`; write `Where(v => v > 1).Count()`, not
-  `Count(v => v > 1)`. Results are never tracked.
+- `Where`, `OrderBy`, `Select`, paging, `Distinct`, aggregates and the terminals, with or without a predicate, work
+  on the result's members, such as `rows.Where(r => r.Id > 1).Select(r => r.Name)` or `ids.Count(v => v > 1)`.
+  Results are never tracked.
 - Not supported (KP1004): a type with navigation properties (EF Core rejects it too; use `FromSql` on its set), a
   collection, or a type without an accessible parameterless constructor or one whose parameters are its properties.
 
@@ -292,7 +294,7 @@ var stats = await db.Posts
   property, `g.Sum()`, `g.Max()` and the rest work without a selector. The SQL is EF Core's.
 - A `Select` on the groups can compute in C# from those values (`g.Key + "!"`, `g.Count() * 2`), as projections do.
   EF Core 10 computes some of these in SQL instead: `g.Key + "!"` on an enum key gives `"0!"` there and `"Draft!"`
-  in KetPsi, EF Core 8 and EF Core 9.
+  in KetPsi and EF Core 9.
 - `Where` on the groups, before or after the `Select`, becomes `HAVING`; `OrderBy`/`ThenBy` on keys and aggregates,
   before or after it, becomes `ORDER BY`. After the `Select` they read members that are a key part or an aggregate as
   they are. Then page, `Distinct`, aggregate (`Select(g => g.Count()).Max()`) and take the first, as after any `Select`.
@@ -302,7 +304,7 @@ var stats = await db.Posts
   where the key changes, so the order inside a group is the database's, as in EF Core. Elements are tracked and
   identity-resolved like any queried entity, and get the includes before the `GroupBy`. After `Where` or `OrderBy` on
   the groups, they can only be selected from (KP1008). As in EF Core, a null in a nullable value-type key (`int?`)
-  throws "Nullable object must have a value." when the groups are returned directly; a `Select` on the groups reads
+  throws what `Nullable<T>.Value` throws when the groups are returned directly; a `Select` on the groups reads
   the null key.
 - Not supported yet (KP2011): `g.First()`, `g.ToList()`, `g.Select(...).ToList()` and other uses of the group's rows,
   aggregates through navigations (`g.Max(p => p.Blog.Rating)`, a correlated subquery in EF Core), aggregate selectors
@@ -335,12 +337,10 @@ Same behavior as EF Core:
 ## Native AOT checklist
 
 1. Generate a compiled model: `dotnet ef dbcontext optimize --output-dir CompiledModels --namespace MyApp.CompiledModel`,
-   adding `--nativeaot` on EF Core 9 and 10, and call `options.UseModel(MyApp.CompiledModel.MyDbModel.Instance)`.
+   adding `--nativeaot`, and call `options.UseModel(MyApp.CompiledModel.MyDbModel.Instance)`.
 2. Compiled models cannot hold query filters; filters only work under JIT.
-3. EF Core 8 cannot track or save changes under Native AOT. KetPsi throws a clear `InvalidOperationException` for
-   tracking queries there, `Find` and `FromSql` on a tracking context included; use `AsNoTracking()` (or set the context's
-   `QueryTrackingBehavior` to `NoTracking`), or move to EF Core 9+. `ExecuteDelete` never tracks, so it works on all
-   three. No-tracking queries with `Include` work under Native AOT on EF Core 8, 9 and 10.
+3. With a `--nativeaot` compiled model, tracking queries, `Find`, `Include`, `FromSql` and `SaveChanges` all work
+   under Native AOT, as do no-tracking queries and `ExecuteDelete`.
 4. Keep `InvariantGlobalization` off; SqlClient needs culture data.
 5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor; KetPsi itself adds none.
 6. Decimal comparisons in predicates (`p.Price < 20m`) are safe: the compiler builds them by reflection, and the
@@ -350,7 +350,7 @@ Same behavior as EF Core:
    reflection over the result type's properties. KetPsi never reads that tree, so the warning is harmless and the
    query runs under Native AOT. Records, other constructors, single members and `ValueTuple.Create` don't warn; use one
    of them where trim warnings must stay at zero.
-8. `FromSql`, `FromSqlRaw`, `Database.SqlQuery<T>` and `SqlQueryRaw<T>` run under Native AOT on EF Core 8, 9 and 10:
+8. `FromSql`, `FromSqlRaw`, `Database.SqlQuery<T>` and `SqlQueryRaw<T>` run under Native AOT:
    their readers are generated, and `SqlQuery<T>` needs no entity in the model. `Database.ExecuteSql` and
    `ExecuteSqlRaw` are EF Core's own (no LINQ to translate) and work under Native AOT too.
 
@@ -364,7 +364,7 @@ Same behavior as EF Core:
 | KP1004 | Make the `SqlQuery<T>` result a scalar, or a class or record of column properties without navigations, constructible by generated code |
 | KP1005 | Write the lambda inline at the call |
 | KP1006 | Use the plain overload (no comparer, no index, no default value) |
-| KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals without a predicate, plus `Where`, `OrderBy`, `Select` and `Join` that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |
+| KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals, plus `Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |
 | KP1008 | On groups use `Where`, `OrderBy`/`ThenBy`, `Select`, `Count`, `LongCount`, `Any`, `ToList`, `ToArray`; select the key and aggregates to page or take the first |
 | KP1009 | Rewrite the query expression with methods: `where` is `Where`, `orderby` is `OrderBy`/`ThenBy`, `select` is `Select` |
 | KP2001–KP2005 | Simplify the predicate to comparisons of a property (or one through reference navigations) with a value; query related collections separately |

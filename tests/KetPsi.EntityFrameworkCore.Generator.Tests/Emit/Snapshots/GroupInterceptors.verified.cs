@@ -117,7 +117,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TElement>(
                 query,
                 new string[] { "Views" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
                 new string[] { "Id" },
                 global::System.Array.Empty<string>(),
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TElement>)(object)Reader(static (reader, ordinals, entities) => reader.GetInt32(ordinals[0])));
@@ -147,7 +147,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
                 query,
                 new string[] { "Views" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
                 global::System.Array.Empty<string>(),
                 new string[] { "" },
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));
@@ -277,7 +277,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
                 query,
                 new string[] { "Views" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
                 global::System.Array.Empty<string>(),
                 new string[] { "" },
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));
@@ -421,7 +421,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
                 query,
                 new string[] { "Views" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : (reader.IsDBNull(ordinals[0]) ? (int?)null : reader.GetInt32(ordinals[0])))),
                 global::System.Array.Empty<string>(),
                 new string[] { "" },
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));
@@ -831,7 +831,7 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var groups = global::KetPsi.EntityFrameworkCore.Infrastructure.SqlGrouping.GroupBy<global::Shop.Blog, TKey, TSource>(
                 query,
                 new string[] { "Status", "Views" },
-                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => new { Status = (global::Shop.Status)reader.GetInt32(ordinals[0]), Views = (reader.IsDBNull(ordinals[1]) ? throw new global::System.InvalidOperationException("Nullable object must have a value.") : (reader.IsDBNull(ordinals[1]) ? (int?)null : reader.GetInt32(ordinals[1]))) }),
+                (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TKey>)(object)Reader(static (reader, ordinals, entities) => new { Status = (global::Shop.Status)reader.GetInt32(ordinals[0]), Views = (reader.IsDBNull(ordinals[1]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : (reader.IsDBNull(ordinals[1]) ? (int?)null : reader.GetInt32(ordinals[1]))) }),
                 global::System.Array.Empty<string>(),
                 new string[] { "" },
                 (global::KetPsi.EntityFrameworkCore.Infrastructure.ProjectionReader<TSource>)(object)Reader(static (reader, ordinals, entities) => ((global::Shop.Blog)entities[0]!)));

@@ -135,6 +135,31 @@ public static partial class Queries
 
     public static List<int> SelectColumnThenWhere(DiffDb db, int rating) => db.Blogs.Select(b => b.Rating).Where(r => r > rating).ToList();
 
+    // Terminals whose predicate reads through a projection's members.
+    public static int JoinCountThroughThePair(DiffDb db, int rating)
+        => db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).Count(x => x.b.Rating >= rating);
+
+    public static Task<bool> JoinAnyAsync(DiffDb db, string name)
+        => db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p, b }).AnyAsync(x => x.b.Name == name && x.p.Title != "p101");
+
+    public static object? JoinFirstOrDefault(DiffDb db, int rating)
+        => db.Posts.AsNoTracking().Join(db.Blogs.AsNoTracking(), p => p.BlogId, b => b.Id, (p, b) => new { p, b }).OrderBy(x => x.p.Id).FirstOrDefault(x => x.b.Rating > rating);
+
+    public static object JoinFirstWithoutMatch(DiffDb db)
+        => db.Posts.Join(db.Blogs, p => p.BlogId, b => b.Id, (p, b) => new { p.Id, b.Rating }).First(x => x.Rating > 100);
+
+    public static int SelectColumnSingle(DiffDb db, int id) => db.Blogs.Select(b => b.Id).Single(i => i == id);
+
+    public static int SelectColumnSingleOfMany(DiffDb db) => db.Blogs.Select(b => b.Id).Single(i => i > 1);
+
+    public static long SelectColumnLongCount(DiffDb db, int views) => db.Blogs.Select(b => b.Views).LongCount(v => v > views);
+
+    public static async Task<object> SelectEntitiesLastAsync(DiffDb db, int rating)
+        => await db.Posts.AsNoTracking().Select(p => new { p, p.Blog }).OrderBy(x => x.p.Id).LastAsync(x => x.Blog.Rating < rating);
+
+    public static RawBlogRow? SqlQueryRecordFirstOrDefault(DiffDb db)
+        => db.Database.SqlQuery<RawBlogRow>($"SELECT Id, Name, Views FROM diff.Blogs").OrderBy(x => x.Id).FirstOrDefault(x => x.Views == null);
+
     private static object InRolledBackTransaction(DiffDb db, Func<int> delete)
     {
         using var transaction = db.Database.BeginTransaction();

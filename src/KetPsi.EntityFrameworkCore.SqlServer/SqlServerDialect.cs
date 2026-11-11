@@ -25,9 +25,16 @@ public sealed class SqlServerDialect : ISqlDialect
     private const string TimeSpanFormat = @"hh\:mm\:ss\.fffffff";
 
     private const string MaxFacet = "max";
+
+    // EF Core 11 sends ExecuteDelete after SET NOCOUNT OFF, so its row count is right on a server that has NOCOUNT on.
+    private const int EfCoreMajorWithNoCountOff = 11;
+    private const string NoCountOff = "SET NOCOUNT OFF; ";
     private const int MaxSize = -1;
 
     // Store types whose parameter type has no facets to set.
+    private static readonly bool SetsNoCountOff =
+        typeof(Microsoft.EntityFrameworkCore.DbContext).Assembly.GetName().Version?.Major >= EfCoreMajorWithNoCountOff;
+
     private static readonly Dictionary<string, DbType> SimpleTypes = new(StringComparer.Ordinal)
     {
         ["bit"] = DbType.Boolean,
@@ -134,13 +141,17 @@ public sealed class SqlServerDialect : ISqlDialect
     }
 
     /// <inheritdoc/>
-    /// <remarks>SQL Server's <c>DELETE FROM [alias] FROM ...</c>, as EF Core writes it.</remarks>
+    /// <remarks>
+    /// SQL Server's <c>DELETE FROM [alias] FROM ...</c>, as EF Core writes it; on EF Core 11 and later after
+    /// <c>SET NOCOUNT OFF</c>, as EF Core 11 sends it.
+    /// </remarks>
     public string Delete(string alias, string from)
     {
         ArgumentException.ThrowIfNullOrEmpty(alias);
         ArgumentException.ThrowIfNullOrEmpty(from);
 
-        return "DELETE FROM " + alias + " FROM " + from;
+        var delete = "DELETE FROM " + alias + " FROM " + from;
+        return SetsNoCountOff ? NoCountOff + delete : delete;
     }
 
     /// <inheritdoc/>

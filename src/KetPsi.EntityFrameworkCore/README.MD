@@ -33,8 +33,8 @@ dotnet add package KetPsi.EntityFrameworkCore.SqlServer --prerelease
 ```
 
 The SQL Server package brings in `KetPsi.EntityFrameworkCore`, which contains the runtime, the source generator and the
-MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.0.100) or later, even when targeting
-`net8.0`.
+MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.0.100) or later. It
+targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 is not supported.
 
 ## What is supported
 
@@ -45,7 +45,7 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 | Ordering | `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending` on a property of the entity or of a reference navigation |
 | Paging | `Skip`, `Take`, in any order and combination, as EF Core translates them |
 | Tracking | `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`, and the context's `QueryTrackingBehavior` |
-| Query filters | Model query filters always apply; `IgnoreQueryFilters()` (and, on EF Core 10, `IgnoreQueryFilters(["name"])`) |
+| Query filters | Model query filters always apply; `IgnoreQueryFilters()` (and, on EF Core 10 and later, `IgnoreQueryFilters(["name"])`) |
 | Related data | `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`; `AsSplitQuery()` and `AsSingleQuery()` are accepted |
 | Projection | `Select` to anonymous types, records and constructors, object initializers, `ValueTuple.Create` or one member, reading properties, reference navigations and entities, with computed members; then `Skip`, `Take`, `Distinct`, aggregates and terminals |
 | Distinct | `Distinct()` on entities and on projections without computed members |
@@ -68,7 +68,7 @@ MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.
 - Values: constants, locals, parameters, fields and properties of them, static members. Every value is sent as a
   `DbParameter`; nothing is concatenated into SQL.
 
-Null handling follows C#, as EF Core 9 and 10 do: `b.Views != views` with `views == null` means `IS NOT NULL`, and
+Null handling follows C#, as EF Core 9 and later do: `b.Views != views` with `views == null` means `IS NOT NULL`, and
 `!(b.Views > 10)` keeps rows where `Views` is null.
 
 ### Tracking
@@ -103,8 +103,9 @@ are tracked, identity-resolved and given the includes below them, as in EF Core.
 navigation is null, and a non-nullable value type there throws as it does in EF Core unless it is cast to nullable.
 Computed members run in C# on the values read, as EF Core evaluates a final projection on the client; captured values
 are read each time the query runs. Following C# rather than SQL, `Math.Round` rounds halves to even and string methods
-use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals without a predicate are
-allowed, and `Where`, `OrderBy`, `Select` and `Join` that read only its entity and column members, before any paging.
+use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals are allowed, and
+`Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read only its entity and column members, before
+any paging.
 Collection navigations in projections are not supported yet.
 
 ### Raw SQL
@@ -159,11 +160,11 @@ through navigations, and computed or constant keys.
 
 KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things under Native AOT:
 
-- **A compiled model.** Generate it with `dotnet ef dbcontext optimize` (add `--nativeaot` on EF Core 9 and 10) and
+- **A compiled model.** Generate it with `dotnet ef dbcontext optimize` (add `--nativeaot`) and
   register it with `options.UseModel(...)`.
 - **No query filters under AOT.** EF Core compiled models cannot contain query filters. Query filters work under JIT.
-- **EF Core 8 cannot track or save under Native AOT.** KetPsi rejects tracking queries there with a clear error; use
-  `AsNoTracking()` or move to EF Core 9 or later. No-tracking queries, `Include` included, work on every version.
+- **Tracking needs `--nativeaot`.** With it, tracking queries, `Include`, `Find` and `SaveChanges` work under Native
+  AOT.
 - **No `InvariantGlobalization`.** SqlClient fails with it enabled.
 - **Decimal operators are handled.** The compiler builds decimal comparisons such as `p.Price < 20m` by reflection,
   which trimming would break; queries that use them keep decimal's operator methods, so they work without relying on

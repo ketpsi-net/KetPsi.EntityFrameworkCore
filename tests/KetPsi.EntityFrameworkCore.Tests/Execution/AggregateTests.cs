@@ -66,7 +66,7 @@ public sealed class AggregateTests : IDisposable
             () => SqlQuery.Aggregate<Item, int>(_db.Items, AggregateFunction.Max, nameof(Item.Id), AggregateValueType.Column));
 
         Assert.Equal(
-            QueryRunner.EfCoreMajorVersion >= 10 ? "Nullable object must have a value." : "Sequence contains no elements.",
+            QueryRunner.EfCoreMajorVersion >= 10 ? NoValueMessage() : "Sequence contains no elements.",
             exception.Message);
     }
 
@@ -84,11 +84,13 @@ public sealed class AggregateTests : IDisposable
             () => SqlQuery.Aggregate<Item, int>(_db.Items, AggregateFunction.Max, "", AggregateValueType.Column));
 
     [Theory]
-    [InlineData(8, "Sequence contains no elements.")]
     [InlineData(9, "Sequence contains no elements.")]
-    [InlineData(10, "Nullable object must have a value.")]
-    public void Convert_NullToValueType_UsesThatVersionsMessage(int efCoreMajorVersion, string message)
+    [InlineData(10, null)]
+    [InlineData(11, null)]
+    public void Convert_NullToValueType_UsesThatVersionsMessage(int efCoreMajorVersion, string? message)
     {
+        // EF Core 10 and later throw what Nullable<T>.Value throws, which the runtime words.
+        message ??= NoValueMessage();
         Assert.Equal(message, Assert.Throws<InvalidOperationException>(() => AggregateExecutor.Convert<int>(DBNull.Value, efCoreMajorVersion)).Message);
         Assert.Equal(message, Assert.Throws<InvalidOperationException>(() => AggregateExecutor.Convert<DateTime>(null, efCoreMajorVersion)).Message);
     }
@@ -127,4 +129,7 @@ public sealed class AggregateTests : IDisposable
         Assert.Equal(5L, AggregateExecutor.Convert<long>(5, 10));
         Assert.Equal(2.5f, AggregateExecutor.Convert<float>(2.5, 10));
     }
+
+    // What Nullable<T>.Value throws without a value; .NET 11 words it differently from earlier versions.
+    private static string NoValueMessage(int? none = null) => Assert.Throws<InvalidOperationException>(() => none!.Value).Message;
 }

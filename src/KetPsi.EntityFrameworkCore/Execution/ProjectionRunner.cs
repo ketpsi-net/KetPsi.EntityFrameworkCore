@@ -225,11 +225,7 @@ internal static class ProjectionRunner
         var filtersFor = QueryRunner.FiltersFor(context, query.Tail);
 
         var tracking = QueryRunner.ResolveTracking(query.Tail, context.ChangeTracker.QueryTrackingBehavior);
-        if (tracking == QueryTrackingBehavior.TrackAll)
-        {
-            QueryRunner.EnsureTrackingSupported(RuntimeFeature.IsDynamicCodeSupported, QueryRunner.EfCoreMajorVersion);
-        }
-        else if (tracking == QueryTrackingBehavior.NoTracking)
+        if (tracking == QueryTrackingBehavior.NoTracking)
         {
             // Only the includes a projected entity gets are applied, so only they can form a cycle, as in EF Core.
             foreach (var path in projection.EntityPaths)
