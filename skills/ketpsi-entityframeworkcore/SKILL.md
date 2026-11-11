@@ -18,7 +18,8 @@ dotnet add package KetPsi.EntityFrameworkCore.SqlServer --prerelease
 - That package depends on `KetPsi.EntityFrameworkCore` (runtime + generator + MSBuild props/targets). Nothing else to
   register: the dialect and the generated readers register themselves at module load.
 - Configure the context as usual (`UseSqlServer(...)`).
-- The build needs the .NET 9 SDK (9.0.100) or later. EF Core 9 and 10 are supported; EF Core 8 is not.
+- The build needs the .NET 9 SDK (9.0.100) or later. EF Core 9, 10 and 11 are supported (`net9.0`,
+  `net10.0`, `net11.0`); EF Core 8 is not.
 - If the build reports **KP0002**, the project overrides `InterceptorsNamespaces` without keeping
   `KetPsi.EntityFrameworkCore.Generated`; append it instead of replacing the list.
 
@@ -39,7 +40,7 @@ var page = await db.Blogs
   then `q = q.Where(...)`).
 - `Where`, `WhereIf`, `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending`, `Skip`, `Take`.
 - `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`,
-  `IgnoreQueryFilters()` (EF Core 10 also `IgnoreQueryFilters(["name"])`).
+  `IgnoreQueryFilters()` (EF Core 10 and later also `IgnoreQueryFilters(["name"])`).
 - `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`, `AsSplitQuery()`, `AsSingleQuery()` (see Include below).
 - `Select(x => ...)`, then `Skip`, `Take`, `Distinct`, aggregates and the terminals below, with a predicate when it
   reads the projection's entity and column members (see Projections below).

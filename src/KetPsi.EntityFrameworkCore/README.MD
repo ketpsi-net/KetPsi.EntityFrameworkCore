@@ -34,7 +34,7 @@ dotnet add package KetPsi.EntityFrameworkCore.SqlServer --prerelease
 
 The SQL Server package brings in `KetPsi.EntityFrameworkCore`, which contains the runtime, the source generator and the
 MSBuild settings that enable its interceptors. Building needs the .NET 9 SDK (9.0.100) or later. It
-targets `net9.0` and `net10.0` with EF Core 9 and 10; EF Core 8 is not supported.
+targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 is not supported.
 
 ## What is supported
 
@@ -45,7 +45,7 @@ targets `net9.0` and `net10.0` with EF Core 9 and 10; EF Core 8 is not supported
 | Ordering | `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending` on a property of the entity or of a reference navigation |
 | Paging | `Skip`, `Take`, in any order and combination, as EF Core translates them |
 | Tracking | `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`, and the context's `QueryTrackingBehavior` |
-| Query filters | Model query filters always apply; `IgnoreQueryFilters()` (and, on EF Core 10, `IgnoreQueryFilters(["name"])`) |
+| Query filters | Model query filters always apply; `IgnoreQueryFilters()` (and, on EF Core 10 and later, `IgnoreQueryFilters(["name"])`) |
 | Related data | `Include(x => x.Navigation)`, `ThenInclude(x => x.Navigation)`; `AsSplitQuery()` and `AsSingleQuery()` are accepted |
 | Projection | `Select` to anonymous types, records and constructors, object initializers, `ValueTuple.Create` or one member, reading properties, reference navigations and entities, with computed members; then `Skip`, `Take`, `Distinct`, aggregates and terminals |
 | Distinct | `Distinct()` on entities and on projections without computed members |
@@ -68,7 +68,7 @@ targets `net9.0` and `net10.0` with EF Core 9 and 10; EF Core 8 is not supported
 - Values: constants, locals, parameters, fields and properties of them, static members. Every value is sent as a
   `DbParameter`; nothing is concatenated into SQL.
 
-Null handling follows C#, as EF Core 9 and 10 do: `b.Views != views` with `views == null` means `IS NOT NULL`, and
+Null handling follows C#, as EF Core 9 and later do: `b.Views != views` with `views == null` means `IS NOT NULL`, and
 `!(b.Views > 10)` keeps rows where `Views` is null.
 
 ### Tracking
