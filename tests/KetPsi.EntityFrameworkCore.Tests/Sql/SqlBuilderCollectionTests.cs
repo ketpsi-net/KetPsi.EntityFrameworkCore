@@ -287,16 +287,21 @@ public sealed class SqlBuilderCollectionTests : IDisposable
             () => WhereSql(Exists("Topics", Exists("^Followers"))));
 
     [Fact]
-    public void CollectionInAJoinedQuery_IsNotSupported()
-        => Assert.Throws<NotSupportedException>(
-            () => Build(((ProjectedQueryable<int>)SqlQuery.Join(
+    public void CollectionInAJoinedQuery_ReadsTheJoinedRow()
+        => Assert.Equal(
+            "SELECT [t0].[Title] FROM [Topics] AS [t0] INNER JOIN [Forums] AS [t1] ON [t0].[ForumId] = [t1].[Id] " +
+            "WHERE EXISTS (SELECT 1 FROM [Topics] AS [t2] WHERE [t2].[IsDeleted] = CAST(0 AS bit) AND [t1].[Id] = [t2].[ForumId] AND [t2].[Score] > [t1].[MinScore])",
+            Build(((ProjectedQueryable<int>)SqlQuery.Join(
                 Query(_db.Topics),
-                SqlQuery.Where(Query(_db.Forums), Exists("Topics"), []),
+                SqlQuery.Where(
+                    Query(_db.Forums),
+                    Exists("Topics", Compare(P(nameof(Topic.Score)), ComparisonOperator.GreaterThan, P("^" + nameof(Forum.MinScore)))),
+                    []),
                 ["ForumId"],
                 ["Id"],
                 ["Title"],
                 [],
-                static (_, _, _) => 0)).Tail));
+                static (_, _, _) => 0)).Tail, filtered: true).CommandText);
 
     // --- Templates.
 

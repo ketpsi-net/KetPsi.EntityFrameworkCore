@@ -565,43 +565,67 @@ internal sealed class SqlBuilder
         }
     }
 
-    /// <summary>The predicate with each name read through <paramref name="path"/>, such as <c>"$0.Name"</c> for <c>"Name"</c>.</summary>
-    private static PredicateTemplate Prefixed(PredicateTemplate template, string path) => template switch
+    /// <summary>
+    /// The predicate with each name read through <paramref name="path"/>, such as <c>"$0.Name"</c> for <c>"Name"</c>.
+    /// Inside a collection's condition, <paramref name="depth"/> is how many collections in it is, and only the names of
+    /// the row the path reaches are prefixed, such as <c>"^$0.MinScore"</c> for <c>"^MinScore"</c>.
+    /// </summary>
+    private static PredicateTemplate Prefixed(PredicateTemplate template, string path, int depth = 0) => template switch
     {
-        ComparisonTemplate comparison => new ComparisonTemplate(path + "." + comparison.PropertyName, comparison.Comparison, comparison.ValueIndex),
-        BooleanPropertyTemplate boolean => new BooleanPropertyTemplate(path + "." + boolean.PropertyName),
-        NullCheckTemplate nullCheck => new NullCheckTemplate(path + "." + nullCheck.PropertyName, nullCheck.IsNull),
-        InListTemplate inList => new InListTemplate(path + "." + inList.PropertyName, inList.ValueIndex),
-        NotTemplate not => new NotTemplate(Prefixed(not.Operand, path)),
-        AndTemplate and => new AndTemplate(Prefixed(and.Left, path), Prefixed(and.Right, path)),
-        OrTemplate or => new OrTemplate(Prefixed(or.Left, path), Prefixed(or.Right, path)),
+        ComparisonTemplate comparison => new ComparisonTemplate(Name(comparison.PropertyName, path, depth), comparison.Comparison, comparison.ValueIndex),
+        BooleanPropertyTemplate boolean => new BooleanPropertyTemplate(Name(boolean.PropertyName, path, depth)),
+        NullCheckTemplate nullCheck => new NullCheckTemplate(Name(nullCheck.PropertyName, path, depth), nullCheck.IsNull),
+        InListTemplate inList => new InListTemplate(Name(inList.PropertyName, path, depth), inList.ValueIndex),
+        NotTemplate not => new NotTemplate(Prefixed(not.Operand, path, depth)),
+        AndTemplate and => new AndTemplate(Prefixed(and.Left, path, depth), Prefixed(and.Right, path, depth)),
+        OrTemplate or => new OrTemplate(Prefixed(or.Left, path, depth), Prefixed(or.Right, path, depth)),
         ValueComparisonTemplate comparison => new ValueComparisonTemplate(
-            Prefixed(comparison.Left, path), comparison.Comparison, Prefixed(comparison.Right, path)),
-        BooleanValueTemplate boolean => new BooleanValueTemplate(Prefixed(boolean.Value, path)),
-        StringMatchTemplate match => new StringMatchTemplate(match.Match, Prefixed(match.Value, path), Prefixed(match.Part, path)),
+            Prefixed(comparison.Left, path, depth), comparison.Comparison, Prefixed(comparison.Right, path, depth)),
+        BooleanValueTemplate boolean => new BooleanValueTemplate(Prefixed(boolean.Value, path, depth)),
+        StringMatchTemplate match => new StringMatchTemplate(match.Match, Prefixed(match.Value, path, depth), Prefixed(match.Part, path, depth)),
         LikeTemplate like => new LikeTemplate(
-            Prefixed(like.Value, path), Prefixed(like.Pattern, path), like.Escape is null ? null : Prefixed(like.Escape, path)),
-        NullOrEmptyTemplate empty => new NullOrEmptyTemplate(Prefixed(empty.Value, path), empty.OrWhiteSpace),
-        ExistsTemplate => throw new NotSupportedException(ExceptionMessages.CollectionQueryNotSupportedHere),
+            Prefixed(like.Value, path, depth), Prefixed(like.Pattern, path, depth), like.Escape is null ? null : Prefixed(like.Escape, path, depth)),
+        NullOrEmptyTemplate empty => new NullOrEmptyTemplate(Prefixed(empty.Value, path, depth), empty.OrWhiteSpace),
+        ExistsTemplate exists => new ExistsTemplate(Prefixed(exists.Collection, path, depth)),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
     /// <summary>The value with each name read through <paramref name="path"/>.</summary>
-    private static ValueTemplate Prefixed(ValueTemplate template, string path) => template switch
+    private static ValueTemplate Prefixed(ValueTemplate template, string path, int depth = 0) => template switch
     {
-        PropertyValueTemplate property => new PropertyValueTemplate(path + "." + property.PropertyName),
+        PropertyValueTemplate property => new PropertyValueTemplate(Name(property.PropertyName, path, depth)),
         SlotValueTemplate => template,
-        BinaryValueTemplate binary => new BinaryValueTemplate(binary.Operator, Prefixed(binary.Left, path), Prefixed(binary.Right, path)),
-        UnaryValueTemplate unary => new UnaryValueTemplate(unary.Operator, Prefixed(unary.Operand, path)),
-        ConvertValueTemplate convert => new ConvertValueTemplate(Prefixed(convert.Operand, path), convert.Type),
-        CoalesceValueTemplate coalesce => new CoalesceValueTemplate(Prefixed(coalesce.Left, path), Prefixed(coalesce.Right, path)),
+        BinaryValueTemplate binary => new BinaryValueTemplate(binary.Operator, Prefixed(binary.Left, path, depth), Prefixed(binary.Right, path, depth)),
+        UnaryValueTemplate unary => new UnaryValueTemplate(unary.Operator, Prefixed(unary.Operand, path, depth)),
+        ConvertValueTemplate convert => new ConvertValueTemplate(Prefixed(convert.Operand, path, depth), convert.Type),
+        CoalesceValueTemplate coalesce => new CoalesceValueTemplate(Prefixed(coalesce.Left, path, depth), Prefixed(coalesce.Right, path, depth)),
         ConditionalValueTemplate conditional => new ConditionalValueTemplate(
-            Prefixed(conditional.Test, path), Prefixed(conditional.WhenTrue, path), Prefixed(conditional.WhenFalse, path)),
-        PredicateValueTemplate predicate => new PredicateValueTemplate(Prefixed(predicate.Predicate, path)),
-        FunctionValueTemplate function => new FunctionValueTemplate(function.Function, [.. function.Arguments.Select(a => Prefixed(a, path))]),
-        CountValueTemplate or CollectionAggregateTemplate => throw new NotSupportedException(ExceptionMessages.CollectionQueryNotSupportedHere),
+            Prefixed(conditional.Test, path, depth), Prefixed(conditional.WhenTrue, path, depth), Prefixed(conditional.WhenFalse, path, depth)),
+        PredicateValueTemplate predicate => new PredicateValueTemplate(Prefixed(predicate.Predicate, path, depth)),
+        FunctionValueTemplate function => new FunctionValueTemplate(function.Function, [.. function.Arguments.Select(a => Prefixed(a, path, depth))]),
+        CountValueTemplate count => new CountValueTemplate(Prefixed(count.Collection, path, depth), count.IsLong),
+        CollectionAggregateTemplate aggregate => new CollectionAggregateTemplate(
+            Prefixed(aggregate.Collection, path, depth), aggregate.Function, Prefixed(aggregate.Selector, path, depth + 1), aggregate.ValueType),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
+
+    // A collection's own names are one level in: only those that read the row its path starts from are prefixed.
+    private static CollectionTemplate Prefixed(CollectionTemplate collection, string path, int depth)
+        => new(
+            depth == 0 ? path + "." + collection.NavigationPath : collection.NavigationPath,
+            collection.Predicate is null ? null : Prefixed(collection.Predicate, path, depth + 1));
+
+    // A name of the row at depth, which starts with as many '^' as collections the name is inside.
+    private static string Name(string name, string path, int depth)
+    {
+        var outer = 0;
+        while (outer < name.Length && name[outer] == '^')
+        {
+            outer++;
+        }
+
+        return outer == depth ? name[..depth] + path + "." + name[depth..] : name;
+    }
 
     private void EnsureRootComposable()
     {

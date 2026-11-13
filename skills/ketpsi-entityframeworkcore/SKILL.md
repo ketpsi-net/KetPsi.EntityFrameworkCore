@@ -101,6 +101,19 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
   from the foreign key without a join (`[BlogId] IS NULL`), as in EF Core. When the target has query filters, or on
   the other side of a one-to-one, the target is joined and its key checked, so a filtered-out target counts as
   missing.
+- Related collections with `Any` and `All`, as EF Core translates them: `b.Posts.Any()`, `!b.Posts.Any()`,
+  `b.Posts.Any(p => p.Rating > min)`, `b.Posts.Where(p => p.IsPublic).Any(...)`, `b.Posts.All(p => p.Rating > 3)`,
+  through references (`p.Blog.Posts.Any()`) and nested (`b.Posts.Any(p => p.Comments.Any())`).
+  - Each is a correlated `EXISTS` on the related table, matched by the navigation's keys (an alternate key too), and
+    the related entity's query filters apply inside it, so `b.Posts.Any()` ignores soft-deleted posts.
+  - The condition can read the related entity's references (`p => p.Author.Name == name`, joined inside), the outer
+    row (`p => p.Rating >= b.MinRating`) and variables, which are computed in C# like other values.
+  - `All(c)` is `NOT EXISTS (... AND NOT c)`, so it is true for no related rows, and a null that makes `c` false
+    excludes the parent, as in C#.
+  - They work wherever an entity predicate does (`Where`, `WhereIf`, predicate terminals, `ExecuteDelete`, the inner
+    query of a `Join`), as booleans (`b.Posts.Any() == b.IsActive`) and as order keys (`OrderBy(b => b.Posts.Any())`).
+  - A many-to-many navigation without a join entity in between (`p.Tags`) throws `NotSupportedException` when the
+    query runs; query the join entity instead (`p.PostTags.Any(pt => pt.Tag.Name == name)`).
 - `list.Contains(b.Property)` for arrays and lists (one JSON parameter, `OPENJSON` on SQL Server).
 - A value that doesn't read the row is computed in C# when the query runs and sent as one parameter, as EF Core
   does: `p.Quantity > min + 1`, `p.Sku == new Sku(12)`, `p.CreatedAt > day.AddDays(1)`, `p.Id == ids[0]`,
@@ -123,8 +136,9 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
     EF Core.
 - Not translatable: comparing a navigation with anything but `null` (KP2002); `StringComparison` overloads,
   `ToUpperInvariant`, `Trim(chars)`, `PadLeft`, the indexer `Name[0]`, `ToString()` of enums, dates and decimals, and
-  other methods (KP2003); `EF.Functions` other than `Like` (KP2004); related collections such as `b.Posts.Any()` or
-  `b.Posts.Count` (KP2005); `<<` and `>>`, and concatenating anything but strings and integers, which C# formats
+  other methods (KP2003); `EF.Functions` other than `Like` (KP2004); related collections other than `Any` and `All`,
+  such as `b.Posts.Count`, and collections after a `Select`, a `Join` or `GroupBy`, in query filters, or of an outer
+  row inside a collection's condition (KP2005); `<<` and `>>`, and concatenating anything but strings and integers, which C# formats
   differently from SQL (KP2001).
 - Navigations are not supported yet inside query filters (KP3005) and inside the expressions on groups (KP2002), such
   as `g.Count(p => p.Blog.IsActive)`.
@@ -137,8 +151,8 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
 like a predicate's navigation), or a value computed from them like a predicate's (`p => p.Price * p.Quantity`,
 `b => b.Code ?? b.Name`, `b => b.IsActive ? 0 : 1`, `b => b.Score > 5`). A key that reads no column, such as a
 constant or a variable, orders nothing, as in EF Core. String methods work as in predicates (`b => b.Name.Length`,
-`b => b.Name.ToLower()`). Collections (`b => b.Posts.Count`, KP2005) and other methods (KP2003) are not translatable
-yet; anything else is KP2008. Computed keys are supported on the
+`b => b.Name.ToLower()`), and so does `Any` of a collection (`b => b.Posts.Any()`). Other collection queries
+(`b => b.Posts.Count`, KP2005) and other methods (KP2003) are not translatable yet; anything else is KP2008. Computed keys are supported on the
 entity query; after a `Select` or `Join`, order by members that read one column.
 
 **Lambdas** must be written at the call site, not passed as variables or method groups (KP1005).
@@ -416,7 +430,7 @@ Same behavior as EF Core:
 | KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals, plus `Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |
 | KP1008 | On groups use `Where`, `OrderBy`/`ThenBy`, `Select`, `Count`, `LongCount`, `Any`, `ToList`, `ToArray`; select the key and aggregates to page or take the first |
 | KP1009 | Rewrite the query expression with methods: `where` is `Where`, `orderby` is `OrderBy`/`ThenBy`, `select` is `Select` |
-| KP2001–KP2005 | Simplify the predicate to comparisons, arithmetic and the supported string methods on properties (or ones through reference navigations) and values; use `EF.Functions.Like` for patterns; query related collections separately |
+| KP2001–KP2005 | Simplify the predicate to comparisons, arithmetic and the supported string methods on properties (or ones through reference navigations) and values; use `EF.Functions.Like` for patterns; test related collections with `Any` or `All` on the entity query |
 | KP2006 | No longer reported for entity predicates: two properties can be compared |
 | KP2007 | Move the value into a local variable before the query, or make what it calls accessible to the assembly |
 | KP2008 | Order by a property, or a value computed from properties with operators, `?:` and `??` |
