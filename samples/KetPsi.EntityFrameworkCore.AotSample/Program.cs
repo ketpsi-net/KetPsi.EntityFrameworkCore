@@ -487,6 +487,30 @@ await CheckAsync(
     "7|True|True");
 
 await CheckAsync(
+    "Arithmetic, coalescing and property comparisons in SQL",
+    db => Task.FromResult(Ids(db.Products.AsNoTracking().Where(p => p.Price * (p.Stock ?? 0) > 100m && p.Stock > p.Id).OrderBy(p => p.Id).ToList())),
+    "1,5,7,8");
+
+await CheckAsync(
+    "String methods and EF.Functions.Like",
+    db => Task.FromResult(
+        Ids(db.Products.AsNoTracking().Where(p => p.Name.Contains("o") && !p.Name.StartsWith("N")).OrderBy(p => p.Id).ToList()) + "|" +
+        Ids(db.Products.AsNoTracking().Where(p => EF.Functions.Like(p.Name, "%e")).OrderBy(p => p.Id).ToList())),
+    "3,6,7,8|1,4,6");
+
+await CheckAsync(
+    "Computed order key",
+    db => Task.FromResult(Ids(db.Products.AsNoTracking().OrderBy(p => p.Name.Length).ThenBy(p => p.Id).Take(3).ToList())),
+    "1,2,4");
+
+var title = "dune";
+var cheapest = 10m;
+await CheckAsync(
+    "Values computed from captured variables without compiling the tree",
+    db => Task.FromResult(db.Products.Count(p => p.Name.ToUpper() == title.ToUpper() && p.Price > cheapest - 1)),
+    1);
+
+await CheckAsync(
     "SaveChanges through EF Core, read back through KetPsi",
     async db =>
     {

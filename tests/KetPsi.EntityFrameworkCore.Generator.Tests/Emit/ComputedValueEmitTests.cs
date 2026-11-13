@@ -124,6 +124,35 @@ public sealed class ComputedValueEmitTests
         Assert.Equal(text, run.TextAt(diagnostic));
     }
 
+    // DateTime's comparison operators are methods of System.DateTime, which compare as SQL does.
+    [Fact]
+    public void DatesOfTwoProperties_AreCompared()
+    {
+        var run = GeneratorHost.Run(TestSources.Usings + """
+            namespace App;
+
+            public sealed class Order
+            {
+                public int Id { get; set; }
+                public DateTime CreatedAt { get; set; }
+                public DateTime? ShippedAt { get; set; }
+                public TimeSpan Duration { get; set; }
+            }
+
+            public sealed class Db : DbContext { public DbSet<Order> Orders => Set<Order>(); }
+
+            public static class Queries
+            {
+                public static List<Order> Late(Db db, TimeSpan limit)
+                    => db.Orders.AsNoTracking().Where(o => o.ShippedAt > o.CreatedAt && o.Duration >= limit && o.CreatedAt <= o.ShippedAt).ToList();
+            }
+            """);
+
+        Assert.Empty(run.Diagnostics);
+        Assert.Empty(run.OutputProblems());
+        Assert.Contains("ValueComparisonTemplate", run.Generated(InterceptorEmitter.HintName), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void QueryFilterComparingProperties_IsTranslated()
     {

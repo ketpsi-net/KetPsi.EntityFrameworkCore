@@ -391,7 +391,9 @@ Same behavior as EF Core:
    `Enum.GetValues(Type)` in the compiled model of an entity with an enum stored as a string; KetPsi itself adds none.
    Value converters, built-in and custom, run under Native AOT.
 6. Decimal comparisons in predicates (`p.Price < 20m`) are safe: the compiler builds them by reflection, and the
-   generated interceptor keeps decimal's operator methods for it. Nothing to configure.
+   generated interceptor keeps decimal's operator methods for it. Nothing to configure. Values computed in a predicate
+   (`p.Price > min - 1`, `p.Name == title.ToUpper()`) are computed by generated C# from the captured variables; the
+   expression tree is never compiled, so they run under Native AOT too.
 7. A `Select` or `GroupBy` key to an anonymous type, or a `Select` to an object initializer, warns IL2026 in your code
    (`Expression.New` with members, `Expression.Bind`): the compiler builds the lambda's expression tree with
    reflection over the result type's properties. KetPsi never reads that tree, so the warning is harmless and the

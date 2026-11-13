@@ -82,6 +82,27 @@ internal static class SeedData
         new() { Id = 51, TicketId = new(5), Text = "n51" },
     ];
 
+    // A hidden category the filter removes, and a category without a prefix.
+    public static IEnumerable<GadgetCategory> GadgetCategories() =>
+    [
+        new() { Id = 1, Name = "Books", Prefix = "BK" },
+        new() { Id = 2, Name = "Games", Prefix = null },
+        new() { Id = 3, Name = "_Hidden", Prefix = "H" },
+    ];
+
+    // Nulls in every nullable column, a price below its cost, a zero discount that divides by zero, wildcards in notes,
+    // names with spaces and in another case, a shipping date before the creation date, and a long beyond int.
+    public static IEnumerable<Gadget> Gadgets() =>
+    [
+        new() { Id = 1, Name = "Dune", Code = "DU", Note = "50%_off", Price = 10m, Cost = 6m, Quantity = 12, Discount = 2, Stock = 5, Views = 100, Rating = 4.5, CreatedAt = GadgetDay(1), ShippedAt = GadgetDay(3), IsActive = true, IsFeatured = true, Shade = Shade.Active, CategoryId = 1 },
+        new() { Id = 2, Name = "Emma", Code = null, Note = "a[b]", Price = 8.5m, Cost = null, Quantity = 3, Discount = null, Stock = 0, Views = 0, Rating = 3.0, CreatedAt = GadgetDay(2), ShippedAt = null, IsActive = false, IsFeatured = null, Shade = Shade.Draft, CategoryId = 1 },
+        new() { Id = 3, Name = "  Halo ", Code = "HA", Note = null, Price = 60m, Cost = 70m, Quantity = 1, Discount = 1, Stock = 1, Views = 5_000_000_000, Rating = 2.25, CreatedAt = GadgetDay(3), ShippedAt = new DateTime(2025, 12, 31), IsActive = true, IsFeatured = false, Shade = Shade.Retired, CategoryId = 2 },
+        new() { Id = 4, Name = "Zork", Code = "ZORK", Note = "", Price = 0m, Cost = 0m, Quantity = 0, Discount = 0, Stock = 3, Views = 7, Rating = 0, CreatedAt = GadgetDay(4), ShippedAt = null, IsActive = true, IsFeatured = null, Shade = Shade.Active, CategoryId = 2 },
+        new() { Id = 5, Name = "doom", Code = "do", Note = "Doom_2", Price = 20m, Cost = 5m, Quantity = 7, Discount = null, Stock = 7, Views = 3, Rating = 5, CreatedAt = GadgetDay(5), ShippedAt = new DateTime(2026, 2, 1), IsActive = false, IsFeatured = true, Shade = Shade.Active, CategoryId = 2 },
+    ];
+
+    public static DateTime GadgetDay(int day) => new(2026, 1, day);
+
     public static Guid ExternalId(int id) => new($"00000000-0000-0000-0000-{id:D12}");
 
     public static int Revision(int id) => id * 10;

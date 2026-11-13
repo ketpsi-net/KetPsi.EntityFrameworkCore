@@ -126,6 +126,65 @@ public sealed class TicketNote
 }
 
 /// <summary>The context both query builds run on: stock EF Core and KetPsi.</summary>
+public enum Shade
+{
+    Draft,
+    Active,
+    Retired,
+}
+
+/// <summary>A category, whose filter hides names starting with an underscore.</summary>
+public sealed class GadgetCategory
+{
+    public int Id { get; set; }
+
+    public string Name { get; set; } = "";
+
+    public string? Prefix { get; set; }
+
+    public List<Gadget> Gadgets { get; set; } = [];
+}
+
+/// <summary>Columns of every kind computed values combine: nullable strings and numbers, short, long, double, decimal.</summary>
+public sealed class Gadget
+{
+    public int Id { get; set; }
+
+    public string Name { get; set; } = "";
+
+    public string? Code { get; set; }
+
+    public string? Note { get; set; }
+
+    public decimal Price { get; set; }
+
+    public decimal? Cost { get; set; }
+
+    public int Quantity { get; set; }
+
+    public int? Discount { get; set; }
+
+    public short Stock { get; set; }
+
+    public long Views { get; set; }
+
+    public double Rating { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+
+    public DateTime? ShippedAt { get; set; }
+
+    public bool IsActive { get; set; }
+
+    public bool? IsFeatured { get; set; }
+
+    public Shade Shade { get; set; }
+
+    public int CategoryId { get; set; }
+
+    public GadgetCategory Category { get; set; } = null!;
+}
+
 public sealed class DiffDb(string connectionString, int tenantId, CommandCounter? counter = null) : DbContext
 {
     public const string SoftDeleteFilter = "SoftDelete";
@@ -147,6 +206,10 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
     public DbSet<Ticket> Tickets => Set<Ticket>();
 
     public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
+
+    public DbSet<Gadget> Gadgets => Set<Gadget>();
+
+    public DbSet<GadgetCategory> GadgetCategories => Set<GadgetCategory>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
@@ -221,6 +284,28 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
             n.Property(x => x.TicketId).HasConversion(id => id.Value, value => new TicketId(value));
             n.Property(x => x.Text).HasMaxLength(50);
             n.HasOne(x => x.Ticket).WithMany(t => t.Notes).HasForeignKey(x => x.TicketId);
+        });
+
+        // A filter with a string method, so filters translate them too.
+        modelBuilder.Entity<GadgetCategory>(c =>
+        {
+            c.ToTable("GadgetCategories", "diff");
+            c.Property(x => x.Id).ValueGeneratedNever();
+            c.Property(x => x.Name).HasMaxLength(20);
+            c.Property(x => x.Prefix).HasMaxLength(10);
+            c.HasQueryFilter(x => !x.Name.StartsWith("_"));
+        });
+
+        modelBuilder.Entity<Gadget>(g =>
+        {
+            g.ToTable("Gadgets", "diff");
+            g.Property(x => x.Id).ValueGeneratedNever();
+            g.Property(x => x.Name).HasMaxLength(50);
+            g.Property(x => x.Code).HasMaxLength(10);
+            g.Property(x => x.Note).HasMaxLength(20);
+            g.Property(x => x.Price).HasPrecision(18, 2);
+            g.Property(x => x.Cost).HasPrecision(18, 2);
+            g.HasOne(x => x.Category).WithMany(c => c.Gadgets).HasForeignKey(x => x.CategoryId);
         });
     }
 }

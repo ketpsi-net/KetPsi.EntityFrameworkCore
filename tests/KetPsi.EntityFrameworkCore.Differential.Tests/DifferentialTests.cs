@@ -459,7 +459,119 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "DeleteNotesOfTicket", [1] },
             { "DeleteNotesOfHighTickets", [] },
             { "LoadModifySaveTicket", [3] },
+            { "GadgetsPriceAboveCost", [] },
+            { "GadgetsNotPriceAboveCost", [] },
+            { "GadgetsQuantityEqualsDiscount", [] },
+            { "GadgetsQuantityNotDiscount", [] },
+            { "GadgetsCodeEqualsNote", [] },
+            { "GadgetsCodeNotNote", [] },
+            { "GadgetsNameEqualsCode", [] },
+            { "GadgetsShippedAfterCreated", [] },
+            { "GadgetsMixedWidths", [] },
+            { "GadgetsCodeIsCategoryPrefix", [] },
+            { "GadgetsFeaturedIsActive", [] },
+            { "GadgetsTotalAbove", [100m] },
+            { "GadgetsQuantityMinusAbove", [5] },
+            { "GadgetsIntegerOperators", [] },
+            { "GadgetsDecimalThird", [] },
+            { "GadgetsNegatedQuantity", [] },
+            { "GadgetsDiscountPlusOneIs", [3] },
+            { "GadgetsDiscountPlusOneIs", [null] },
+            { "GadgetsDiscountPlusOneIsNot", [3] },
+            { "GadgetsDiscountPlusOneIsNot", [null] },
+            { "GadgetsMarginAbove", [] },
+            { "GadgetsNotMarginAbove", [] },
+            { "GadgetsSquaredAboveViews", [] },
+            { "GadgetsDividedByDiscount", [] },
+            { "GadgetsCasts", [] },
+            { "GadgetsNamePlusCode", ["DuneDU"] },
+            { "GadgetsNamePlusCode", ["Emma"] },
+            { "GadgetsNamePlusQuantity", [] },
+            { "GadgetsCodePlusNoteIsNull", [] },
+            { "GadgetsQuantityIsComputed", [5] },
+            { "GadgetsCreatedAfterNextDay", [SeedData.GadgetDay(2)] },
+            { "GadgetsQuantityInArray", [] },
+            { "GadgetsBeforeNow", [] },
+            { "GadgetsWhenFlag", [true] },
+            { "GadgetsWhenFlag", [false] },
+            { "GadgetsAlways", [] },
+            { "GadgetsActivePriceAbove", [] },
+            { "GadgetsDiscountOrZero", [] },
+            { "GadgetsCodeOrName", ["Emma"] },
+            { "GadgetsCodeOrNoteOrX", [] },
+            { "GadgetsFeaturedOrFalse", [] },
+            { "GadgetsNotFeaturedOrFalse", [] },
+            { "GadgetsDiscountOrDefault", [] },
+            { "GadgetsTernaryCondition", [] },
+            { "GadgetsConditionIsActive", [] },
+            { "GadgetsActiveIsNoDiscount", [] },
+            { "GadgetsActiveXor", [] },
+            { "GadgetsNonShortCircuit", [] },
+            { "GadgetsNestedTernary", [] },
+            { "GadgetsCategoryNameLength", [] },
+            { "GadgetsNameContains", ["o"] },
+            { "GadgetsNameContains", ["O"] },
+            { "GadgetsNameContains", [""] },
+            { "GadgetsNoteContains", ["%"] },
+            { "GadgetsNoteContains", ["_"] },
+            { "GadgetsNoteContains", ["["] },
+            { "GadgetsNoteNotContains", [] },
+            { "GadgetsNameContainsCode", [] },
+            { "GadgetsNoteNotContainsCode", [] },
+            { "GadgetsNameStartsWith", ["D"] },
+            { "GadgetsNameStartsWith", ["%"] },
+            { "GadgetsNoteNotStartsWith", ["D"] },
+            { "GadgetsNameEndsWith", ["e"] },
+            { "GadgetsNameEndsWith", ["o"] },
+            { "GadgetsNameStartsOrEndsWithCode", [] },
+            { "GadgetsCaseFunctions", ["DUNE"] },
+            { "GadgetsCaseFunctions", ["doom"] },
+            { "GadgetsTrimmed", [] },
+            { "GadgetsNameLengthAbove", [4] },
+            { "GadgetsShortTexts", [] },
+            { "GadgetsNoteNullOrEmpty", [] },
+            { "GadgetsNoteNotNullOrEmpty", [] },
+            { "GadgetsNoteNullOrWhiteSpace", [] },
+            { "GadgetsSubstrings", [] },
+            { "GadgetsReplaced", [] },
+            { "GadgetsIndexOf", ["o", 1] },
+            { "GadgetsIndexOf", ["", 0] },
+            { "GadgetsComparedNames", ["E"] },
+            { "GadgetsNameIs", ["DOOM"] },
+            { "GadgetsNumbersAsText", [] },
+            { "GadgetsNameEqualsItsUpper", [] },
+            { "GadgetsConcatenated", [] },
+            { "GadgetsLike", ["D%"] },
+            { "GadgetsLike", ["_o%"] },
+            { "GadgetsLikeEscaped", [] },
+            { "GadgetsNotLike", [] },
+            { "GadgetsLikeCode", [] },
+            { "GadgetsOfCategoryStartingWith", ["G"] },
+            { "GadgetCategoriesAll", [] },
+            { "GadgetsOrderedByNameLength", [] },
+            { "GadgetsOrderedByTotal", [] },
+            { "GadgetsOrderedByCodeOrName", [] },
+            { "GadgetsOrderedByActive", [] },
+            { "GadgetsOrderedByLowerName", [] },
+            { "GadgetsOrderedByDiscount", [] },
+            { "GadgetsOrderedByCategoryAndName", [] },
+            { "GadgetsOrderedByVariable", [3] },
+            { "GadgetsPagedByTotal", [] },
+            { "CountGadgetsTotalAbove", [50m] },
+            { "AnyGadgetBelowCostAsync", [] },
+            { "FirstGadgetStartingWith", ["Z"] },
+            { "SumQuantityOfShortNames", [] },
+            { "GadgetsAfterSelect", [] },
+            { "GadgetsJoinedWithCategories", [] },
+            { "GroupGadgetsWithShortNames", [] },
+            { "DeleteGadgetsComputed", [] },
+            { "GadgetsTrackedByUpperName", ["DUNE"] },
         };
+
+#if NET10_0_OR_GREATER
+        // EF Core 9 cannot translate the char overloads; EF Core 10 and later can.
+        cases.Add("GadgetsNameContainsChar", []);
+#endif
 
 #if NET10_0_OR_GREATER
         cases.Add("IgnoringTenantFilter", []);
@@ -492,7 +604,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
     private static readonly HashSet<string> TrackingCases = new(StringComparer.Ordinal)
     {
         "Tracked(4)", "AsTrackingAfterAsNoTracking()", "AsTrackingWithBehavior(TrackAll)", "TrackedFirst()",
-        "TrackedToListAsync()", "TrackedSingleOrDefaultAsync(5)", "RequeryKeepsTrackedValues()", "LoadModifySave(2)",
+        "TrackedToListAsync()", "GadgetsTrackedByUpperName(DUNE)", "TrackedSingleOrDefaultAsync(5)", "RequeryKeepsTrackedValues()", "LoadModifySave(2)",
         "LoadModifyShadowSaveAsync(7)", "IncludePosts()", "IncludeAuthor()", "IncludeRequiredBlog()", "IncludePostsThenComments()",
         "IncludeBlogThenPosts()", "IncludeFirst()", "IncludeSingleAsync(1)", "IncludeSingleAsync(2)", "IncludeAfterTrackingBlog()",
         "LoadGraphModifySave()", "SelectEntityAndColumn()", "SelectAuthors()", "SelectBlogAndAuthor()", "SelectPostAndBlog()",
@@ -515,6 +627,9 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "PostsOrderedByBlog", "BlogsOrderedByAuthor", "JoinThroughThePair", "JoinAfterPaging", "JoinPagedAfter", "SelectEntitiesThenWhere",
         "FromSqlComposed", "SqlQueryRawAsync", "SqlQueryRecordComposed",
         "TicketsOrderedByPriority", "TicketsOrderedByPoints", "SelectNotePriorities",
+        "GadgetsOrderedByNameLength", "GadgetsOrderedByTotal", "GadgetsOrderedByCodeOrName", "GadgetsOrderedByActive",
+        "GadgetsOrderedByLowerName", "GadgetsOrderedByDiscount", "GadgetsOrderedByCategoryAndName", "GadgetsOrderedByVariable",
+        "GadgetsPagedByTotal",
     };
 
     private static string Key(string query, object?[] arguments)
@@ -574,7 +689,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         if (value is IEnumerable rows and not string && !OrderedQueries.Contains(query))
         {
             var items = rows.Cast<object?>().ToList();
-            value = items.TrueForAll(static r => r is Blog or Author or Post or Comment or Ticket or TicketNote)
+            value = items.TrueForAll(static r => r is Blog or Author or Post or Comment or Ticket or TicketNote or Gadget or GadgetCategory)
                 ? items.OrderBy(r => KeyOf(r!)).ToList()
                 : items.OrderBy(SortKey, StringComparer.Ordinal).ToList();
         }
@@ -610,7 +725,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
     private static string SortKey(object? value) => value switch
     {
         null => "",
-        Blog or Author or Post or Comment or Ticket or TicketNote => value.GetType().Name + "#" + KeyOf(value).ToString("D6", CultureInfo.InvariantCulture),
+        Blog or Author or Post or Comment or Ticket or TicketNote or Gadget or GadgetCategory => value.GetType().Name + "#" + KeyOf(value).ToString("D6", CultureInfo.InvariantCulture),
         _ when IsScalar(value) => Scalar(value),
         System.Runtime.CompilerServices.ITuple tuple => string.Join("|", Enumerable.Range(0, tuple.Length).Select(i => SortKey(tuple[i]))),
         _ when GroupingKey(value) is { } grouping => "group|" + SortKey(grouping.Key),
@@ -655,6 +770,8 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         Comment comment => comment.Id,
         Ticket ticket => ticket.Id.Value,
         TicketNote note => note.Id,
+        Gadget gadget => gadget.Id,
+        GadgetCategory category => category.Id,
         _ => throw new ArgumentException(entity.GetType().Name, nameof(entity)),
     };
 
@@ -663,7 +780,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
     // point at each other, which collection types hold them, and in what order.
     private static string Describe(object? value)
     {
-        if (value is null or Blog or Author or Post or Comment or Ticket or TicketNote)
+        if (value is null or Blog or Author or Post or Comment or Ticket or TicketNote or Gadget or GadgetCategory)
         {
             return value is null ? "null" : new Graph().Describe([value]);
         }
@@ -690,6 +807,10 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             CultureInfo.InvariantCulture,
             $"{t.Id.Value}|{t.Code}|{t.Priority}|{t.Escalated?.ToString() ?? "null"}|{t.IsOpen}|{t.IsArchived}|{t.Points?.ToString(CultureInfo.InvariantCulture) ?? "null"}|{t.DueAt:O}"),
         TicketNote note => string.Create(CultureInfo.InvariantCulture, $"{note.Id}|{note.TicketId.Value}|{note.Text}"),
+        Gadget g => string.Create(
+            CultureInfo.InvariantCulture,
+            $"{g.Id}|{g.Name}|{g.Code ?? "null"}|{g.Note ?? "null"}|{g.Price:0.00}|{g.Cost?.ToString("0.00", CultureInfo.InvariantCulture) ?? "null"}|{g.Quantity}|{g.Discount?.ToString(CultureInfo.InvariantCulture) ?? "null"}|{g.Stock}|{g.Views}|{g.Rating:R}|{g.CreatedAt:O}|{g.ShippedAt?.ToString("O", CultureInfo.InvariantCulture) ?? "null"}|{g.IsActive}|{g.IsFeatured?.ToString() ?? "null"}|{g.Shade}|{g.CategoryId}"),
+        GadgetCategory c => string.Create(CultureInfo.InvariantCulture, $"{c.Id}|{c.Name}|{c.Prefix ?? "null"}"),
         _ => throw new ArgumentException(entity.GetType().Name, nameof(entity)),
     };
 
@@ -718,6 +839,8 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             Comment comment => $"|post={Ref(comment.Post)}",
             Ticket ticket => $"|notes={Collection(ticket.Notes)}",
             TicketNote note => $"|ticket={Ref(note.Ticket)}",
+            Gadget gadget => $"|category={Ref(gadget.Category)}",
+            GadgetCategory category => $"|gadgets={Collection(category.Gadgets)}",
             _ => "",
         };
 
@@ -726,7 +849,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         private string Value(object? value) => value switch
         {
             null => "null",
-            Blog or Author or Post or Comment or Ticket or TicketNote => Ref(value),
+            Blog or Author or Post or Comment or Ticket or TicketNote or Gadget or GadgetCategory => Ref(value),
             _ when IsScalar(value) => Scalar(value),
             System.Runtime.CompilerServices.ITuple tuple => "(" + string.Join(",", Enumerable.Range(0, tuple.Length).Select(i => Value(tuple[i]))) + ")",
             _ when GroupingKey(value) is { } grouping => "group " + Value(grouping.Key) + "[" + string.Join(",", grouping.Elements.Select(Value)) + "]",

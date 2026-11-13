@@ -315,8 +315,10 @@ internal sealed class PredicateTranslator
             throw Fail(DiagnosticDescriptors.ExpressionNotSupported, binary);
         }
 
-        // A user-defined ordering has no SQL; equality of a value stored through a converter compares the columns.
-        if (operation.OperatorMethod is { } method && !IsDecimal(method.ContainingType) && comparison is not ("Equal" or "NotEqual"))
+        // The operators of System's types, such as DateTime's, compare as SQL does; another type's ordering has no SQL,
+        // and equality of a value stored through a converter compares the columns.
+        if (operation.OperatorMethod is { } method && method.ContainingType.ContainingNamespace?.ToDisplayString() != "System"
+            && comparison is not ("Equal" or "NotEqual"))
         {
             throw Fail(DiagnosticDescriptors.ExpressionNotSupported, binary);
         }
