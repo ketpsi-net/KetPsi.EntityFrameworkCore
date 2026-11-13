@@ -154,10 +154,12 @@ public sealed class PredicateTranslatorTests
     [Theory]
     [InlineData("b => b.Author!.Id == 1", "KP2002", "b.Author!.Id")]
     [InlineData("b => b.Author == null", "KP2002", "b.Author")]
-    [InlineData("b => b.Name.StartsWith(\"a\")", "KP2003", "b.Name.StartsWith(\"a\")")]
-    [InlineData("b => b.Name.Length > 3", "KP2003", "b.Name.Length")]
-    [InlineData("b => b.Name.ToUpper() == name", "KP2003", "b.Name.ToUpper()")]
-    [InlineData("b => EF.Functions.Like(b.Name, \"a%\")", "KP2004", "EF.Functions.Like(b.Name, \"a%\")")]
+    [InlineData("b => b.Name.StartsWith(\"a\", StringComparison.Ordinal)", "KP2003", "b.Name.StartsWith(\"a\", StringComparison.Ordinal)")]
+    [InlineData("b => b.Name.PadLeft(3) == name", "KP2003", "b.Name.PadLeft(3)")]
+    [InlineData("b => b.Name.ToUpperInvariant() == name", "KP2003", "b.Name.ToUpperInvariant()")]
+    [InlineData("b => b.Name.Trim('a') == name", "KP2003", "b.Name.Trim('a')")]
+    [InlineData("b => b.Status.ToString() == name", "KP2003", "b.Status.ToString()")]
+    [InlineData("b => EF.Functions.Collate(b.Name, \"x\") == name", "KP2004", "EF.Functions.Collate(b.Name, \"x\")")]
     [InlineData("b => b.Posts.Any()", "KP2005", "b.Posts.Any()")]
     [InlineData("b => b.Rating > anon.Limit + 1", "KP2007", "anon")]
     [InlineData("b => b.Rating > ids.Count(x => x > 1)", "KP2007", "x => x > 1")]
@@ -198,7 +200,7 @@ public sealed class PredicateTranslatorTests
     [InlineData("b => b.Posts.Count + 1 > 1", "KP2005", "b.Posts.Count")]
     [InlineData("b => b.Posts.Count > 1", "KP2005", "b.Posts.Count")]
     [InlineData("b => b.Posts == null", "KP2005", "b.Posts")]
-    [InlineData("b => b.Name.Length > 3", "KP2003", "b.Name.Length")]
+    [InlineData("b => b.Name.PadRight(3) == \"a\"", "KP2003", "b.Name.PadRight(3)")]
     public void Translate_WithNavigations_StillReportsTheRest(string lambda, string id, string text)
     {
         var (predicate, diagnostic) = Translate(lambda, allowNavigations: true);
@@ -211,12 +213,12 @@ public sealed class PredicateTranslatorTests
     [Fact]
     public void Generator_ReportsTranslationDiagnosticAtConstruct()
     {
-        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Where(b => b.Name.StartsWith(\"a\")).AsNoTracking().ToList();"));
+        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Where(b => b.Name.PadLeft(3) == \"a\").AsNoTracking().ToList();"));
 
         var diagnostic = Assert.Single(run.Diagnostics);
         Assert.Equal("KP2003", diagnostic.Id);
-        Assert.Equal("b.Name.StartsWith(\"a\")", run.TextAt(diagnostic));
-        Assert.Equal("'b.Name.StartsWith(\"a\")' calls a method or member that cannot be translated to SQL yet", diagnostic.GetMessage());
+        Assert.Equal("b.Name.PadLeft(3)", run.TextAt(diagnostic));
+        Assert.Equal("'b.Name.PadLeft(3)' calls a method or member that cannot be translated to SQL yet", diagnostic.GetMessage());
     }
 
     [Fact]

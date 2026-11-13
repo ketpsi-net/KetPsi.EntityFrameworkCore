@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using KetPsi.EntityFrameworkCore.Generator.Diagnostics;
 using KetPsi.EntityFrameworkCore.Generator.Model;
 using Microsoft.CodeAnalysis;
@@ -21,6 +22,8 @@ internal sealed class PredicateTranslator
     private const string CapturedValues = "global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues";
     private const string ValueProperty = "Value";
     private const string GetValueOrDefaultMethod = "GetValueOrDefault";
+    private const string LikeMethod = "Like";
+    private const string DbFunctionsExtensions = "Microsoft.EntityFrameworkCore.DbFunctionsExtensions";
     private const string DbFunctions = "Microsoft.EntityFrameworkCore.DbFunctions";
     private const string ContainsMethod = "Contains";
     private const string EqualsMethod = "Equals";
@@ -207,7 +210,7 @@ internal sealed class PredicateTranslator
                     : throw Fail(DiagnosticDescriptors.ExpressionNotSupported, node);
 
             // An operand that is not a member access, such as the parameter itself or an aggregate.
-            case IdentifierNameSyntax or InvocationExpressionSyntax when _operands is not null && EntityProperty(node) is { } operand:
+            case IdentifierNameSyntax or InvocationExpressionSyntax when _operands is not null && _operands(StripParentheses(node)) is { } operand:
                 return operand.Type.SpecialType == SpecialType.System_Boolean
                     ? $"new {Templates}.BooleanPropertyTemplate(\"{operand.Name}\")"
                     : throw Fail(DiagnosticDescriptors.ExpressionNotSupported, node);
@@ -228,6 +231,17 @@ internal sealed class PredicateTranslator
                 is { } navigation)
         {
             return NullCheck(navigation, isNull: comparison == "Equal");
+        }
+
+        // string.Compare(a, b) > 0 and a.CompareTo(b) > 0 compare the strings, as EF Core translates them.
+        if (StringComparison(binary.Left, binary.Right) is var (first, second))
+        {
+            return $"new {Templates}.ValueComparisonTemplate({TranslateValue(first)}, {Templates}.ComparisonOperator.{comparison}, {TranslateValue(second)})";
+        }
+
+        if (StringComparison(binary.Right, binary.Left) is var (third, fourth))
+        {
+            return $"new {Templates}.ValueComparisonTemplate({TranslateValue(third)}, {Templates}.ComparisonOperator.{Flip(comparison)}, {TranslateValue(fourth)})";
         }
 
         // Two values read from the row, or a computed one: compared in SQL.
@@ -320,13 +334,49 @@ internal sealed class PredicateTranslator
         }
 
         var definition = method.ReducedFrom ?? method;
+        var operation = _model.GetOperation(invocation, _cancellationToken) as IInvocationOperation;
         if (definition.Parameters.Length > 0 && definition.Parameters[0].Type.ToDisplayString() == DbFunctions)
         {
+            // EF.Functions.Like(value, pattern) and Like(value, pattern, escape); the other functions are not translated yet.
+            if (method.Name == LikeMethod && definition.ContainingType.ToDisplayString() == DbFunctionsExtensions
+                && operation is { Arguments.Length: 3 or 4 } like
+                && like.Arguments.Skip(1).All(static a => a.Value.Type?.SpecialType == SpecialType.System_String))
+            {
+                // Translated in source order, so the slots are numbered in it.
+                var matched = TranslateValue(like.Arguments[1].Value);
+                var pattern = TranslateValue(like.Arguments[2].Value);
+                var escape = like.Arguments.Length == 4 ? ", " + TranslateValue(like.Arguments[3].Value) : "";
+                return $"new {Templates}.LikeTemplate({matched}, {pattern}{escape})";
+            }
+
             throw Fail(DiagnosticDescriptors.DbFunctionsNotSupported, invocation);
         }
 
         var receiver = (invocation.Expression as MemberAccessExpressionSyntax)?.Expression;
         var arguments = invocation.ArgumentList.Arguments;
+
+        // Contains, StartsWith and EndsWith of a string, with a string or a character; not with a StringComparison.
+        if (operation is { Instance: { Type.SpecialType: SpecialType.System_String } text, Arguments.Length: 1 } match
+            && method.Name is ContainsMethod or "StartsWith" or "EndsWith"
+            && match.Arguments[0].Value.Type?.SpecialType is SpecialType.System_String or SpecialType.System_Char)
+        {
+            return $"new {Templates}.StringMatchTemplate({Templates}.StringMatch.{method.Name}, {TranslateValue(text)}, {TranslateValue(match.Arguments[0].Value)})";
+        }
+
+        // string.IsNullOrEmpty(x.Name) and string.IsNullOrWhiteSpace(x.Name).
+        if (method is { IsStatic: true, Name: "IsNullOrEmpty" or "IsNullOrWhiteSpace", ContainingType.SpecialType: SpecialType.System_String }
+            && operation is { Arguments.Length: 1 } empty)
+        {
+            var orWhiteSpace = method.Name == "IsNullOrWhiteSpace" ? "true" : "false";
+            return $"new {Templates}.NullOrEmptyTemplate({TranslateValue(empty.Arguments[0].Value)}, orWhiteSpace: {orWhiteSpace})";
+        }
+
+        // Equals of two strings that are not one property and a value: compared like ==.
+        if (method.Name == EqualsMethod && operation is { } equals && StringEquality(equals) is var (left, right)
+            && (method.IsStatic || ReferencesParameter(right.Syntax) || SimpleOperand((ExpressionSyntax)left.Syntax) is null))
+        {
+            return $"new {Templates}.ValueComparisonTemplate({TranslateValue(left)}, {Templates}.ComparisonOperator.Equal, {TranslateValue(right)})";
+        }
 
         if (method.Name == ContainsMethod && arguments.Count > 0 && EntityProperty(arguments[arguments.Count - 1].Expression) is { } item)
         {
@@ -354,6 +404,38 @@ internal sealed class PredicateTranslator
         throw Fail(
             ReferencesParameter(invocation) ? DiagnosticDescriptors.MethodNotSupported : DiagnosticDescriptors.ExpressionNotSupported,
             invocation);
+    }
+
+    // a.Equals(b) and string.Equals(a, b) of strings, without a StringComparison, which EF Core cannot translate.
+    private static (IOperation Left, IOperation Right)? StringEquality(IInvocationOperation equals)
+        => equals switch
+        {
+            { TargetMethod.IsStatic: false, Instance: { Type.SpecialType: SpecialType.System_String } instance, Arguments.Length: 1 }
+                => (instance, equals.Arguments[0].Value),
+            { TargetMethod: { IsStatic: true, ContainingType.SpecialType: SpecialType.System_String }, Arguments.Length: 2 }
+                => (equals.Arguments[0].Value, equals.Arguments[1].Value),
+            _ => null,
+        };
+
+    // The strings string.Compare(a, b) or a.CompareTo(b) compares, when it is compared with 0; otherwise null.
+    private (IOperation Left, IOperation Right)? StringComparison(ExpressionSyntax compared, ExpressionSyntax zero)
+    {
+        if (_model.GetConstantValue(StripParentheses(zero), _cancellationToken) is not { HasValue: true, Value: 0 }
+            || _model.GetOperation(StripParentheses(compared), _cancellationToken) is not IInvocationOperation invocation
+            || !ReferencesParameter(compared))
+        {
+            return null;
+        }
+
+        return invocation switch
+        {
+            { TargetMethod: { Name: "Compare", IsStatic: true, ContainingType.SpecialType: SpecialType.System_String }, Arguments.Length: 2 }
+                => (invocation.Arguments[0].Value, invocation.Arguments[1].Value),
+            { TargetMethod.Name: "CompareTo", Instance: { Type.SpecialType: SpecialType.System_String } instance, Arguments.Length: 1 }
+                when invocation.Arguments[0].Value.Type?.SpecialType == SpecialType.System_String
+                => (instance, invocation.Arguments[0].Value),
+            _ => null,
+        };
     }
 
     // list.Contains(x.Prop): the list is the instance for List<T>.Contains, and the first argument for
@@ -473,6 +555,25 @@ internal sealed class PredicateTranslator
                 when IsNullableValue(nullable.Type):
                 return $"new {Templates}.CoalesceValueTemplate({TranslateValue(nullable)}, {TranslateValue(orDefault.Arguments[0].Value)})";
 
+            case IPropertyReferenceOperation { Property.Name: "Length", Instance: { Type.SpecialType: SpecialType.System_String } text }:
+                return Function("Length", text);
+
+            // A value of a group, such as an aggregate, before the methods of its value.
+            case IInvocationOperation when _operands is not null && _operands(syntax) is { } groupValue:
+                return $"new {Templates}.PropertyValueTemplate(\"{groupValue.Name}\")";
+
+            case IInvocationOperation invocation when StringFunction(invocation) is { } function:
+                return function;
+
+            // EF.Functions other than Like, which is a condition.
+            case IInvocationOperation { TargetMethod: var dbFunction } when dbFunction.Name != LikeMethod
+                && (dbFunction.ReducedFrom ?? dbFunction).Parameters.FirstOrDefault()?.Type.ToDisplayString() == DbFunctions:
+                throw Fail(DiagnosticDescriptors.DbFunctionsNotSupported, syntax);
+
+            // A condition used as a value, such as x.Name.StartsWith("a") == x.IsActive.
+            case IInvocationOperation { Type.SpecialType: SpecialType.System_Boolean }:
+                return $"new {Templates}.PredicateValueTemplate({TranslatePredicate(syntax, path: "")})";
+
             case IPropertyReferenceOperation or IParameterReferenceOperation or IInvocationOperation:
                 // An operand: a property of the entity, through reference navigations, or a value of a group.
                 var operand = EntityProperty(syntax) ?? throw Fail(DiagnosticDescriptors.ExpressionNotSupported, syntax);
@@ -482,6 +583,59 @@ internal sealed class PredicateTranslator
                 throw Fail(DiagnosticDescriptors.ExpressionNotSupported, syntax);
         }
     }
+
+    /// <summary>
+    /// A string method EF Core translates: <c>ToUpper</c>, <c>ToLower</c>, <c>Trim</c>, <c>TrimStart</c> and
+    /// <c>TrimEnd</c> without arguments, <c>Substring</c>, <c>Replace</c>, <c>IndexOf</c> of a string or a character,
+    /// <c>ToString</c> of a string or an integer, and <c>string.Concat</c> of strings; null for anything else.
+    /// </summary>
+    private string? StringFunction(IInvocationOperation invocation)
+    {
+        var method = invocation.TargetMethod;
+        var arguments = invocation.Arguments;
+        if (method is { IsStatic: true, Name: "Concat", ContainingType.SpecialType: SpecialType.System_String }
+            && arguments.Length is >= 2 and <= 4 && arguments.All(static a => a.Value.Type?.SpecialType == SpecialType.System_String))
+        {
+            return arguments.Skip(1).Aggregate(
+                TranslateValue(arguments[0].Value),
+                (concatenated, next) => $"new {Templates}.BinaryValueTemplate({Templates}.ValueOperator.Concat, {concatenated}, {TranslateValue(next.Value)})");
+        }
+
+        if (invocation.Instance is not { } instance)
+        {
+            return null;
+        }
+
+        // x.Count.ToString() and x.Discount.ToString(): integers format the same in C# and SQL.
+        if (method.Name == "ToString" && arguments.Length == 0 && Underlying(instance.Type)?.SpecialType
+            is SpecialType.System_String or SpecialType.System_Int32 or SpecialType.System_Int64 or SpecialType.System_Int16 or SpecialType.System_Byte)
+        {
+            return Function("ToString", instance);
+        }
+
+        if (instance.Type?.SpecialType != SpecialType.System_String)
+        {
+            return null;
+        }
+
+        static bool Are(ImmutableArray<IArgumentOperation> arguments, SpecialType type)
+            => arguments.All(a => a.Value.Type?.SpecialType == type);
+
+        return method.Name switch
+        {
+            "ToUpper" or "ToLower" or "Trim" or "TrimStart" or "TrimEnd" when arguments.Length == 0 => Function(method.Name, instance),
+            "Substring" when arguments.Length is 1 or 2 && Are(arguments, SpecialType.System_Int32)
+                => Function(method.Name, [instance, .. arguments.Select(static a => a.Value)]),
+            "Replace" when arguments.Length == 2 && (Are(arguments, SpecialType.System_String) || Are(arguments, SpecialType.System_Char))
+                => Function(method.Name, instance, arguments[0].Value, arguments[1].Value),
+            "IndexOf" when arguments.Length == 1 && arguments[0].Value.Type?.SpecialType is SpecialType.System_String or SpecialType.System_Char
+                => Function(method.Name, instance, arguments[0].Value),
+            _ => null,
+        };
+    }
+
+    private string Function(string function, params IOperation[] arguments)
+        => $"new {Templates}.FunctionValueTemplate({Templates}.ValueFunction.{function}, {string.Join(", ", arguments.Select(TranslateValue))})";
 
     // The condition of ?: as a predicate; one that does not read the row is decided by its value.
     private string TranslateCondition(IOperation condition)

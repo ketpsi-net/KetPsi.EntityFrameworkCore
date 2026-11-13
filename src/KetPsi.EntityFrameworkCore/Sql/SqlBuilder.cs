@@ -561,6 +561,10 @@ internal sealed class SqlBuilder
         ValueComparisonTemplate comparison => new ValueComparisonTemplate(
             Prefixed(comparison.Left, path), comparison.Comparison, Prefixed(comparison.Right, path)),
         BooleanValueTemplate boolean => new BooleanValueTemplate(Prefixed(boolean.Value, path)),
+        StringMatchTemplate match => new StringMatchTemplate(match.Match, Prefixed(match.Value, path), Prefixed(match.Part, path)),
+        LikeTemplate like => new LikeTemplate(
+            Prefixed(like.Value, path), Prefixed(like.Pattern, path), like.Escape is null ? null : Prefixed(like.Escape, path)),
+        NullOrEmptyTemplate empty => new NullOrEmptyTemplate(Prefixed(empty.Value, path), empty.OrWhiteSpace),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
@@ -576,6 +580,7 @@ internal sealed class SqlBuilder
         ConditionalValueTemplate conditional => new ConditionalValueTemplate(
             Prefixed(conditional.Test, path), Prefixed(conditional.WhenTrue, path), Prefixed(conditional.WhenFalse, path)),
         PredicateValueTemplate predicate => new PredicateValueTemplate(Prefixed(predicate.Predicate, path)),
+        FunctionValueTemplate function => new FunctionValueTemplate(function.Function, [.. function.Arguments.Select(a => Prefixed(a, path))]),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
@@ -1012,6 +1017,9 @@ internal sealed class SqlBuilder
         OrTemplate or => TemplateNames(or.Left).Concat(TemplateNames(or.Right)),
         ValueComparisonTemplate comparison => ValueNames(comparison.Left).Concat(ValueNames(comparison.Right)),
         BooleanValueTemplate boolean => ValueNames(boolean.Value),
+        StringMatchTemplate match => ValueNames(match.Value).Concat(ValueNames(match.Part)),
+        LikeTemplate like => ValueNames(like.Value).Concat(ValueNames(like.Pattern)).Concat(like.Escape is null ? [] : ValueNames(like.Escape)),
+        NullOrEmptyTemplate empty => ValueNames(empty.Value),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
@@ -1026,6 +1034,7 @@ internal sealed class SqlBuilder
         ConditionalValueTemplate conditional => TemplateNames(conditional.Test)
             .Concat(ValueNames(conditional.WhenTrue)).Concat(ValueNames(conditional.WhenFalse)),
         PredicateValueTemplate predicate => TemplateNames(predicate.Predicate),
+        FunctionValueTemplate function => function.Arguments.SelectMany(ValueNames),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
@@ -1429,8 +1438,199 @@ internal sealed class SqlBuilder
         BoundInList inList => RenderInList(inList, values[inList.ValueIndex], negated, column),
         BoundValueComparison comparison => RenderValueComparison(comparison, values, negated, column),
         BoundBooleanValue boolean => RenderBooleanValue(boolean, values, negated, column),
+        BoundStringMatch match => RenderStringMatch(match, values, negated, column),
+        BoundLike like => RenderLike(like, values, negated, column),
+        BoundNullOrEmpty empty => RenderNullOrEmpty(empty, values, negated, column),
         _ => throw new UnreachableException(predicate.GetType().ToString()),
     };
+
+    /// <summary>
+    /// <c>Contains</c>, <c>StartsWith</c> or <c>EndsWith</c>, as EF Core writes them: a value is sent as a <c>LIKE</c>
+    /// pattern with its wildcards escaped; a column's value is searched for, after checking neither side is null.
+    /// Looking for null is false, as EF Core writes it.
+    /// </summary>
+    private string RenderStringMatch(BoundStringMatch match, IReadOnlyList<object?> values, bool negated, Func<BoundProperty, string> column)
+    {
+        var value = RenderValue(match.Value, values, column, hint: null);
+        if (match.Part is BoundSlotValue slot)
+        {
+            if (values[slot.ValueIndex] is not { } part || value.IsNull)
+            {
+                return negated ? AlwaysTrue : AlwaysFalse;
+            }
+
+            var text = _dialect.EscapeLikePattern(System.Convert.ToString(part, CultureInfo.InvariantCulture)!);
+            var pattern = match.Match switch
+            {
+                StringMatch.Contains => "%" + text + "%",
+                StringMatch.StartsWith => text + "%",
+                _ => "%" + text,
+            };
+
+            var like = _dialect.Like(value.Sql, AddParameter(pattern, property: null), _dialect.LikeEscapeLiteral);
+            return negated ? NotLike(like, value) : like;
+        }
+
+        var searched = RenderValue(match.Part, values, column, hint: null);
+        if (searched.IsNull || value.IsNull)
+        {
+            return negated ? AlwaysTrue : AlwaysFalse;
+        }
+
+        var core = match.Match switch
+        {
+            // CHARINDEX finds no empty string, which every string contains.
+            StringMatch.Contains => Combine(
+                "OR",
+                StringFunction(SqlStringFunction.Position, searched.Sql, value.Sql) + " > 0",
+                _dialect.Like(searched.Sql, _dialect.EmptyStringLiteral, escape: null)),
+            StringMatch.StartsWith => StringFunction(SqlStringFunction.Left, value.Sql, StringFunction(SqlStringFunction.Length, searched.Sql)) + " = " + searched.Sql,
+            _ => StringFunction(SqlStringFunction.Right, value.Sql, StringFunction(SqlStringFunction.Length, searched.Sql)) + " = " + searched.Sql,
+        };
+
+        // With neither side null the test is true or false, never unknown, so NOT negates it exactly.
+        var parts = new List<string>();
+        if (value.IsNullable)
+        {
+            parts.Add(Parenthesized(value) + " IS NOT NULL");
+        }
+
+        if (searched.IsNullable)
+        {
+            parts.Add(Parenthesized(searched) + " IS NOT NULL");
+        }
+
+        parts.Add(core);
+        var positive = parts.Count == 1 ? core : "(" + string.Join(" AND ", parts) + ")";
+        return negated ? "NOT " + (parts.Count == 1 && match.Match != StringMatch.Contains ? "(" + positive + ")" : positive) : positive;
+    }
+
+    // NOT LIKE is unknown for a null, which C#'s negation counts as true.
+    private static string NotLike(string like, SqlValue value)
+        => value.IsNullable ? Combine("OR", "NOT (" + like + ")", Parenthesized(value) + " IS NULL") : "NOT (" + like + ")";
+
+    /// <summary><c>EF.Functions.Like</c>: false for a null pattern, as EF Core writes it; its negation keeps the nulls.</summary>
+    private string RenderLike(BoundLike like, IReadOnlyList<object?> values, bool negated, Func<BoundProperty, string> column)
+    {
+        var value = RenderValue(like.Value, values, column, hint: null);
+        var pattern = RenderValue(like.Pattern, values, column, hint: null);
+        var escape = like.Escape is null ? (SqlValue?)null : RenderValue(like.Escape, values, column, hint: null);
+        if (value.IsNull || pattern.IsNull || escape is { IsNull: true })
+        {
+            return negated ? AlwaysTrue : AlwaysFalse;
+        }
+
+        var sql = _dialect.Like(value.Sql, pattern.Sql, escape?.Sql);
+        if (!negated)
+        {
+            return sql;
+        }
+
+        var parts = new List<string> { "NOT (" + sql + ")" };
+        if (value.IsNullable)
+        {
+            parts.Add(Parenthesized(value) + " IS NULL");
+        }
+
+        if (pattern.IsNullable)
+        {
+            parts.Add(Parenthesized(pattern) + " IS NULL");
+        }
+
+        return parts.Count == 1 ? parts[0] : "(" + string.Join(" OR ", parts) + ")";
+    }
+
+    /// <summary><c>string.IsNullOrEmpty</c> and <c>IsNullOrWhiteSpace</c>, as EF Core writes them.</summary>
+    private string RenderNullOrEmpty(BoundNullOrEmpty empty, IReadOnlyList<object?> values, bool negated, Func<BoundProperty, string> column)
+    {
+        var value = RenderValue(empty.Value, values, column, hint: null);
+        if (value.IsNull)
+        {
+            return negated ? AlwaysFalse : AlwaysTrue;
+        }
+
+        // SQL Server's = ignores trailing spaces, so a string of spaces equals the empty one; LIKE does not.
+        var isEmpty = empty.OrWhiteSpace
+            ? value.Sql + " = " + _dialect.EmptyStringLiteral
+            : _dialect.Like(value.Sql, _dialect.EmptyStringLiteral, escape: null);
+        if (!value.IsNullable)
+        {
+            return negated ? "NOT (" + isEmpty + ")" : isEmpty;
+        }
+
+        return negated
+            ? Combine("AND", Parenthesized(value) + " IS NOT NULL", "NOT (" + isEmpty + ")")
+            : Combine("OR", Parenthesized(value) + " IS NULL", isEmpty);
+    }
+
+    private string StringFunction(SqlStringFunction function, params string[] arguments) => _dialect.StringFunction(function, arguments);
+
+    /// <summary>
+    /// A string method or member, as EF Core writes it. A null string makes the result null, as EF Core's SQL does
+    /// where C# would throw.
+    /// </summary>
+    private SqlValue RenderFunction(BoundFunctionValue function, IReadOnlyList<object?> values, Func<BoundProperty, string> column)
+    {
+        var arguments = new List<SqlValue>(function.Arguments.Count);
+        foreach (var argument in function.Arguments)
+        {
+            var rendered = RenderValue(argument, values, column, hint: null);
+            if (rendered.IsNull && function.Function != ValueFunction.ToString)
+            {
+                return SqlValue.Null;
+            }
+
+            arguments.Add(rendered);
+        }
+
+        var value = arguments[0];
+        var isNullable = arguments.Exists(static a => a.IsNullable);
+        var readsRow = arguments.Exists(static a => a.ReadsRow);
+        SqlValue Text(string sql) => new(sql, isNullable, typeof(string), readsRow);
+        SqlValue Number(string sql, bool isCompound = false) => new(sql, isNullable, typeof(int), readsRow, isCompound);
+
+        switch (function.Function)
+        {
+            case ValueFunction.ToUpper:
+                return Text(StringFunction(SqlStringFunction.Upper, value.Sql));
+            case ValueFunction.ToLower:
+                return Text(StringFunction(SqlStringFunction.Lower, value.Sql));
+            case ValueFunction.Trim:
+                return Text(StringFunction(SqlStringFunction.TrimStart, StringFunction(SqlStringFunction.TrimEnd, value.Sql)));
+            case ValueFunction.TrimStart:
+                return Text(StringFunction(SqlStringFunction.TrimStart, value.Sql));
+            case ValueFunction.TrimEnd:
+                return Text(StringFunction(SqlStringFunction.TrimEnd, value.Sql));
+            case ValueFunction.Length:
+                return Number(StringFunction(SqlStringFunction.Length, value.Sql));
+            case ValueFunction.Substring:
+                // SQL counts from one; without a length, the rest of the string.
+                var length = arguments.Count > 2 ? arguments[2].Sql : StringFunction(SqlStringFunction.Length, value.Sql);
+                return Text(StringFunction(SqlStringFunction.Substring, value.Sql, Parenthesized(arguments[1]) + " + 1", length));
+            case ValueFunction.Replace:
+                return Text(StringFunction(SqlStringFunction.Replace, value.Sql, arguments[1].Sql, arguments[2].Sql));
+            case ValueFunction.IndexOf:
+                // SQL counts from one and finds no empty string; C# finds it at 0.
+                var position = StringFunction(SqlStringFunction.Position, arguments[1].Sql, value.Sql);
+                var offset = function.Arguments[1] is BoundSlotValue slot
+                    ? values[slot.ValueIndex] is string { Length: 0 } ? "0" : "1"
+                    : "CASE WHEN " + arguments[1].Sql + " = " + _dialect.EmptyStringLiteral + " THEN 0 ELSE 1 END";
+                return Number(position + " - " + offset, isCompound: true);
+            case ValueFunction.ToString when value.IsNull:
+                return new SqlValue(_dialect.EmptyStringLiteral, IsNullable: false, typeof(string), ReadsRow: false);
+            case ValueFunction.ToString when value.ClrType == typeof(string):
+                return value;
+            case ValueFunction.ToString when value.ClrType is { } type && (type == typeof(int) || type == typeof(long) || type == typeof(short) || type == typeof(byte)):
+                // A null number's ToString is the empty string.
+                var text = _dialect.Cast(value.Sql, typeof(string));
+                return new SqlValue(
+                    value.IsNullable ? "COALESCE(" + text + ", " + _dialect.EmptyStringLiteral + ")" : text, IsNullable: false, typeof(string), readsRow);
+            case ValueFunction.ToString:
+                throw new NotSupportedException(string.Format(CultureInfo.InvariantCulture, ExceptionMessages.ToStringNotSupported, value.ClrType));
+            default:
+                throw new UnreachableException(function.Function.ToString());
+        }
+    }
 
     /// <summary>
     /// A comparison of two computed values, true exactly where C# is: two nulls are equal, a null and a value are not,
@@ -1536,8 +1736,11 @@ internal sealed class SqlBuilder
             case BoundPropertyValue { Property: var property }:
                 return new SqlValue(column(property), property.IsNullable, Underlying(property.ClrType), ReadsRow: true);
             case BoundSlotValue slot:
+                // A character is a string of one in SQL, as EF Core sends it.
                 return values[slot.ValueIndex] is { } slotValue
-                    ? new SqlValue(AddParameter(slotValue, Fits(hint, slotValue) ? hint : null), IsNullable: false, slotValue.GetType(), ReadsRow: false)
+                    ? slotValue is char character
+                        ? new SqlValue(AddParameter(character.ToString(), property: null), IsNullable: false, typeof(string), ReadsRow: false)
+                        : new SqlValue(AddParameter(slotValue, Fits(hint, slotValue) ? hint : null), IsNullable: false, slotValue.GetType(), ReadsRow: false)
                     : SqlValue.Null;
             case BoundBinaryValue binary:
                 return RenderBinary(binary, values, column);
@@ -1598,6 +1801,9 @@ internal sealed class SqlBuilder
                     whenTrue.ClrType ?? whenFalse.ClrType,
                     ReadsRow: true);
             }
+
+            case BoundFunctionValue function:
+                return RenderFunction(function, values, column);
 
             case BoundPredicateValue predicate:
             {

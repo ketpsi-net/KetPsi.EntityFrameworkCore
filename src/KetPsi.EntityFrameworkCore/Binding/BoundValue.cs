@@ -20,3 +20,5 @@ internal sealed record BoundCoalesceValue(BoundValue Left, BoundValue Right) : B
 internal sealed record BoundConditionalValue(BoundPredicate Test, BoundValue WhenTrue, BoundValue WhenFalse) : BoundValue;
 
 internal sealed record BoundPredicateValue(BoundPredicate Predicate) : BoundValue;
+
+internal sealed record BoundFunctionValue(ValueFunction Function, IReadOnlyList<BoundValue> Arguments) : BoundValue;

@@ -38,7 +38,7 @@ public sealed class TrackingAndOrderingDiagnosticsTests
 
     // A key the value translation rejects for a precise reason reports that reason.
     [Theory]
-    [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Name.Length).ToList();", "KP2003", "b.Name.Length")]
+    [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Name.PadLeft(3)).ToList();", "KP2003", "b.Name.PadLeft(3)")]
     [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Id).ThenBy(b => b.Posts.Count).ToList();", "KP2005", "b.Posts.Count")]
     [InlineData("var r = db.Blogs.AsNoTracking().OrderByDescending(b => b.Author).ToList();", "KP2002", "b.Author")]
     public void OrderKeyWithAnUnsupportedPart_ReportsThatPart(string body, string id, string text)

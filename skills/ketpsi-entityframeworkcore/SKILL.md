@@ -108,10 +108,24 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
   methods and types the same assembly can access. A private method or type, an instance method of the enclosing
   class, a lambda or an anonymous type is KP2007: compute it into a local first. A condition that doesn't read the row
   (`b => flag && b.IsActive`, `b => true`) is decided by its value.
-- Not translatable: comparing a navigation with anything but `null` (KP2002), method calls and members such as
-  `ToUpper()`, `StartsWith` or `Name.Length` (KP2003), `EF.Functions` (KP2004), related collections such as
-  `b.Posts.Any()` or `b.Posts.Count` (KP2005), `<<` and `>>`, and concatenating anything but strings and integers, which
-  C# formats differently from SQL (KP2001).
+- String methods, as EF Core translates them:
+  - `Contains`, `StartsWith` and `EndsWith` with a string or a `char`: a value becomes a `LIKE` pattern with its
+    wildcards escaped (`b.Name.Contains(term)` matches `50%` literally); another column is searched for with
+    `CHARINDEX`, `LEFT` or `RIGHT`. Looking for `null` is false. EF Core 9 cannot translate the `char` overloads;
+    KetPsi does, as EF Core 10 and 11 do.
+  - `ToUpper()`, `ToLower()`, `Trim()`, `TrimStart()`, `TrimEnd()`, `Length`, `Substring(start)`,
+    `Substring(start, length)`, `Replace(a, b)`, `IndexOf(string)` and `IndexOf(char)`, `string.Concat`, and
+    `ToString()` of strings and integers (a null `int?` is `""`, as in C#).
+  - `string.IsNullOrEmpty`, `string.IsNullOrWhiteSpace`, `a.Equals(b)`, `string.Equals(a, b)`, and
+    `string.Compare(a, b)` or `a.CompareTo(b)` compared with `0`, which compare the strings.
+  - `EF.Functions.Like(value, pattern)` and `Like(value, pattern, escape)`, sent as written.
+  - Matching follows the column's collation, usually case-insensitive, and `LEN` doesn't count trailing spaces, as in
+    EF Core.
+- Not translatable: comparing a navigation with anything but `null` (KP2002); `StringComparison` overloads,
+  `ToUpperInvariant`, `Trim(chars)`, `PadLeft`, the indexer `Name[0]`, `ToString()` of enums, dates and decimals, and
+  other methods (KP2003); `EF.Functions` other than `Like` (KP2004); related collections such as `b.Posts.Any()` or
+  `b.Posts.Count` (KP2005); `<<` and `>>`, and concatenating anything but strings and integers, which C# formats
+  differently from SQL (KP2001).
 - Navigations are not supported yet inside query filters (KP3005) and inside the expressions on groups (KP2002), such
   as `g.Count(p => p.Blog.IsActive)`.
 - Null semantics follow C#: `!(b.Views > 10)` keeps rows with null `Views`; two nullable properties are equal when
@@ -122,8 +136,9 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
 **Order keys** are a property of the entity or of a reference navigation (`b => b.Name`, `p => p.Blog.Name`, joined
 like a predicate's navigation), or a value computed from them like a predicate's (`p => p.Price * p.Quantity`,
 `b => b.Code ?? b.Name`, `b => b.IsActive ? 0 : 1`, `b => b.Score > 5`). A key that reads no column, such as a
-constant or a variable, orders nothing, as in EF Core. Collections (`b => b.Posts.Count`, KP2005) and methods
-(`b => b.Name.Length`, KP2003) are not translatable yet; anything else is KP2008. Computed keys are supported on the
+constant or a variable, orders nothing, as in EF Core. String methods work as in predicates (`b => b.Name.Length`,
+`b => b.Name.ToLower()`). Collections (`b => b.Posts.Count`, KP2005) and other methods (KP2003) are not translatable
+yet; anything else is KP2008. Computed keys are supported on the
 entity query; after a `Select` or `Join`, order by members that read one column.
 
 **Lambdas** must be written at the call site, not passed as variables or method groups (KP1005).
@@ -399,7 +414,7 @@ Same behavior as EF Core:
 | KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals, plus `Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |
 | KP1008 | On groups use `Where`, `OrderBy`/`ThenBy`, `Select`, `Count`, `LongCount`, `Any`, `ToList`, `ToArray`; select the key and aggregates to page or take the first |
 | KP1009 | Rewrite the query expression with methods: `where` is `Where`, `orderby` is `OrderBy`/`ThenBy`, `select` is `Select` |
-| KP2001–KP2005 | Simplify the predicate to comparisons and arithmetic on properties (or ones through reference navigations) and values; query related collections separately |
+| KP2001–KP2005 | Simplify the predicate to comparisons, arithmetic and the supported string methods on properties (or ones through reference navigations) and values; use `EF.Functions.Like` for patterns; query related collections separately |
 | KP2006 | No longer reported for entity predicates: two properties can be compared |
 | KP2007 | Move the value into a local variable before the query, or make what it calls accessible to the assembly |
 | KP2008 | Order by a property, or a value computed from properties with operators, `?:` and `??` |

@@ -38,6 +38,19 @@ public interface ISqlDialect
     /// <exception cref="NotSupportedException">The dialect has no store type for <paramref name="type"/>.</exception>
     string Cast(string value, Type type);
 
+    /// <summary>Returns a string function: <see cref="SqlStringFunction"/> lists its arguments.</summary>
+    /// <exception cref="ArgumentException">The arguments do not match the function.</exception>
+    string StringFunction(SqlStringFunction function, IReadOnlyList<string> arguments);
+
+    /// <summary>Returns <c>value LIKE pattern</c>, with <c>ESCAPE escape</c> when <paramref name="escape"/> is given.</summary>
+    string Like(string value, string pattern, string? escape);
+
+    /// <summary>The literal of the character <see cref="EscapeLikePattern"/> escapes the wildcards with.</summary>
+    string LikeEscapeLiteral { get; }
+
+    /// <summary>Escapes the wildcards of <c>LIKE</c> in <paramref name="value"/>, so it matches only itself.</summary>
+    string EscapeLikePattern(string value);
+
     /// <summary>Returns the row-count aggregate: <c>Count</c> or, when <paramref name="isLong"/>, <c>LongCount</c>.</summary>
     string Count(bool isLong);
 

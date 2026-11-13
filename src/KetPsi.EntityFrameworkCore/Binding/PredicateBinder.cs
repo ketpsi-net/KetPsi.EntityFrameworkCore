@@ -26,6 +26,10 @@ internal static class PredicateBinder
         ValueComparisonTemplate comparison => new BoundValueComparison(
             Bind(comparison.Left, resolve, owner), comparison.Comparison, Bind(comparison.Right, resolve, owner)),
         BooleanValueTemplate boolean => new BoundBooleanValue(Bind(boolean.Value, resolve, owner)),
+        StringMatchTemplate match => new BoundStringMatch(match.Match, Bind(match.Value, resolve, owner), Bind(match.Part, resolve, owner)),
+        LikeTemplate like => new BoundLike(
+            Bind(like.Value, resolve, owner), Bind(like.Pattern, resolve, owner), like.Escape is null ? null : Bind(like.Escape, resolve, owner)),
+        NullOrEmptyTemplate empty => new BoundNullOrEmpty(Bind(empty.Value, resolve, owner), empty.OrWhiteSpace),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
@@ -41,6 +45,7 @@ internal static class PredicateBinder
         ConditionalValueTemplate conditional => new BoundConditionalValue(
             Bind(conditional.Test, resolve, owner), Bind(conditional.WhenTrue, resolve, owner), Bind(conditional.WhenFalse, resolve, owner)),
         PredicateValueTemplate predicate => new BoundPredicateValue(Bind(predicate.Predicate, resolve, owner)),
+        FunctionValueTemplate function => new BoundFunctionValue(function.Function, [.. function.Arguments.Select(a => Bind(a, resolve, owner))]),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 

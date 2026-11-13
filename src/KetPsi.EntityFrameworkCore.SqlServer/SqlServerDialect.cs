@@ -128,6 +128,62 @@ public sealed class SqlServerDialect : ISqlDialect
     }
 
     /// <inheritdoc/>
+    public string StringFunction(SqlStringFunction function, IReadOnlyList<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        var (name, count) = function switch
+        {
+            SqlStringFunction.Upper => ("UPPER", 1),
+            SqlStringFunction.Lower => ("LOWER", 1),
+            SqlStringFunction.TrimStart => ("LTRIM", 1),
+            SqlStringFunction.TrimEnd => ("RTRIM", 1),
+            SqlStringFunction.Length => ("LEN", 1),
+            SqlStringFunction.Substring => ("SUBSTRING", 3),
+            SqlStringFunction.Replace => ("REPLACE", 3),
+            SqlStringFunction.Position => ("CHARINDEX", 2),
+            SqlStringFunction.Left => ("LEFT", 2),
+            SqlStringFunction.Right => ("RIGHT", 2),
+            _ => throw new ArgumentOutOfRangeException(nameof(function), function, message: null),
+        };
+
+        if (arguments.Count != count)
+        {
+            throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, ExceptionMessages.FunctionArgumentCount, function, count), nameof(arguments));
+        }
+
+        // LEN returns bigint for varchar(max) and nvarchar(max); EF Core casts it to int, as string.Length is.
+        var call = name + "(" + string.Join(", ", arguments) + ")";
+        return function == SqlStringFunction.Length ? "CAST(" + call + " AS int)" : call;
+    }
+
+    /// <inheritdoc/>
+    public string Like(string value, string pattern, string? escape)
+        => value + " LIKE " + pattern + (escape is null ? "" : " ESCAPE " + escape);
+
+    /// <inheritdoc/>
+    public string LikeEscapeLiteral => "N'\\'";
+
+    /// <inheritdoc/>
+    public string EscapeLikePattern(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        var escaped = new StringBuilder(value.Length);
+        foreach (var c in value)
+        {
+            if (c is '%' or '_' or '[' or '\\')
+            {
+                escaped.Append('\\');
+            }
+
+            escaped.Append(c);
+        }
+
+        return escaped.ToString();
+    }
+
+    /// <inheritdoc/>
     public string Count(bool isLong) => isLong ? "COUNT_BIG(*)" : "COUNT(*)";
 
     /// <inheritdoc/>

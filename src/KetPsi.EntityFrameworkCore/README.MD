@@ -64,6 +64,10 @@ targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 i
 - Arithmetic and string concatenation in SQL (`p.Price * p.Quantity`, `b.First + " " + b.Last`), casts, `?:`, `??`,
   `.GetValueOrDefault(value)`, `.Value`, and computed booleans (`p => p.IsFeatured ?? false`).
 - `&&`, `||`, `!`, `&`, `|`, `^`, boolean properties, `== null`, `!= null` and `.HasValue`.
+- String methods as EF Core translates them: `Contains`, `StartsWith` and `EndsWith` (a value becomes an escaped
+  `LIKE` pattern), `ToUpper`, `ToLower`, `Trim`, `TrimStart`, `TrimEnd`, `Length`, `Substring`, `Replace`, `IndexOf`,
+  `string.Concat`, `string.IsNullOrEmpty`, `string.IsNullOrWhiteSpace`, `Equals`, `string.Compare` and `CompareTo`, and
+  `ToString()` of strings and integers; and `EF.Functions.Like`.
 - `string.Equals(value)`, enums, nullable properties.
 - `list.Contains(b.Property)` over arrays and lists, sent as one JSON parameter through `OPENJSON`.
 - Properties through reference navigations, such as `p.Blog.Name == name`, joined like an included reference

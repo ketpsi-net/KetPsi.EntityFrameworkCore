@@ -53,6 +53,35 @@ public sealed class SqlServerDialectTests
     public void Cast_UsesEfCoresDefaultStoreType(Type type, string storeType)
         => Assert.Equal($"CAST([t0].[x] AS {storeType})", Dialect.Cast("[t0].[x]", type));
 
+    [Theory]
+    [InlineData(SqlStringFunction.Upper, new[] { "[a]" }, "UPPER([a])")]
+    [InlineData(SqlStringFunction.Lower, new[] { "[a]" }, "LOWER([a])")]
+    [InlineData(SqlStringFunction.TrimStart, new[] { "[a]" }, "LTRIM([a])")]
+    [InlineData(SqlStringFunction.TrimEnd, new[] { "[a]" }, "RTRIM([a])")]
+    [InlineData(SqlStringFunction.Length, new[] { "[a]" }, "CAST(LEN([a]) AS int)")]
+    [InlineData(SqlStringFunction.Substring, new[] { "[a]", "2", "3" }, "SUBSTRING([a], 2, 3)")]
+    [InlineData(SqlStringFunction.Replace, new[] { "[a]", "@p0", "@p1" }, "REPLACE([a], @p0, @p1)")]
+    [InlineData(SqlStringFunction.Position, new[] { "@p0", "[a]" }, "CHARINDEX(@p0, [a])")]
+    [InlineData(SqlStringFunction.Left, new[] { "[a]", "2" }, "LEFT([a], 2)")]
+    [InlineData(SqlStringFunction.Right, new[] { "[a]", "2" }, "RIGHT([a], 2)")]
+    public void StringFunction_IsWrittenAsEfCoreWritesIt(SqlStringFunction function, string[] arguments, string expected)
+        => Assert.Equal(expected, Dialect.StringFunction(function, arguments));
+
+    [Fact]
+    public void StringFunction_WrongArguments_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => Dialect.StringFunction(SqlStringFunction.Upper, ["[a]", "[b]"]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Dialect.StringFunction((SqlStringFunction)99, ["[a]"]));
+    }
+
+    [Fact]
+    public void Like_EscapesWithABackslash()
+    {
+        Assert.Equal("[a] LIKE @p0", Dialect.Like("[a]", "@p0", escape: null));
+        Assert.Equal(@"[a] LIKE @p0 ESCAPE N'\'", Dialect.Like("[a]", "@p0", Dialect.LikeEscapeLiteral));
+        Assert.Equal(@"50\%\_\[x]\\ok", Dialect.EscapeLikePattern(@"50%_[x]\ok"));
+    }
+
     [Fact]
     public void Cast_TypeWithoutStoreType_Throws()
     {

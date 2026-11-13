@@ -17,6 +17,9 @@ internal static class ExceptionMessages
     public const string ValueCountMismatch =
         "The predicate reads {0} value(s), but {1} were supplied.";
 
+    public const string ToStringNotSupported =
+        "ToString of '{0}' cannot be translated: only strings and integers are, as C# and SQL format other types differently.";
+
     public const string KeyValueCountMismatch =
         "The order key reads {0} value(s), but {1} were supplied.";
 
