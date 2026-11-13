@@ -79,7 +79,21 @@ public sealed class SqlDialectsTests
 
         public string FalseLiteral => throw new NotSupportedException();
 
+        public string EmptyStringLiteral => throw new NotSupportedException();
+
         public string QuoteIdentifier(string identifier) => throw new NotSupportedException();
+
+        public string Concat(string left, string right) => throw new NotSupportedException();
+
+        public string Cast(string value, Type type) => throw new NotSupportedException();
+
+        public string StringFunction(SqlStringFunction function, IReadOnlyList<string> arguments) => throw new NotSupportedException();
+
+        public string Like(string value, string pattern, string? escape) => throw new NotSupportedException();
+
+        public string LikeEscapeLiteral => throw new NotSupportedException();
+
+        public string EscapeLikePattern(string value) => throw new NotSupportedException();
 
         public string QualifyTable(string table, string? schema) => throw new NotSupportedException();
 

@@ -29,6 +29,7 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// <param name="Group">For <c>GroupBy</c> and the operators on its groups, what the interceptor passes to the runtime.</param>
 /// <param name="Join">For <c>Join</c>, its keys; its result selector is <paramref name="Projection"/>.</param>
 /// <param name="SqlQuery">For <c>Database.SqlQuery</c>, its result columns; <paramref name="Projection"/> reads them.</param>
+/// <param name="OrderKey">For ordering operators whose key is computed, such as <c>x =&gt; x.Price * x.Quantity</c>, its translation.</param>
 internal sealed record CallSite(
     string ElementType,
     LocationInfo Location,
@@ -48,7 +49,8 @@ internal sealed record CallSite(
     AggregateModel? Aggregate = null,
     GroupCallModel? Group = null,
     JoinModel? Join = null,
-    SqlQueryModel? SqlQuery = null);
+    SqlQueryModel? SqlQuery = null,
+    PredicateModel? OrderKey = null);
 
 /// <summary>An aggregate, as the runtime's <c>AggregateFunction</c> and <c>AggregateValueType</c> name it.</summary>
 /// <param name="ValueType">The overload's numeric type, or <c>Column</c> for <c>Min</c> and <c>Max</c>.</param>

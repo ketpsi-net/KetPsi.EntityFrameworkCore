@@ -8,6 +8,12 @@ internal static class ExceptionMessages
     public const string SumNeedsNumericType =
         "Sum and Average work in int, long, decimal, double or float.";
 
+    public const string FunctionArgumentCount =
+        "{0} takes {1} argument(s).";
+
+    public const string CastTypeNotSupported =
+        "SQL Server has no store type KetPsi.EntityFrameworkCore converts '{0}' to.";
+
     public const string TupleColumnsMismatch =
         "A tuple list needs at least one column, and one store type per column.";
 }

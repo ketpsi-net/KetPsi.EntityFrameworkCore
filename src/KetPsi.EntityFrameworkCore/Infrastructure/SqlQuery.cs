@@ -175,6 +175,30 @@ public static class SqlQuery
         where T : class
         => AppendOrder(source, propertyName, descending: true, isThenBy: true);
 
+    /// <summary>Appends <c>OrderBy</c> on a computed value, such as <c>x.Price * x.Quantity</c>.</summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IOrderedQueryable<T> OrderBy<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, ValueTemplate key, object?[] values)
+        where T : class
+        => AppendOrder(source, key, values, descending: false, isThenBy: false);
+
+    /// <summary>Appends <c>OrderByDescending</c> on a computed value, such as <c>x.Price * x.Quantity</c>.</summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IOrderedQueryable<T> OrderByDescending<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, ValueTemplate key, object?[] values)
+        where T : class
+        => AppendOrder(source, key, values, descending: true, isThenBy: false);
+
+    /// <summary>Appends <c>ThenBy</c> on a computed value, such as <c>x.Price * x.Quantity</c>.</summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IOrderedQueryable<T> ThenBy<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IOrderedQueryable<T> source, ValueTemplate key, object?[] values)
+        where T : class
+        => AppendOrder(source, key, values, descending: false, isThenBy: true);
+
+    /// <summary>Appends <c>ThenByDescending</c> on a computed value, such as <c>x.Price * x.Quantity</c>.</summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IOrderedQueryable<T> ThenByDescending<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IOrderedQueryable<T> source, ValueTemplate key, object?[] values)
+        where T : class
+        => AppendOrder(source, key, values, descending: true, isThenBy: true);
+
     /// <summary>Appends <c>Skip</c>.</summary>
     public static IQueryable<T> Skip<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, int count)
         where T : class
@@ -524,5 +548,15 @@ public static class SqlQuery
 
         var query = ToSqlQueryable(source);
         return query.WithTail(new OrderNode(query.Tail, propertyName, descending, isThenBy));
+    }
+
+    private static SqlQueryable<T> AppendOrder<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        IQueryable<T> source, ValueTemplate key, object?[] values, bool descending, bool isThenBy)
+        where T : class
+    {
+        OrderKey.Validate(key, values);
+
+        var query = ToSqlQueryable(source);
+        return query.WithTail(new OrderNode(query.Tail, key, values, descending, isThenBy));
     }
 }

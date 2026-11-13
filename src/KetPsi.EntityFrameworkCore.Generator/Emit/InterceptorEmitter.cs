@@ -23,6 +23,7 @@ internal static class InterceptorEmitter
     private const string AggregateValueType = "global::KetPsi.EntityFrameworkCore.Sql.AggregateValueType";
     private const string CapturedValues = "global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues";
     private const string PredicateTemplate = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate";
+    private const string ValueTemplate = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueTemplate";
     private const string Enumerable = "global::System.Linq.Enumerable";
     private const string ExpressionType = "global::System.Linq.Expressions.Expression<";
     private const string NoValues = "global::System.Array.Empty<object?>()";
@@ -37,7 +38,7 @@ internal static class InterceptorEmitter
 
     private static bool CanInterceptEntityOperator(CallSite site, OperatorKind kind)
         => (!TakesPredicate(site) || site.Predicate is not null)
-            && (!IsOrdering(kind) || site.OrderProperty is not null)
+            && (!IsOrdering(kind) || site.OrderProperty is not null || site.OrderKey is not null)
             && (kind is not (OperatorKind.Include or OperatorKind.ThenInclude) || site.Include is not null)
             && (kind != OperatorKind.Select || site.Projection is not null)
             && (kind != OperatorKind.Join || site.Join is not null && site.Projection is not null)
@@ -107,6 +108,11 @@ internal static class InterceptorEmitter
         if (site.Predicate is not null)
         {
             writer.Line($"private static readonly {PredicateTemplate} {template} = {site.Predicate.TemplateCode};").Line();
+        }
+
+        if (site.OrderKey is not null)
+        {
+            writer.Line($"private static readonly {ValueTemplate} {template} = {site.OrderKey.TemplateCode};").Line();
         }
 
         if (site.Group?.TemplateCode is { } groupTemplate)
@@ -193,10 +199,9 @@ internal static class InterceptorEmitter
             .Close()
             .Line();
 
-        if (site.Predicate is { ValuePaths.Count: > 0 })
+        if ((site.Predicate ?? site.OrderKey) is { } lambdaValues)
         {
-            var predicateParameter = parameters.First(static p => p.Type.StartsWith(ExpressionType, StringComparison.Ordinal)).Name;
-            writer.Line($"var {PredicateTranslator.BodyVariable} = {predicateParameter}.Body;");
+            WriteValueReads(writer, lambdaValues, parameters.First(static p => p.Type.StartsWith(ExpressionType, StringComparison.Ordinal)).Name);
         }
 
         writer.Line("return " + Body(site, source, template) + ";").Close();
@@ -323,10 +328,7 @@ internal static class InterceptorEmitter
         if (TakesPredicate(site) && site.Predicate is { } predicate)
         {
             writer.Open($"if ({source} is var query && {SqlProjection}.IsInterceptable(query))");
-            if (predicate.ValuePaths.Count > 0)
-            {
-                writer.Line($"var {PredicateTranslator.BodyVariable} = {parameters[1].Name}.Body;");
-            }
+            WriteValueReads(writer, predicate, parameters[1].Name);
 
             // A terminal's predicate is a Where before the terminal.
             var filtered = $"{SqlProjection}.Where(query, {template}, {Values(predicate)})";
@@ -544,7 +546,9 @@ internal static class InterceptorEmitter
                 var condition = parameters[1].Name;
                 return $"{SqlQuery}.WhereIf({source}, {condition}, {template}, {condition} ? {values} : {NoValues})";
             case OperatorKind.OrderBy or OperatorKind.OrderByDescending or OperatorKind.ThenBy or OperatorKind.ThenByDescending:
-                return $"{SqlQuery}.{site.Operator}({source}, \"{site.OrderProperty}\")";
+                return site.OrderKey is { } key
+                    ? $"{SqlQuery}.{site.Operator}({source}, {template}, {Values(key)})"
+                    : $"{SqlQuery}.{site.Operator}({source}, \"{site.OrderProperty}\")";
             case OperatorKind.Skip or OperatorKind.Take:
                 return $"{SqlQuery}.{site.Operator}({source}, {parameters[1].Name})";
             case OperatorKind.AsNoTracking or OperatorKind.AsNoTrackingWithIdentityResolution:
@@ -577,14 +581,20 @@ internal static class InterceptorEmitter
     }
 
     private static string Values(PredicateModel predicate)
+        => predicate.ValueCodes.Count == 0 ? NoValues : $"new object?[] {{ {string.Join(", ", predicate.ValueCodes)} }}";
+
+    // The variables the value codes read: the lambda body, and the values it captures in source order.
+    private static void WriteValueReads(CodeWriter writer, PredicateModel model, string lambda)
     {
-        if (predicate.ValuePaths.Count == 0)
+        if (model.ReadsBody)
         {
-            return NoValues;
+            writer.Line($"var {PredicateTranslator.BodyVariable} = {lambda}.Body;");
         }
 
-        var reads = predicate.ValuePaths.Select(static path => $"{CapturedValues}.Read({path})");
-        return $"new object?[] {{ {string.Join(", ", reads)} }}";
+        if (model.ReadsCaptures)
+        {
+            writer.Line($"var {CapturedValueWriter.Captures} = {CapturedValues}.ReadAll({lambda});");
+        }
     }
 
     private static bool TakesPredicate(CallSite site)

@@ -17,6 +17,9 @@ public interface ISqlDialect
     /// <summary>The literal for boolean <see langword="false"/>.</summary>
     string FalseLiteral { get; }
 
+    /// <summary>The literal for the empty string, which C# reads a <see langword="null"/> operand of string concatenation as.</summary>
+    string EmptyStringLiteral { get; }
+
     /// <summary>Quotes an identifier, escaping any quote characters inside it.</summary>
     string QuoteIdentifier(string identifier);
 
@@ -25,6 +28,28 @@ public interface ISqlDialect
 
     /// <summary>Returns the placeholder for the parameter at <paramref name="index"/>.</summary>
     string ParameterName(int index);
+
+    /// <summary>Returns the concatenation of two strings, neither of them null.</summary>
+    string Concat(string left, string right);
+
+    /// <summary>Returns <paramref name="value"/> converted to the store type of <paramref name="type"/>: a C# conversion such as <c>(long)x</c>.</summary>
+    /// <param name="value">The SQL of the converted value.</param>
+    /// <param name="type">The type converted to, never nullable.</param>
+    /// <exception cref="NotSupportedException">The dialect has no store type for <paramref name="type"/>.</exception>
+    string Cast(string value, Type type);
+
+    /// <summary>Returns a string function: <see cref="SqlStringFunction"/> lists its arguments.</summary>
+    /// <exception cref="ArgumentException">The arguments do not match the function.</exception>
+    string StringFunction(SqlStringFunction function, IReadOnlyList<string> arguments);
+
+    /// <summary>Returns <c>value LIKE pattern</c>, with <c>ESCAPE escape</c> when <paramref name="escape"/> is given.</summary>
+    string Like(string value, string pattern, string? escape);
+
+    /// <summary>The literal of the character <see cref="EscapeLikePattern"/> escapes the wildcards with.</summary>
+    string LikeEscapeLiteral { get; }
+
+    /// <summary>Escapes the wildcards of <c>LIKE</c> in <paramref name="value"/>, so it matches only itself.</summary>
+    string EscapeLikePattern(string value);
 
     /// <summary>Returns the row-count aggregate: <c>Count</c> or, when <paramref name="isLong"/>, <c>LongCount</c>.</summary>
     string Count(bool isLong);

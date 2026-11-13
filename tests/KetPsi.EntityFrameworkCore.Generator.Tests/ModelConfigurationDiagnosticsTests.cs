@@ -24,7 +24,7 @@ public sealed class ModelConfigurationDiagnosticsTests
     [Fact]
     public void FilterWithUnsupportedShape_ReportsTranslatorDiagnostic()
     {
-        var run = GeneratorHost.Run(Source("modelBuilder.Entity<Blog>().HasQueryFilter(b => b.Name.StartsWith(\"a\"));"));
+        var run = GeneratorHost.Run(Source("modelBuilder.Entity<Blog>().HasQueryFilter(b => b.Name.PadLeft(3) == \"a\");"));
 
         Assert.Equal("KP2003", Assert.Single(run.Diagnostics).Id);
     }

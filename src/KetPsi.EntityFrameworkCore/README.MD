@@ -41,8 +41,8 @@ targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 i
 | Area | Supported |
 |------|-----------|
 | Sources | `db.Blogs`, `db.Set<Blog>()`, and queries composed across statements (`IQueryable<Blog> q = db.Blogs; ...`) |
-| Filtering | `Where`, `WhereIf(condition, predicate)`, on properties of the entity and of reference navigations (`p => p.Blog.Name == name`, `p => p.Blog != null`) |
-| Ordering | `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending` on a property of the entity or of a reference navigation |
+| Filtering | `Where`, `WhereIf(condition, predicate)`, on properties of the entity and of reference navigations (`p => p.Blog.Name == name`, `p => p.Blog != null`), and on values computed from them (`p => p.Price * p.Quantity > p.Budget`) |
+| Ordering | `OrderBy`, `OrderByDescending`, `ThenBy`, `ThenByDescending` on a property of the entity or of a reference navigation, or a value computed from them (`p => p.Price * p.Quantity`) |
 | Paging | `Skip`, `Take`, in any order and combination, as EF Core translates them |
 | Tracking | `AsTracking()`, `AsTracking(behavior)`, `AsNoTracking()`, `AsNoTrackingWithIdentityResolution()`, and the context's `QueryTrackingBehavior` |
 | Query filters | Model query filters always apply; `IgnoreQueryFilters()` (and, on EF Core 10 and later, `IgnoreQueryFilters(["name"])`) |
@@ -59,17 +59,27 @@ targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 i
 
 ### Predicates
 
-- Comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`) between an entity property and a value, either way round.
-- `&&`, `||`, `!`, boolean properties, `== null`, `!= null` and `.HasValue`.
+- Comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`) between entity properties and values, either way round, and between
+  two properties (`p.Price > p.Cost`).
+- Arithmetic and string concatenation in SQL (`p.Price * p.Quantity`, `b.First + " " + b.Last`), casts, `?:`, `??`,
+  `.GetValueOrDefault(value)`, `.Value`, and computed booleans (`p => p.IsFeatured ?? false`).
+- `&&`, `||`, `!`, `&`, `|`, `^`, boolean properties, `== null`, `!= null` and `.HasValue`.
+- String methods as EF Core translates them: `Contains`, `StartsWith` and `EndsWith` (a value becomes an escaped
+  `LIKE` pattern), `ToUpper`, `ToLower`, `Trim`, `TrimStart`, `TrimEnd`, `Length`, `Substring`, `Replace`, `IndexOf`,
+  `string.Concat`, `string.IsNullOrEmpty`, `string.IsNullOrWhiteSpace`, `Equals`, `string.Compare` and `CompareTo`, and
+  `ToString()` of strings and integers; and `EF.Functions.Like`.
 - `string.Equals(value)`, enums, nullable properties.
 - `list.Contains(b.Property)` over arrays and lists, sent as one JSON parameter through `OPENJSON`.
 - Properties through reference navigations, such as `p.Blog.Name == name`, joined like an included reference
   (`INNER JOIN` when required, `LEFT JOIN` when optional), and `p.Blog == null`, which checks the foreign key.
-- Values: constants, locals, parameters, fields and properties of them, static members. Every value is sent as a
-  `DbParameter`; nothing is concatenated into SQL.
+- Values: constants, locals, parameters, fields and properties of them, static members, and anything computed from
+  them in C#, such as `min + 1`, `new OrderId(42)` or `day.AddDays(1)`: the generated code computes it when the query
+  runs, without compiling the expression tree, so it works under Native AOT. Every value is sent as a `DbParameter`;
+  nothing is concatenated into SQL.
 
-Null handling follows C#, as EF Core 9 and later do: `b.Views != views` with `views == null` means `IS NOT NULL`, and
-`!(b.Views > 10)` keeps rows where `Views` is null.
+Null handling follows C#, as EF Core 9 and later do: `b.Views != views` with `views == null` means `IS NOT NULL`,
+`!(b.Views > 10)` keeps rows where `Views` is null, two nullable properties are equal when both are null, and a null
+string concatenates as an empty one.
 
 ### Tracking
 
@@ -196,7 +206,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP1007 | Operator not supported after `Select` |
 | KP1008 | Operator not supported on the groups of `GroupBy` |
 | KP1009 | Query syntax over a query, which interceptors cannot replace; use method syntax |
-| KP2001–KP2008 | Expression, navigation, method, `EF.Functions`, collection, property comparison, value or order key not translatable |
+| KP2001–KP2008 | Expression, navigation, method, `EF.Functions`, collection, property comparison, value or order key not translatable; a value is KP2007 only when the generated code can't compute it, such as a call to a private method |
 | KP2009 | Projection not supported: a collection navigation, an instance method or `this`, a computed aggregate selector, or a type the generated code cannot reach |
 | KP2010 | `GroupBy` key not supported: a computed, constant, entity or `ValueTuple.Create` key |
 | KP2011 | Group expression not supported: the group's rows (`g.First()`, `g.ToList()`), an aggregate through a navigation or with a computed selector |
