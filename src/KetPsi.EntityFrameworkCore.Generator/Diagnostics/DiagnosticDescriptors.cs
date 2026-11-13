@@ -65,7 +65,7 @@ internal static class DiagnosticDescriptors
         "KP2001",
         "Expression not supported",
         "The expression '{0}' cannot be translated to SQL by KetPsi.EntityFrameworkCore. Predicates compare entity " +
-        "properties with values and combine the comparisons with !, && and ||.");
+        "properties, values and arithmetic on them, and combine the comparisons with !, && and ||.");
 
     public static readonly DiagnosticDescriptor NavigationNotSupported = Error(
         "KP2002",
@@ -95,13 +95,15 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor ValueNotSupported = Error(
         "KP2007",
         "Value not supported",
-        "The value '{0}' must be a constant, a variable, or a field or property of one. Compute it into a local " +
-        "variable before the query.");
+        "The value '{0}' cannot be computed by generated code: it can use constants, variables and the members, methods " +
+        "and types the same assembly can access, but not lambdas, anonymous types or the enclosing instance's methods. " +
+        "Compute it into a local variable before the query.");
 
     public static readonly DiagnosticDescriptor OrderKeyNotSupported = Error(
         "KP2008",
         "Order key not supported",
-        "The order key '{0}' must be a property of the entity or of a reference navigation, such as x => x.Name or x => x.Blog.Name");
+        "The order key '{0}' must be a property of the entity or of a reference navigation, or a value computed from them, " +
+        "such as x => x.Name, x => x.Blog.Name or x => x.Price * x.Quantity");
 
     public static readonly DiagnosticDescriptor ProjectionNotSupported = Error(
         "KP2009",

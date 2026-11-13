@@ -170,7 +170,7 @@ internal static class ModelConfigurationAnalyzer
                 EntityDiscovery.TypeName(entity),
                 filterKey,
                 predicate!.TemplateCode,
-                predicate.ValuePaths,
+                predicate.ValueCodes,
                 reader.Accessors.ToEquatableArray()),
             null);
     }

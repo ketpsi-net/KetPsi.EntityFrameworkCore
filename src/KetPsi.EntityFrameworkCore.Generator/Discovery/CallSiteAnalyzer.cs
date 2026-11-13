@@ -842,6 +842,7 @@ internal static partial class CallSiteAnalyzer
         {
             PredicateModel? predicate = null;
             string? orderProperty = null;
+            PredicateModel? orderKey = null;
             IncludeModel? include = null;
             ProjectionModel? projection = null;
             AggregateModel? aggregate = null;
@@ -869,10 +870,15 @@ internal static partial class CallSiteAnalyzer
                 }
                 else if (lambda is not null && IsOrdering(kind))
                 {
+                    // A property path is ordered by name; any other key is computed in SQL.
                     var (property, keyDiagnostic) = KeySelectorTranslator.Translate(lambda, semanticModel, cancellationToken);
                     if (keyDiagnostic is not null)
                     {
-                        return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, keyDiagnostic);
+                        (orderKey, keyDiagnostic) = PredicateTranslator.TranslateKey(lambda, semanticModel, cancellationToken);
+                        if (keyDiagnostic is not null)
+                        {
+                            return new CallSite(_elementType, location, Operator: null, isAsync, hasPredicate, keyDiagnostic);
+                        }
                     }
 
                     orderProperty = property;
@@ -941,7 +947,8 @@ internal static partial class CallSiteAnalyzer
                 include,
                 usesDecimalOperators,
                 projection,
-                Aggregate: aggregate);
+                Aggregate: aggregate,
+                OrderKey: orderKey);
         }
 
         private static bool IsPredicate(OperatorKind kind, bool hasPredicate)

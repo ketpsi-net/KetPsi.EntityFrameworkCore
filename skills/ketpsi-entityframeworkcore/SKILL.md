@@ -80,10 +80,17 @@ Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashS
 on a `DbSet`, but after any KetPsi operator they run the query and finish in memory:
 `db.Blogs.AsNoTracking().ToDictionary(b => b.Id)` works.
 
-**Predicates** compare an entity property with a value:
+**Predicates** compare entity properties, values, and values computed from them:
 
 - `==`, `!=`, `<`, `<=`, `>`, `>=` (value on either side), `&&`, `||`, `!`, a bool property, `== null`, `!= null`,
   `.HasValue`, `string.Equals(value)`, enums, nullable properties.
+- Two properties: `p => p.Price > p.Cost`, `p => p.ShippedAt > p.CreatedAt`, `p => p.Blog.OwnerId == p.AuthorId`.
+- Arithmetic and concatenation in SQL: `+ - * / %`, `& | ^` on integers, `-x`, `~x`, `+` on strings
+  (`p => p.Price * p.Quantity > 100`, `b => b.First + " " + b.Last == name`); casts (`(long)p.Quantity`, `(int)p.Status`)
+  and C#'s implicit conversions, written as a `CAST` where EF Core writes one.
+- `?:`, `??` and `.GetValueOrDefault(value)` (`p => (p.Discount ?? 0) > 5`, `p => (p.IsActive ? p.Price : 0) > 5`),
+  `.Value` of a nullable property, conditions used as values (`p => (p.Quantity > 5) == p.IsActive`), and computed
+  booleans as predicates (`p => p.IsFeatured ?? false`, `p => p.IsActive ^ p.IsFeatured`, `p => p.IsActive & p.InStock`).
 - Properties through reference navigations, in `Where`, `WhereIf` and the predicates of `First`, `Last`, `Single`,
   `Count`, `Any` and the rest: `p => p.Blog.Name == name`, `p => p.Blog.Owner.IsActive`. Each navigation is joined
   like an included reference: `INNER JOIN` when required, `LEFT JOIN` when optional, with the target's query filters
@@ -95,17 +102,29 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
   the other side of a one-to-one, the target is joined and its key checked, so a filtered-out target counts as
   missing.
 - `list.Contains(b.Property)` for arrays and lists (one JSON parameter, `OPENJSON` on SQL Server).
-- Values may be constants, locals, parameters, fields/properties of them, or static members. Compute anything else
-  into a local first (KP2007).
-- Not translatable: comparing two properties (KP2006), comparing a navigation with anything but `null` (KP2002),
-  method calls such as `ToUpper()` or `StartsWith` (KP2003), `EF.Functions` (KP2004), related collections such as
-  `b.Posts.Any()` or `b.Posts.Count` (KP2005).
+- A value that doesn't read the row is computed in C# when the query runs and sent as one parameter, as EF Core
+  does: `p.Quantity > min + 1`, `p.Sku == new Sku(12)`, `p.CreatedAt > day.AddDays(1)`, `p.Id == ids[0]`,
+  `p.Name == $"{prefix}une"`. It can use constants, variables, members of the enclosing instance, and the members,
+  methods and types the same assembly can access. A private method or type, an instance method of the enclosing
+  class, a lambda or an anonymous type is KP2007: compute it into a local first. A condition that doesn't read the row
+  (`b => flag && b.IsActive`, `b => true`) is decided by its value.
+- Not translatable: comparing a navigation with anything but `null` (KP2002), method calls and members such as
+  `ToUpper()`, `StartsWith` or `Name.Length` (KP2003), `EF.Functions` (KP2004), related collections such as
+  `b.Posts.Any()` or `b.Posts.Count` (KP2005), `<<` and `>>`, and concatenating anything but strings and integers, which
+  C# formats differently from SQL (KP2001).
 - Navigations are not supported yet inside query filters (KP3005) and inside the expressions on groups (KP2002), such
   as `g.Count(p => p.Blog.IsActive)`.
-- Null semantics follow C#: `!(b.Views > 10)` keeps rows with null `Views`.
+- Null semantics follow C#: `!(b.Views > 10)` keeps rows with null `Views`; two nullable properties are equal when
+  both are null; arithmetic with a null is null; a null string concatenates as an empty one. SQL Server's own rules
+  still apply where EF Core has them too: string comparisons follow the column's collation (usually case-insensitive),
+  and dividing by zero throws a `SqlException`.
 
-**Order keys** must be a property of the entity or of a reference navigation: `b => b.Name` or `p => p.Blog.Name`,
-joined like a predicate's navigation; not `b => b.Name.Length` or `b => b.Posts.Count` (KP2008).
+**Order keys** are a property of the entity or of a reference navigation (`b => b.Name`, `p => p.Blog.Name`, joined
+like a predicate's navigation), or a value computed from them like a predicate's (`p => p.Price * p.Quantity`,
+`b => b.Code ?? b.Name`, `b => b.IsActive ? 0 : 1`, `b => b.Score > 5`). A key that reads no column, such as a
+constant or a variable, orders nothing, as in EF Core. Collections (`b => b.Posts.Count`, KP2005) and methods
+(`b => b.Name.Length`, KP2003) are not translatable yet; anything else is KP2008. Computed keys are supported on the
+entity query; after a `Select` or `Join`, order by members that read one column.
 
 **Lambdas** must be written at the call site, not passed as variables or method groups (KP1005).
 
@@ -380,10 +399,10 @@ Same behavior as EF Core:
 | KP1007 | Filter and order before `Select`; after it use `Skip`, `Take`, `Distinct` (no computed members), aggregates of one property, and terminals, plus `Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read its entity and column members before any paging (after a `Select` on groups, `Where` and `OrderBy` on keys and aggregates); group the entities, not a projection |
 | KP1008 | On groups use `Where`, `OrderBy`/`ThenBy`, `Select`, `Count`, `LongCount`, `Any`, `ToList`, `ToArray`; select the key and aggregates to page or take the first |
 | KP1009 | Rewrite the query expression with methods: `where` is `Where`, `orderby` is `OrderBy`/`ThenBy`, `select` is `Select` |
-| KP2001–KP2005 | Simplify the predicate to comparisons of a property (or one through reference navigations) with a value; query related collections separately |
-| KP2006 | Compare a property with a value, not with another property |
-| KP2007 | Move the value into a local variable before the query |
-| KP2008 | Order by a property of the entity or of a reference navigation |
+| KP2001–KP2005 | Simplify the predicate to comparisons and arithmetic on properties (or ones through reference navigations) and values; query related collections separately |
+| KP2006 | No longer reported for entity predicates: two properties can be compared |
+| KP2007 | Move the value into a local variable before the query, or make what it calls accessible to the assembly |
+| KP2008 | Order by a property, or a value computed from properties with operators, `?:` and `??` |
 | KP2009 | Avoid collection navigations and instance methods in projections; aggregate one property; make projected types accessible |
 | KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
 | KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
