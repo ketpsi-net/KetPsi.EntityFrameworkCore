@@ -30,6 +30,7 @@ internal static class PredicateBinder
         LikeTemplate like => new BoundLike(
             Bind(like.Value, resolve, owner), Bind(like.Pattern, resolve, owner), like.Escape is null ? null : Bind(like.Escape, resolve, owner)),
         NullOrEmptyTemplate empty => new BoundNullOrEmpty(Bind(empty.Value, resolve, owner), empty.OrWhiteSpace),
+        ExistsTemplate exists => new BoundExists(exists.Collection),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
@@ -46,6 +47,8 @@ internal static class PredicateBinder
             Bind(conditional.Test, resolve, owner), Bind(conditional.WhenTrue, resolve, owner), Bind(conditional.WhenFalse, resolve, owner)),
         PredicateValueTemplate predicate => new BoundPredicateValue(Bind(predicate.Predicate, resolve, owner)),
         FunctionValueTemplate function => new BoundFunctionValue(function.Function, [.. function.Arguments.Select(a => Bind(a, resolve, owner))]),
+        CountValueTemplate count => new BoundCountValue(count.Collection, count.IsLong),
+        CollectionAggregateTemplate aggregate => new BoundCollectionAggregate(aggregate),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
