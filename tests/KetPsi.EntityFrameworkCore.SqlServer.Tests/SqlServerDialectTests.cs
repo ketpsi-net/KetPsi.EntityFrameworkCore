@@ -26,6 +26,40 @@ public sealed class SqlServerDialectTests
         Assert.Equal("CAST(0 AS bit)", Dialect.FalseLiteral);
     }
 
+    [Fact]
+    public void Strings_ConcatenateWithPlus()
+    {
+        Assert.Equal("N''", Dialect.EmptyStringLiteral);
+        Assert.Equal("[a] + N'!'", Dialect.Concat("[a]", "N'!'"));
+    }
+
+    // The store types EF Core maps the CLR types to by default.
+    [Theory]
+    [InlineData(typeof(bool), "bit")]
+    [InlineData(typeof(byte), "tinyint")]
+    [InlineData(typeof(short), "smallint")]
+    [InlineData(typeof(int), "int")]
+    [InlineData(typeof(long), "bigint")]
+    [InlineData(typeof(float), "real")]
+    [InlineData(typeof(double), "float")]
+    [InlineData(typeof(decimal), "decimal(18,2)")]
+    [InlineData(typeof(string), "nvarchar(max)")]
+    [InlineData(typeof(Guid), "uniqueidentifier")]
+    [InlineData(typeof(DateTime), "datetime2")]
+    [InlineData(typeof(DateTimeOffset), "datetimeoffset")]
+    [InlineData(typeof(DateOnly), "date")]
+    [InlineData(typeof(TimeOnly), "time")]
+    [InlineData(typeof(TimeSpan), "time")]
+    public void Cast_UsesEfCoresDefaultStoreType(Type type, string storeType)
+        => Assert.Equal($"CAST([t0].[x] AS {storeType})", Dialect.Cast("[t0].[x]", type));
+
+    [Fact]
+    public void Cast_TypeWithoutStoreType_Throws()
+    {
+        Assert.Throws<NotSupportedException>(() => Dialect.Cast("[x]", typeof(Uri)));
+        Assert.Throws<ArgumentNullException>(() => Dialect.Cast("[x]", null!));
+    }
+
     [Theory]
     [InlineData("Blogs", "[Blogs]")]
     [InlineData("Blog Name", "[Blog Name]")]

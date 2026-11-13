@@ -53,6 +53,26 @@ public sealed class SqlServerDialect : ISqlDialect
         ["datetimeoffset"] = DbType.DateTimeOffset,
     };
 
+    // The store types C# conversions cast to, as EF Core maps the CLR types by default.
+    private static readonly Dictionary<Type, string> CastTypes = new()
+    {
+        [typeof(bool)] = "bit",
+        [typeof(byte)] = "tinyint",
+        [typeof(short)] = "smallint",
+        [typeof(int)] = "int",
+        [typeof(long)] = "bigint",
+        [typeof(float)] = "real",
+        [typeof(double)] = "float",
+        [typeof(decimal)] = "decimal(18,2)",
+        [typeof(string)] = "nvarchar(max)",
+        [typeof(Guid)] = "uniqueidentifier",
+        [typeof(DateTime)] = "datetime2",
+        [typeof(DateTimeOffset)] = "datetimeoffset",
+        [typeof(DateOnly)] = "date",
+        [typeof(TimeOnly)] = "time",
+        [typeof(TimeSpan)] = "time",
+    };
+
     private SqlServerDialect()
     {
     }
@@ -68,6 +88,9 @@ public sealed class SqlServerDialect : ISqlDialect
 
     /// <inheritdoc/>
     public string FalseLiteral => "CAST(0 AS bit)";
+
+    /// <inheritdoc/>
+    public string EmptyStringLiteral => "N''";
 
     /// <inheritdoc/>
     public string QuoteIdentifier(string identifier)
@@ -89,6 +112,19 @@ public sealed class SqlServerDialect : ISqlDialect
         ArgumentOutOfRangeException.ThrowIfNegative(index);
 
         return ParameterPrefix + index.ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <inheritdoc/>
+    public string Concat(string left, string right) => left + " + " + right;
+
+    /// <inheritdoc/>
+    public string Cast(string value, Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+
+        return CastTypes.TryGetValue(type, out var storeType)
+            ? "CAST(" + value + " AS " + storeType + ")"
+            : throw new NotSupportedException(string.Format(CultureInfo.InvariantCulture, ExceptionMessages.CastTypeNotSupported, type));
     }
 
     /// <inheritdoc/>

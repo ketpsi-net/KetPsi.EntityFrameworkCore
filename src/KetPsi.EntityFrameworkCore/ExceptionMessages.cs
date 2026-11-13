@@ -17,6 +17,9 @@ internal static class ExceptionMessages
     public const string ValueCountMismatch =
         "The predicate reads {0} value(s), but {1} were supplied.";
 
+    public const string KeyValueCountMismatch =
+        "The order key reads {0} value(s), but {1} were supplied.";
+
     public const string EntityNotInModel =
         "The type '{0}' is not an entity type in the EF Core model.";
 

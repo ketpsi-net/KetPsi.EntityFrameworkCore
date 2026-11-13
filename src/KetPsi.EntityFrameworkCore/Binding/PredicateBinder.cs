@@ -23,6 +23,24 @@ internal static class PredicateBinder
         NotTemplate not => new BoundNot(Bind(not.Operand, resolve, owner)),
         AndTemplate and => new BoundAnd(Bind(and.Left, resolve, owner), Bind(and.Right, resolve, owner)),
         OrTemplate or => new BoundOr(Bind(or.Left, resolve, owner), Bind(or.Right, resolve, owner)),
+        ValueComparisonTemplate comparison => new BoundValueComparison(
+            Bind(comparison.Left, resolve, owner), comparison.Comparison, Bind(comparison.Right, resolve, owner)),
+        BooleanValueTemplate boolean => new BoundBooleanValue(Bind(boolean.Value, resolve, owner)),
+        _ => throw new UnreachableException(template.GetType().ToString()),
+    };
+
+    /// <summary>Binds a computed value whose property names <paramref name="resolve"/> maps to properties.</summary>
+    public static BoundValue Bind(ValueTemplate template, Func<string, BoundProperty> resolve, Type owner) => template switch
+    {
+        PropertyValueTemplate property => new BoundPropertyValue(resolve(property.PropertyName)),
+        SlotValueTemplate slot => new BoundSlotValue(slot.ValueIndex),
+        BinaryValueTemplate binary => new BoundBinaryValue(binary.Operator, Bind(binary.Left, resolve, owner), Bind(binary.Right, resolve, owner)),
+        UnaryValueTemplate unary => new BoundUnaryValue(unary.Operator, Bind(unary.Operand, resolve, owner)),
+        ConvertValueTemplate convert => new BoundConvertValue(Bind(convert.Operand, resolve, owner), convert.Type),
+        CoalesceValueTemplate coalesce => new BoundCoalesceValue(Bind(coalesce.Left, resolve, owner), Bind(coalesce.Right, resolve, owner)),
+        ConditionalValueTemplate conditional => new BoundConditionalValue(
+            Bind(conditional.Test, resolve, owner), Bind(conditional.WhenTrue, resolve, owner), Bind(conditional.WhenFalse, resolve, owner)),
+        PredicateValueTemplate predicate => new BoundPredicateValue(Bind(predicate.Predicate, resolve, owner)),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 

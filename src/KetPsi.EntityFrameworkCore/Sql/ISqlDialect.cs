@@ -17,6 +17,9 @@ public interface ISqlDialect
     /// <summary>The literal for boolean <see langword="false"/>.</summary>
     string FalseLiteral { get; }
 
+    /// <summary>The literal for the empty string, which C# reads a <see langword="null"/> operand of string concatenation as.</summary>
+    string EmptyStringLiteral { get; }
+
     /// <summary>Quotes an identifier, escaping any quote characters inside it.</summary>
     string QuoteIdentifier(string identifier);
 
@@ -25,6 +28,15 @@ public interface ISqlDialect
 
     /// <summary>Returns the placeholder for the parameter at <paramref name="index"/>.</summary>
     string ParameterName(int index);
+
+    /// <summary>Returns the concatenation of two strings, neither of them null.</summary>
+    string Concat(string left, string right);
+
+    /// <summary>Returns <paramref name="value"/> converted to the store type of <paramref name="type"/>: a C# conversion such as <c>(long)x</c>.</summary>
+    /// <param name="value">The SQL of the converted value.</param>
+    /// <param name="type">The type converted to, never nullable.</param>
+    /// <exception cref="NotSupportedException">The dialect has no store type for <paramref name="type"/>.</exception>
+    string Cast(string value, Type type);
 
     /// <summary>Returns the row-count aggregate: <c>Count</c> or, when <paramref name="isLong"/>, <c>LongCount</c>.</summary>
     string Count(bool isLong);

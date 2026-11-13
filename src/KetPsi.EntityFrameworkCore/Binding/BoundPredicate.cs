@@ -18,3 +18,7 @@ internal sealed record BoundNot(BoundPredicate Operand) : BoundPredicate;
 internal sealed record BoundAnd(BoundPredicate Left, BoundPredicate Right) : BoundPredicate;
 
 internal sealed record BoundOr(BoundPredicate Left, BoundPredicate Right) : BoundPredicate;
+
+internal sealed record BoundValueComparison(BoundValue Left, ComparisonOperator Comparison, BoundValue Right) : BoundPredicate;
+
+internal sealed record BoundBooleanValue(BoundValue Value) : BoundPredicate;

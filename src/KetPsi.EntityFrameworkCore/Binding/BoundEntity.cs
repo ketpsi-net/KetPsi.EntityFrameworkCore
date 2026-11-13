@@ -12,6 +12,7 @@ internal sealed class BoundEntity
     private readonly Dictionary<string, BoundNavigation> _navigationsByName;
     private readonly IReadOnlyCollection<string> _skipNavigationNames;
     private readonly ConcurrentDictionary<PredicateTemplate, BoundPredicate> _predicates = new();
+    private readonly ConcurrentDictionary<ValueTemplate, BoundValue> _values = new();
     private readonly ConcurrentDictionary<IReadOnlyList<string>, int[]> _ordinals = new(ReferenceEqualityComparer.Instance);
 
     public BoundEntity(
@@ -135,5 +136,13 @@ internal sealed class BoundEntity
         ArgumentNullException.ThrowIfNull(template);
 
         return _predicates.GetOrAdd(template, static (t, entity) => PredicateBinder.Bind(t, entity), this);
+    }
+
+    /// <summary>Binds the computed value <paramref name="template"/> against this entity, once per template instance.</summary>
+    public BoundValue BindValue(ValueTemplate template)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+
+        return _values.GetOrAdd(template, static (t, entity) => PredicateBinder.Bind(t, entity.GetProperty, entity.ClrType), this);
     }
 }

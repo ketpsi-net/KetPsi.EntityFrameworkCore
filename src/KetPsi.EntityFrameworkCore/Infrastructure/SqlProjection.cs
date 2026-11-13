@@ -278,6 +278,26 @@ public static class SqlProjection
     public static IOrderedQueryable<T> ThenByDescending<T>(IOrderedQueryable<T> source, string propertyPath)
         => AppendOrder(source, propertyPath, descending: true, isThenBy: true);
 
+    /// <summary>Appends <c>OrderBy</c> on a computed value, such as <c>x.Price * x.Quantity</c>.</summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IOrderedQueryable<T> OrderBy<T>(IQueryable<T> source, ValueTemplate key, object?[] values)
+        => AppendOrder(source, key, values, descending: false, isThenBy: false);
+
+    /// <summary>Appends <c>OrderByDescending</c> on a computed value, such as <c>x.Price * x.Quantity</c>.</summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IOrderedQueryable<T> OrderByDescending<T>(IQueryable<T> source, ValueTemplate key, object?[] values)
+        => AppendOrder(source, key, values, descending: true, isThenBy: false);
+
+    /// <summary>Appends <c>ThenBy</c> on a computed value, such as <c>x.Price * x.Quantity</c>.</summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IOrderedQueryable<T> ThenBy<T>(IOrderedQueryable<T> source, ValueTemplate key, object?[] values)
+        => AppendOrder(source, key, values, descending: false, isThenBy: true);
+
+    /// <summary>Appends <c>ThenByDescending</c> on a computed value, such as <c>x.Price * x.Quantity</c>.</summary>
+    /// <exception cref="ArgumentException"><paramref name="values"/> does not have one entry per value slot.</exception>
+    public static IOrderedQueryable<T> ThenByDescending<T>(IOrderedQueryable<T> source, ValueTemplate key, object?[] values)
+        => AppendOrder(source, key, values, descending: true, isThenBy: true);
+
     /// <summary>Appends a <c>Select</c> after one the generator reads through, which replaces it.</summary>
     /// <param name="source">The projected query.</param>
     /// <param name="propertyNames">The paths the reader reads, of the queried entity and of the joined ones.</param>
@@ -320,6 +340,14 @@ public static class SqlProjection
 
         var query = ToProjected(source);
         return query.WithTail(new OrderNode(query.Tail, propertyPath, descending, isThenBy));
+    }
+
+    private static ProjectedQueryable<T> AppendOrder<T>(IQueryable<T> source, ValueTemplate key, object?[] values, bool descending, bool isThenBy)
+    {
+        OrderKey.Validate(key, values);
+
+        var query = ToProjected(source);
+        return query.WithTail(new OrderNode(query.Tail, key, values, descending, isThenBy));
     }
 
     private static ProjectedQueryable<T> AppendGroupOrder<T>(IQueryable<T> source, GroupValue value, object?[] values, bool descending, bool isThenBy)
