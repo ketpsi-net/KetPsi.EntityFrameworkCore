@@ -627,6 +627,38 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "TagsOnPosts", [1] },
             { "TagsOnPosts", [0] },
             { "BlogsWithTaggedPosts", [] },
+            { "BlogPostCounts", [] },
+            { "BlogPostTests", [] },
+            { "BlogMaxPostId", [] },
+            { "BlogNullableAggregates", [] },
+            { "CategoryAggregates", [] },
+            { "BlogComputedFromCounts", [3] },
+            { "PostSiblingCounts", [] },
+            { "BlogCountsPaged", [] },
+            { "DistinctPostCounts", [] },
+            { "FirstBlogWithCount", [] },
+            { "CountBlogsProjectedWithCounts", [] },
+            { "BlogsWithCounts", [] },
+            { "PostTagCounts", [] },
+            { "TicketNoteCounts", [] },
+            { "BlogsWithPostLists", [] },
+            { "BlogPostTitles", [] },
+            { "BlogPostIdArrays", [] },
+            { "BlogPostIdSequences", [] },
+            { "BlogPostSummaries", [] },
+            { "AuthorsWithBlogSets", [] },
+            { "BlogsAndPostsTracked", [] },
+            { "BlogsAndPostsIdentityResolved", [] },
+            { "BlogPostsWithCaptures", [101, 1000] },
+            { "BlogPostsWithCaptures", [0, 0] },
+            { "BlogPostsPaged", [] },
+            { "FirstBlogWithTitles", [] },
+            { "BlogTitlesAsync", [] },
+            { "PostSiblingIds", [] },
+            { "TicketNoteTexts", [] },
+            { "CountBlogsProjectedWithPosts", [] },
+            { "BlogCommentedPostIds", [] },
+            { "CategoryGadgetNames", [] },
         };
 
 #if NET10_0_OR_GREATER
@@ -673,7 +705,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "FindBlog(1)", "FindPostAsync(101)", "FindTrackedTwice(3)", "DeleteTrackedComment()", "JoinEntities()",
         "FromSqlTracked()", "FromSqlAsWrittenTracked()",
         "TicketsTracked()", "FindTicket(2)", "FindTicketTwice(3)", "TicketsWithNotesTracked()", "LoadModifySaveTicket(3)",
-        "BlogsWithPostsTracked()",
+        "BlogsWithPostsTracked()", "BlogsAndPostsTracked()",
     };
 
     // Queries whose results have a defined order; other results are compared sorted by Id.
@@ -692,7 +724,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "GadgetsOrderedByNameLength", "GadgetsOrderedByTotal", "GadgetsOrderedByCodeOrName", "GadgetsOrderedByActive",
         "GadgetsOrderedByLowerName", "GadgetsOrderedByDiscount", "GadgetsOrderedByCategoryAndName", "GadgetsOrderedByVariable",
         "GadgetsPagedByTotal", "AuthorsOrderedByBlogCount", "BlogsOrderedByPostCount", "BlogsPagedByPostCount",
-        "CategoriesOrderedByAverageRating",
+        "CategoriesOrderedByAverageRating", "BlogCountsPaged", "BlogPostsPaged",
     };
 
     private static string Key(string query, object?[] arguments)
@@ -792,6 +824,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         _ when IsScalar(value) => Scalar(value),
         System.Runtime.CompilerServices.ITuple tuple => string.Join("|", Enumerable.Range(0, tuple.Length).Select(i => SortKey(tuple[i]))),
         _ when GroupingKey(value) is { } grouping => "group|" + SortKey(grouping.Key),
+        IEnumerable items => "[" + string.Join(",", items.Cast<object?>().Select(SortKey)) + "]",
         _ => string.Join("|", Members(value).Select(m => SortKey(m.Value))),
     };
 
@@ -916,6 +949,9 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             _ when IsScalar(value) => Scalar(value),
             System.Runtime.CompilerServices.ITuple tuple => "(" + string.Join(",", Enumerable.Range(0, tuple.Length).Select(i => Value(tuple[i]))) + ")",
             _ when GroupingKey(value) is { } grouping => "group " + Value(grouping.Key) + "[" + string.Join(",", grouping.Elements.Select(Value)) + "]",
+
+            // A projected collection: its type and its elements in order.
+            IEnumerable items => items.GetType().Name + "[" + string.Join(",", items.Cast<object?>().Select(Value)) + "]",
             _ => (value.GetType().Name.Contains("AnonymousType", StringComparison.Ordinal) ? "" : value.GetType().Name)
                 + "{" + string.Join(",", Members(value).Select(m => m.Name + "=" + Value(m.Value))) + "}",
         };
