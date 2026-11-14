@@ -32,7 +32,6 @@ public sealed class ProjectionDiagnosticsTests
         => Assert.Empty(GeneratorHost.Run(TestSources.WithBody(body)).Diagnostics);
 
     [Theory]
-    [InlineData("var r = db.Blogs.Select(b => b.Posts).ToList();", "b.Posts")]
     [InlineData("var r = db.Blogs.Sum(b => b.Rating * 2);", "b => b.Rating * 2")]
     [InlineData("var r = db.Blogs.Max(b => b.Posts.Count);", "b => b.Posts.Count")]
     public void UnsupportedProjection_ReportsKP2009AtTheExpression(string body, string expression)

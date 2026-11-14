@@ -43,6 +43,9 @@ internal sealed class PredicateTranslator
     private readonly List<IParameterSymbol> _scopes;
     private bool _readsBody;
 
+    // Whether every value is computed from the captured variables, as in a lambda of a projected collection.
+    private bool _valuesFromCaptures;
+
     // Inside a computed value, values are computed from the captures: the tree's conversions make paths unreliable.
     private int _valueDepth;
 
@@ -180,6 +183,37 @@ internal sealed class PredicateTranslator
         return translator.IsCollectionValue(node) ? translator.TranslateValue(node) : null;
     }
 
+    /// <summary>
+    /// Translates the condition of a <c>Where</c> on a projected collection, such as <c>p =&gt; p.IsPublic</c>, into a
+    /// predicate template over the related entity. Its values are computed from the captured variables, with the
+    /// placeholders <see cref="CapturedValueWriter"/> describes, and appended to <paramref name="valueSlots"/>.
+    /// </summary>
+    /// <exception cref="TranslationException">The condition cannot be translated.</exception>
+    public static string TranslateElementPredicate(
+        LambdaExpressionSyntax lambda, SemanticModel model, List<string> valueSlots, CancellationToken cancellationToken)
+    {
+        var parameterSyntax = lambda switch
+        {
+            SimpleLambdaExpressionSyntax simple => simple.Parameter,
+            ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: 1 } parenthesized => parenthesized.ParameterList.Parameters[0],
+            _ => null,
+        };
+
+        if (parameterSyntax is null
+            || model.GetDeclaredSymbol(parameterSyntax, cancellationToken) is not { } parameter
+            || lambda.Body is not ExpressionSyntax body)
+        {
+            throw Fail(DiagnosticDescriptors.ExpressionNotSupported, lambda);
+        }
+
+        var translator = new PredicateTranslator(
+            model, parameter, readValue: null, operands: null, valueSlots, allowNavigations: true, cancellationToken)
+        {
+            _valuesFromCaptures = true,
+        };
+        return translator.TranslatePredicate(body, BodyVariable);
+    }
+
     // Any, All, Count, LongCount or an aggregate of a source that reads a collection navigation, or its Count property.
     private bool IsCollectionValue(ExpressionSyntax node)
     {
@@ -193,7 +227,7 @@ internal sealed class PredicateTranslator
                     && EnumerableCall(invocation, method, (invocation.Expression as MemberAccessExpressionSyntax)?.Expression) is var (source, _)
                     && ReadsCollection(source);
             case MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Count" } count:
-                return _model.GetSymbolInfo(count, _cancellationToken).Symbol is IPropertySymbol && ReadsCollection(count.Expression);
+                return _model.GetSymbolInfo(count, _cancellationToken).Symbol is IPropertySymbol && CollectionSource(count.Expression) is not null;
             default:
                 return false;
         }
@@ -1230,7 +1264,7 @@ internal sealed class PredicateTranslator
         {
             _valuePaths.Add(_readValue(value));
         }
-        else if (path is not null && _valueDepth == 0 && IsReadableValue(value))
+        else if (path is not null && _valueDepth == 0 && !_valuesFromCaptures && IsReadableValue(value))
         {
             _readsBody = true;
             _valuePaths.Add($"{CapturedValues}.Read({path})");

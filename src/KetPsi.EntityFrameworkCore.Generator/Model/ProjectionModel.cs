@@ -35,6 +35,10 @@ namespace KetPsi.EntityFrameworkCore.Generator.Model;
 /// reader reads them after the property paths, in this order.
 /// </param>
 /// <param name="ValueSlots">C# that computes each value slot of <paramref name="Values"/> from <c>captures</c>.</param>
+/// <param name="Collections">
+/// C# that constructs each collection the projection selects, a <c>CollectionProjection</c>; with any, the reader returns
+/// what builds the result once they are loaded.
+/// </param>
 internal sealed record ProjectionModel(
     EquatableArray<string> PropertyPaths,
     EquatableArray<string> EntityPaths,
@@ -46,14 +50,16 @@ internal sealed record ProjectionModel(
     EquatableArray<string> PredicateValues = default,
     EquatableArray<GroupMember> GroupMembers = default,
     EquatableArray<string> Values = default,
-    EquatableArray<string> ValueSlots = default)
+    EquatableArray<string> ValueSlots = default,
+    EquatableArray<string> Collections = default)
 {
     /// <summary>Whether the projection is of groups.</summary>
     public bool IsGrouped => GroupValues.Count > 0;
 
     /// <summary>Whether the projection reads one column and nothing else, which an aggregate can work on.</summary>
     public bool IsSingleColumn
-        => PropertyPaths.Count + GroupValues.Count == 1 && EntityPaths.Count == 0 && Values.Count == 0 && !HasComputedValues;
+        => PropertyPaths.Count + GroupValues.Count == 1 && EntityPaths.Count == 0 && Values.Count == 0 && Collections.Count == 0
+            && !HasComputedValues;
 }
 
 /// <summary>A member of a <c>Select</c> on groups that is a key part or aggregate as it is.</summary>

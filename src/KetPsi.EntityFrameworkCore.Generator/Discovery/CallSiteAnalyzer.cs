@@ -26,6 +26,8 @@ internal static partial class CallSiteAnalyzer
         "only Skip, Take, Distinct, aggregates and terminals can follow Select, and Where, orderings, Select, Join and predicates only when they read its entity and column members before any paging; filter and order the entities before it";
     private const string ReasonDistinctComputed =
         "Distinct compares the projected values in SQL, so the projection cannot compute values in C#";
+    private const string ReasonDistinctCollections =
+        "Distinct cannot follow a projection that selects a collection, as in EF Core";
     private const string ReasonAggregateProjection =
         "an aggregate works on a projection of one property, such as Select(x => x.Price).Sum()";
     private const string ReasonAggregateSelector =
@@ -310,9 +312,12 @@ internal static partial class CallSiteAnalyzer
         switch (family)
         {
             case Family.Queryable when method.Name == "Distinct" && parameters.Length == 1:
-                return projection is { HasComputedValues: true }
-                    ? site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonDistinctComputed)
-                    : site.SupportedAfterSelect(OperatorKind.Distinct);
+                return projection switch
+                {
+                    { Collections.Count: > 0 } => site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonDistinctCollections),
+                    { HasComputedValues: true } => site.Reject(DiagnosticDescriptors.OperatorAfterSelectNotSupported, method.Name, ReasonDistinctComputed),
+                    _ => site.SupportedAfterSelect(OperatorKind.Distinct),
+                };
             case Family.Queryable or Family.EntityFramework when AggregateName(method.Name) is { } aggregate:
                 var isAsync = family == Family.EntityFramework;
                 if (parameters.Length != (isAsync ? 2 : 1))

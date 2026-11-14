@@ -132,6 +132,14 @@ internal sealed partial class ProjectionTranslator
         {
             var code = translator.Translate(operation);
 
+            // A projection of collections is built once they are loaded: it is translated again, reading every column
+            // and entity of the row first.
+            if (translator._collections.Count > 0)
+            {
+                translator = new ProjectionTranslator(model, symbols, parameters, location, cancellationToken) { _deferred = true };
+                code = translator.Translate(operation);
+            }
+
             // A lambda whose body converts to the result type, such as x => x.Id for an object result.
             var typeInfo = model.GetTypeInfo(body, cancellationToken);
             if (typeInfo.ConvertedType is { IsAnonymousType: false } converted && !SymbolEqualityComparer.Default.Equals(converted, typeInfo.Type))
@@ -148,7 +156,8 @@ internal sealed partial class ProjectionTranslator
                     translator._hasComputedValues,
                     translator.CaptureCount,
                     Values: translator._values.ToEquatableArray(),
-                    ValueSlots: translator._valueSlots.Select(translator.ResolveCaptures).ToEquatableArray()),
+                    ValueSlots: translator._valueSlots.Select(translator.ResolveCaptures).ToEquatableArray(),
+                    Collections: translator._collections.Select(translator.ResolveCaptures).ToEquatableArray()),
                 translator.AliasesOf(operation, memberPath: ""),
                 null);
         }
@@ -266,7 +275,30 @@ internal sealed partial class ProjectionTranslator
 
     // A reader that uses captured values closes over them; one that doesn't is static.
     private string ReaderLambda(string body)
-        => $"{(CaptureCount == 0 ? "static " : "")}({Reader}, {Ordinals}, {Entities}) => {ResolveValueOrdinals(ResolveCaptures(body))}";
+    {
+        if (!_deferred)
+        {
+            return $"{(CaptureCount == 0 ? "static " : "")}({Reader}, {Ordinals}, {Entities}) => {ResolveValueOrdinals(ResolveCaptures(body))}";
+        }
+
+        // The row is read first, since the reader can't be kept; the result is built from what was read.
+        var reads = string.Concat(_hoisted.Select((read, i) => $"var {HoistedName(i)} = {read}; "));
+        return ResolveValueOrdinals(ResolveCaptures($"({Reader}, {Ordinals}, {Entities}) => {{ {reads}return {BuildHelper}(() => {body}); }}"));
+    }
+
+    // With collections, what the reader reads from the row goes in a local the result is built from later.
+    private string Hoist(string read)
+    {
+        if (!_deferred)
+        {
+            return read;
+        }
+
+        _hoisted.Add(read);
+        return HoistedName(_hoisted.Count - 1);
+    }
+
+    private static string HoistedName(int index) => "__kp_read" + index.ToString(CultureInfo.InvariantCulture);
 
     // Values are read after the property paths, whose number is known once the translation is done.
     private string ResolveValueOrdinals(string code)
@@ -276,6 +308,12 @@ internal sealed partial class ProjectionTranslator
             code = code.Replace(ValueOrdinalPlaceholder(i), (_propertyPaths.Count + i).ToString(CultureInfo.InvariantCulture));
         }
 
+        // Each collection's elements follow the entities.
+        for (var i = 0; i < _collections.Count; i++)
+        {
+            code = code.Replace(CollectionIndexPlaceholder(i), (_entityPaths.Count + i).ToString(CultureInfo.InvariantCulture));
+        }
+
         return code;
     }
 
@@ -283,7 +321,7 @@ internal sealed partial class ProjectionTranslator
 
     // A projection of the queried entity itself can select values of its collections, as the root of the SQL query.
     private bool AllowsValues
-        => _group is null && !_readsNoMembers && _parameters.Count == 1
+        => _group is null && !_readsNoMembers && !_isElement && _parameters.Count == 1
             && _parameters.Values.First() is { Count: 1 } aliases && aliases[0] is { MemberPath: "", Path: "", IsEntity: true };
 
     /// <summary>
@@ -330,7 +368,7 @@ internal sealed partial class ProjectionTranslator
 
         var index = _values.Count;
         _values.Add(template);
-        return ReadColumn(shape, $"{Ordinals}[{ValueOrdinalPlaceholder(index)}]", throughNavigation: true, asNullable);
+        return Hoist(ReadColumn(shape, $"{Ordinals}[{ValueOrdinalPlaceholder(index)}]", throughNavigation: true, asNullable));
     }
 
     /// <summary>Replaces each capture placeholder in <paramref name="code"/> with its index in source order.</summary>
@@ -366,6 +404,9 @@ internal sealed partial class ProjectionTranslator
 
             case IInvocationOperation or IPropertyReferenceOperation when CollectionValue(operation, asNullable: false) is { } value:
                 return value;
+
+            case IInvocationOperation or IPropertyReferenceOperation when ProjectedCollection(operation) is { } collection:
+                return collection;
 
             case IConversionOperation conversion when IsNullableOf(conversion.Type, conversion.Operand.Type)
                 && MemberPath(conversion.Operand) is { } path && IsReadable(path, conversion.Operand.Syntax):
@@ -613,7 +654,7 @@ internal sealed partial class ProjectionTranslator
         var shape = PropertyShape(entity, property, syntax);
         var ordinal = Ordinal(_propertyPaths.Count);
         _propertyPaths.Add(path);
-        return ReadColumn(shape, ordinal, throughNavigation: ThroughNavigation(path), asNullable);
+        return Hoist(ReadColumn(shape, ordinal, throughNavigation: ThroughNavigation(path), asNullable));
     }
 
     // The column of a scalar result of SqlQuery: a null in it throws for a value type, as Nullable<T> does in EF Core.
@@ -622,7 +663,7 @@ internal sealed partial class ProjectionTranslator
         var shape = EntityShapeBuilder.ScalarShape(type, path) ?? throw Fail(syntax, $"the type '{type.ToDisplayString()}' cannot be read");
         var ordinal = Ordinal(_propertyPaths.Count);
         _propertyPaths.Add(path);
-        return ReadColumn(shape, ordinal, throughNavigation: true, asNullable);
+        return Hoist(ReadColumn(shape, ordinal, throughNavigation: true, asNullable));
     }
 
     // Whether a column path goes through a navigation, which can be missing; a joined entity always exists.
@@ -688,7 +729,7 @@ internal sealed partial class ProjectionTranslator
             _entities.Add(shape);
         }
 
-        return $"(({NameOf(entity, syntax)}){Entities}[{index.ToString(CultureInfo.InvariantCulture)}]!)";
+        return Hoist($"(({NameOf(entity, syntax)}){Entities}[{index.ToString(CultureInfo.InvariantCulture)}]!)");
     }
 
     private EntityShape Shape(INamedTypeSymbol entity)
@@ -841,6 +882,11 @@ internal sealed partial class ProjectionTranslator
             if (operation is not null && translator.CollectionValue(operation, asNullable: false) is { } value)
             {
                 return value;
+            }
+
+            if (operation is not null && translator.ProjectedCollection(operation) is { } collection)
+            {
+                return collection;
             }
 
             // A column or entity of the lambda's parameter, read like any projected member.

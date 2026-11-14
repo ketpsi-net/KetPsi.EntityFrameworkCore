@@ -243,6 +243,21 @@ var rows = await db.Posts
 - After a `Select` with such values, `Where`, orderings and aggregates can't read them yet (KP2001, KP1007): filter
   and order by the collection before the `Select`. `Min` and `Max` of an enum or a converted type, and these values
   in a `Join` result or a `Select` on groups, are KP2009.
+- Members can be related collections themselves:
+  `Select(b => new { b.Name, b.Posts, Titles = b.Posts.Where(p => p.IsPublic).OrderBy(p => p.Title).Select(p => p.Title).ToList() })`.
+  - Each collection is loaded with one more statement after the rows, by the keys of their parents, as an included
+    collection is; the related entity's query filters apply.
+  - A collection is the navigation itself, or `Where`, `OrderBy`/`ThenBy` (by a property, through references too)
+    and one `Select` on it, optionally ending in `ToList()` or `ToArray()`. The element can be the entity, a value, or
+    an object of values and references (`p.Blog.Name`, `p.Blog`).
+  - Elements without an ordering come in the related entity's key order. A collection is never null: a parent without
+    related rows gets an empty one. `b.Posts` of an `ICollection<T>` navigation is a `HashSet<T>`, as in EF Core.
+  - Projected entities and elements are tracked or identity-resolved as the query asks: a tracked
+    `new { b, b.Posts }` also fills `b.Posts`.
+  - Not supported yet (KP2009): `Skip`, `Take`, `Distinct`, `First` and other operators inside the collection,
+    lambdas that read the projected row (`b.Posts.Where(p => p.Rating > b.MinRating)`), collections inside a
+    collection's `Select`, many-to-many navigations, and an ordered collection without `ToList()` or `ToArray()`.
+    `Distinct` after such a `Select` is KP1007, as EF Core throws.
 - Projected entities are tracked, identity-resolved and get the includes below them, as in EF Core:
   `Include(p => p.Blog).ThenInclude(b => b.Posts).Select(p => p.Blog)` loads each blog's posts. Includes of
   entities the projection doesn't select are ignored. Without tracking or identity resolution, every projected
@@ -259,8 +274,7 @@ var rows = await db.Posts
   An aggregate after `Select` needs a projection of one property.
 - `Count`, `LongCount` and `Any` ignore the projection, so they don't join its navigations, as in EF Core: with a
   required, filtered reference, `Count()` can be higher than `ToList().Count`.
-- Not supported yet (KP2009): projected collections (`b.Posts`, `b.Posts.Select(p => p.Title).ToList()`; include
-  them on a projected entity instead), calling methods of the enclosing instance or projecting `this` (compute the value
+- Not supported yet (KP2009): calling methods of the enclosing instance or projecting `this` (compute the value
   first), types or members the generated code cannot reach (private nested types and methods), and aggregate
   selectors that compute (`Sum(o => o.Price * o.Quantity)`).
 - The indexed overload `Select((x, i) => ...)` is not supported (KP1006).
@@ -454,7 +468,7 @@ Same behavior as EF Core:
 | KP2006 | No longer reported for entity predicates: two properties can be compared |
 | KP2007 | Move the value into a local variable before the query, or make what it calls accessible to the assembly |
 | KP2008 | Order by a property, or a value computed from properties with operators, `?:` and `??` |
-| KP2009 | Project values of collections (`b.Posts.Count()`) rather than the collections, or include them on a projected entity; avoid instance methods in projections; aggregate one property; make projected types accessible |
+| KP2009 | Keep projected collections to `Where`, `OrderBy`/`ThenBy` and one `Select`, ending in `ToList()` or `ToArray()`, without reading the projected row; avoid instance methods in projections; aggregate one property; make projected types accessible |
 | KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
 | KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
 | KP2012 | Join a filtered `DbSet` on properties: properties or navigations on the outer side, the inner entity's own properties on the inner side |

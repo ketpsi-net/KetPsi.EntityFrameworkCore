@@ -125,8 +125,9 @@ use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates 
 `Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read only its entity and column members, before
 any paging.
 Members can also be values of related collections, computed by the database as EF Core does: `Any`, `All`, counts,
-`Sum`, `Average`, `Min` and `Max` (`b.Posts.Count(p => p.IsPublic)`, `(int?)b.Posts.Max(p => p.Rating)`). Projecting
-the collections themselves (`b.Posts`) is not supported yet.
+`Sum`, `Average`, `Min` and `Max` (`b.Posts.Count(p => p.IsPublic)`, `(int?)b.Posts.Max(p => p.Rating)`). They can be
+related collections too, such as `b.Posts` or `b.Posts.Where(...).OrderBy(...).Select(p => p.Title).ToList()`: each is
+loaded with one more statement by the keys of the rows' parents, as an included collection is.
 
 ### Raw SQL
 
@@ -212,7 +213,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP1008 | Operator not supported on the groups of `GroupBy` |
 | KP1009 | Query syntax over a query, which interceptors cannot replace; use method syntax |
 | KP2001–KP2008 | Expression, navigation, method, `EF.Functions`, collection, property comparison, value or order key not translatable; a value is KP2007 only when the generated code can't compute it, such as a call to a private method |
-| KP2009 | Projection not supported: a projected collection, a `Min` or `Max` of an enum or converted type, an instance method or `this`, a computed aggregate selector, or a type the generated code cannot reach |
+| KP2009 | Projection not supported: a projected collection with other operators or reading the projected row, a `Min` or `Max` of an enum or converted type, an instance method or `this`, a computed aggregate selector, or a type the generated code cannot reach |
 | KP2010 | `GroupBy` key not supported: a computed, constant, entity or `ValueTuple.Create` key |
 | KP2011 | Group expression not supported: the group's rows (`g.First()`, `g.ToList()`), an aggregate through a navigation or with a computed selector |
 | KP2012 | Join not supported: an inner sequence that is not a filtered `DbSet`, an inner key through a navigation, or a computed key |

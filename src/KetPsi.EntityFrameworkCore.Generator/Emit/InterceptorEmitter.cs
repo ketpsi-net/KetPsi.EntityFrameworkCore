@@ -24,6 +24,8 @@ internal static class InterceptorEmitter
     private const string CapturedValues = "global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues";
     private const string PredicateTemplate = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate";
     private const string ValueTemplate = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueTemplate";
+    private const string CollectionProjection = "global::KetPsi.EntityFrameworkCore.Infrastructure.CollectionProjection";
+    private const string CollectionOrdering = "global::KetPsi.EntityFrameworkCore.Infrastructure.CollectionOrdering";
     private const string Enumerable = "global::System.Linq.Enumerable";
     private const string ExpressionType = "global::System.Linq.Expressions.Expression<";
     private const string NoValues = "global::System.Array.Empty<object?>()";
@@ -76,6 +78,23 @@ internal static class InterceptorEmitter
             writer
                 .Line()
                 .Line($"private static {ProjectionReader}<T> {ReaderHelper}<T>({ProjectionReader}<T> reader) => reader;");
+        }
+
+        if (sites.Any(static s => s.Projection is { Collections.Count: > 0 }))
+        {
+            // Create a projected collection and read its elements, inferring the element type, which can be anonymous,
+            // and give a result's builder its delegate type.
+            writer
+                .Line()
+                .Line($"private static {CollectionProjection}<T> {ProjectionTranslator.CollectionHelper}<T>(")
+                .Line($"    string navigationPath, {PredicateTemplate}? predicate, object?[] slotValues, {CollectionOrdering}[] orderings,")
+                .Line($"    string[] propertyNames, string[] entityPaths, {ProjectionReader}<T> reader)")
+                .Line("    => new(navigationPath, predicate, slotValues, orderings, propertyNames, entityPaths, reader);")
+                .Line()
+                .Line($"private static global::System.Collections.Generic.List<T> {ProjectionTranslator.ItemsHelper}<T>(object? items, {CollectionProjection}<T> collection)")
+                .Line("    => (global::System.Collections.Generic.List<T>)items!;")
+                .Line()
+                .Line($"private static global::System.Func<T> {ProjectionTranslator.BuildHelper}<T>(global::System.Func<T> build) => build;");
         }
 
         return writer.Close().Close().ToString();
@@ -226,12 +245,28 @@ internal static class InterceptorEmitter
             writer.Line($"var {ProjectionTranslator.Captures} = {CapturedValues}.ReadAll({signature.Parameters[1].Name});");
         }
 
+        for (var i = 0; i < projection.Collections.Count; i++)
+        {
+            writer.Line($"var {ProjectionTranslator.CollectionLocal}{i.ToString(CultureInfo.InvariantCulture)} = {projection.Collections[i]};");
+        }
+
         writer
             .Line($"return ({Queryable}<{result}>)(object){SqlQuery}.Select(")
             .Line($"    query,")
             .Line($"    {Strings(projection.PropertyPaths)},")
             .Line($"    {Strings(projection.EntityPaths)},");
-        if (projection.Values.Count > 0)
+        if (projection.Collections.Count > 0)
+        {
+            // The collections are loaded after the rows; the reader returns what builds each result once they are.
+            var locals = System.Linq.Enumerable.Range(0, projection.Collections.Count).Select(static i => ProjectionTranslator.CollectionLocal + i.ToString(CultureInfo.InvariantCulture));
+            writer
+                .Line(projection.Values.Count > 0
+                    ? $"    new {ValueTemplate}[] {{ {string.Join(", ", projection.Values)} }},"
+                    : $"    global::System.Array.Empty<{ValueTemplate}>(),")
+                .Line($"    {Slots(projection.ValueSlots)},")
+                .Line($"    new {CollectionProjection}[] {{ {string.Join(", ", locals)} }},");
+        }
+        else if (projection.Values.Count > 0)
         {
             // The values the database computes, and the slots they read.
             writer
