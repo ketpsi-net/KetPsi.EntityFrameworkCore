@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using KetPsi.EntityFrameworkCore.Generator.Diagnostics;
 using KetPsi.EntityFrameworkCore.Generator.Model;
 using Microsoft.CodeAnalysis;
@@ -35,6 +36,9 @@ internal sealed partial class ProjectionTranslator
     private const string ReasonThis = "the enclosing instance itself cannot be projected; capture the values it holds instead";
     private const string ReasonCollection = "collection navigations cannot be projected yet; Include them on a projected entity instead";
     private const string ReasonInitializer = "only property and field assignments are supported in object initializers";
+    private const string ReasonValueType =
+        "a Min or Max of an enum, or of a type stored through a value converter, cannot be selected yet; select the entities' values instead";
+    private static readonly Regex SlotCapture = new(@"__kpvalue(\d+)_", RegexOptions.CultureInvariant);
     private static readonly SymbolDisplayFormat AnnotatedFormat = SymbolDisplayFormat.FullyQualifiedFormat
         .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
@@ -47,6 +51,10 @@ internal sealed partial class ProjectionTranslator
     private readonly List<string> _entityPaths = [];
     private readonly Dictionary<string, EntityShape> _shapes = new(StringComparer.Ordinal);
     private readonly List<EntityShape> _entities = [];
+
+    // The values the database computes, such as counts of collection navigations, and the slots their templates read.
+    private readonly List<string> _values = [];
+    private readonly List<string> _valueSlots = [];
 
     // Captured values are numbered in source order, which is the order the runtime reads them from the tree, whatever
     // order they are translated in: each is written with a placeholder that ResolveCaptures numbers.
@@ -138,7 +146,9 @@ internal sealed partial class ProjectionTranslator
                     translator.ReaderLambda(code),
                     translator._entities.ToEquatableArray(),
                     translator._hasComputedValues,
-                    translator.CaptureCount),
+                    translator.CaptureCount,
+                    Values: translator._values.ToEquatableArray(),
+                    ValueSlots: translator._valueSlots.Select(translator.ResolveCaptures).ToEquatableArray()),
                 translator.AliasesOf(operation, memberPath: ""),
                 null);
         }
@@ -168,6 +178,12 @@ internal sealed partial class ProjectionTranslator
         if (AliasedGroup(value) is { } group)
         {
             return [.. group.Aliases.Select(a => a with { MemberPath = Alias.Combine(memberPath, [a.MemberPath.Substring(group.Prefix.Length).TrimStart('.')]) })];
+        }
+
+        // A value computed from a collection navigation stands for nothing an operator could read.
+        if (MemberPath(value) is { } collectionPath && collectionPath.Rest.Any(static p => EntityShapeBuilder.IsCollectionNavigation(p.Type)))
+        {
+            return [];
         }
 
         if (value is IPropertyReferenceOperation && MemberPath(value) is { } path && IsReadable(path, value.Syntax))
@@ -250,7 +266,72 @@ internal sealed partial class ProjectionTranslator
 
     // A reader that uses captured values closes over them; one that doesn't is static.
     private string ReaderLambda(string body)
-        => $"{(CaptureCount == 0 ? "static " : "")}({Reader}, {Ordinals}, {Entities}) => {ResolveCaptures(body)}";
+        => $"{(CaptureCount == 0 ? "static " : "")}({Reader}, {Ordinals}, {Entities}) => {ResolveValueOrdinals(ResolveCaptures(body))}";
+
+    // Values are read after the property paths, whose number is known once the translation is done.
+    private string ResolveValueOrdinals(string code)
+    {
+        for (var i = 0; i < _values.Count; i++)
+        {
+            code = code.Replace(ValueOrdinalPlaceholder(i), (_propertyPaths.Count + i).ToString(CultureInfo.InvariantCulture));
+        }
+
+        return code;
+    }
+
+    private static string ValueOrdinalPlaceholder(int index) => "__kpordinal" + index.ToString(CultureInfo.InvariantCulture) + "_";
+
+    // A projection of the queried entity itself can select values of its collections, as the root of the SQL query.
+    private bool AllowsValues
+        => _group is null && !_readsNoMembers && _parameters.Count == 1
+            && _parameters.Values.First() is { Count: 1 } aliases && aliases[0] is { MemberPath: "", Path: "", IsEntity: true };
+
+    /// <summary>
+    /// <c>Any</c>, <c>All</c>, a count or an aggregate of a collection navigation, such as <c>x.Posts.Count()</c>: a
+    /// value the database computes, as EF Core selects it, which the reader reads after the property paths; null for
+    /// any other expression.
+    /// </summary>
+    /// <param name="operation">The expression.</param>
+    /// <param name="asNullable">
+    /// Whether the value is read as a nullable type: null when <c>Average</c>, <c>Min</c> or <c>Max</c> has no rows,
+    /// where the value type itself throws as in EF Core.
+    /// </param>
+    private string? CollectionValue(IOperation operation, bool asNullable)
+    {
+        if (!AllowsValues || operation is not (IInvocationOperation or IPropertyReferenceOperation)
+            || operation.Syntax is not ExpressionSyntax expression || operation.Type is not { } type)
+        {
+            return null;
+        }
+
+        var firstSlot = _valueSlots.Count;
+        if (PredicateTranslator.TranslateCollectionValue(expression, _parameter, _model, _valueSlots, _cancellationToken) is not { } template)
+        {
+            return null;
+        }
+
+        var underlying = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable ? nullable.TypeArguments[0] : type;
+        if (underlying.TypeKind == TypeKind.Enum || EntityShapeBuilder.NeedsConverter(underlying)
+            || EntityShapeBuilder.ScalarShape(type, "") is not { } shape)
+        {
+            throw Fail(expression, ReasonValueType);
+        }
+
+        // The variables the slots capture are numbered with the projection's own, in source order.
+        for (var i = firstSlot; i < _valueSlots.Count; i++)
+        {
+            _valueSlots[i] = SlotCapture.Replace(_valueSlots[i], match =>
+            {
+                var span = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                _captureSpans.Add(span);
+                return CapturePlaceholder(span);
+            });
+        }
+
+        var index = _values.Count;
+        _values.Add(template);
+        return ReadColumn(shape, $"{Ordinals}[{ValueOrdinalPlaceholder(index)}]", throughNavigation: true, asNullable);
+    }
 
     /// <summary>Replaces each capture placeholder in <paramref name="code"/> with its index in source order.</summary>
     private string ResolveCaptures(string code)
@@ -278,6 +359,14 @@ internal sealed partial class ProjectionTranslator
 
         switch (operation)
         {
+            // (int?)x.Posts.Max(p => p.Rating) is null when there are no posts, as in EF Core.
+            case IConversionOperation conversion when IsNullableOf(conversion.Type, conversion.Operand.Type)
+                && CollectionValue(conversion.Operand, asNullable: true) is { } nullableValue:
+                return nullableValue;
+
+            case IInvocationOperation or IPropertyReferenceOperation when CollectionValue(operation, asNullable: false) is { } value:
+                return value;
+
             case IConversionOperation conversion when IsNullableOf(conversion.Type, conversion.Operand.Type)
                 && MemberPath(conversion.Operand) is { } path && IsReadable(path, conversion.Operand.Syntax):
                 // (int?)x.Blog.Id is null when there is no blog, as in EF Core, rather than an error.
@@ -740,6 +829,18 @@ internal sealed partial class ProjectionTranslator
                 {
                     throw FailGroup(expression, ReasonGroupItself);
                 }
+            }
+
+            // A value of a collection navigation, which the database computes.
+            if (operation is IConversionOperation { IsImplicit: false } valueConversion && IsNullableOf(valueConversion.Type, valueConversion.Operand.Type)
+                && translator.CollectionValue(valueConversion.Operand, asNullable: true) is { } nullableValue)
+            {
+                return nullableValue;
+            }
+
+            if (operation is not null && translator.CollectionValue(operation, asNullable: false) is { } value)
+            {
+                return value;
             }
 
             // A column or entity of the lambda's parameter, read like any projected member.

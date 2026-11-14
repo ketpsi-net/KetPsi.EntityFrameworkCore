@@ -230,7 +230,16 @@ internal static class InterceptorEmitter
             .Line($"return ({Queryable}<{result}>)(object){SqlQuery}.Select(")
             .Line($"    query,")
             .Line($"    {Strings(projection.PropertyPaths)},")
-            .Line($"    {Strings(projection.EntityPaths)},")
+            .Line($"    {Strings(projection.EntityPaths)},");
+        if (projection.Values.Count > 0)
+        {
+            // The values the database computes, and the slots they read.
+            writer
+                .Line($"    new {ValueTemplate}[] {{ {string.Join(", ", projection.Values)} }},")
+                .Line($"    {Slots(projection.ValueSlots)},");
+        }
+
+        writer
             .Line($"    {ReaderHelper}({projection.ReaderCode}));")
             .Close();
     }

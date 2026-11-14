@@ -157,6 +157,48 @@ internal sealed class PredicateTranslator
         }
     }
 
+    /// <summary>
+    /// Translates <c>Any</c>, <c>All</c>, a count or an aggregate of a collection navigation of the lambda's parameter,
+    /// such as <c>b.Posts.Count(p =&gt; p.Rating &gt; min)</c>, into a value template for a projection to select;
+    /// <see langword="null"/> when the expression is none of those.
+    /// </summary>
+    /// <param name="expression">The expression, inside a lambda over the queried entity.</param>
+    /// <param name="parameter">The lambda's parameter, the queried entity.</param>
+    /// <param name="model">The semantic model of the expression's tree.</param>
+    /// <param name="valueSlots">
+    /// The value slots of the projection, which the value's slots are appended to and numbered from. Each is computed from
+    /// the captured variables, marked with placeholders that <see cref="CapturedValueWriter"/> describes.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the translation.</param>
+    /// <exception cref="TranslationException">The expression reads a collection in a way that cannot be translated.</exception>
+    public static string? TranslateCollectionValue(
+        ExpressionSyntax expression, IParameterSymbol parameter, SemanticModel model, List<string> valueSlots, CancellationToken cancellationToken)
+    {
+        var translator = new PredicateTranslator(
+            model, parameter, readValue: null, operands: null, valueSlots, allowNavigations: true, cancellationToken);
+        var node = StripParentheses(expression);
+        return translator.IsCollectionValue(node) ? translator.TranslateValue(node) : null;
+    }
+
+    // Any, All, Count, LongCount or an aggregate of a source that reads a collection navigation, or its Count property.
+    private bool IsCollectionValue(ExpressionSyntax node)
+    {
+        switch (node)
+        {
+            case InvocationExpressionSyntax invocation:
+                return _model.GetSymbolInfo(invocation, _cancellationToken).Symbol is IMethodSymbol
+                    {
+                        Name: "Any" or "All" or "Count" or "LongCount" or "Sum" or "Average" or "Min" or "Max",
+                    } method
+                    && EnumerableCall(invocation, method, (invocation.Expression as MemberAccessExpressionSyntax)?.Expression) is var (source, _)
+                    && ReadsCollection(source);
+            case MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Count" } count:
+                return _model.GetSymbolInfo(count, _cancellationToken).Symbol is IPropertySymbol && ReadsCollection(count.Expression);
+            default:
+                return false;
+        }
+    }
+
     // The model, with each value computed from the captures given the index ReadAll reads it at.
     private PredicateModel Finish(string templateCode, ExpressionSyntax body)
     {

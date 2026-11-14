@@ -234,6 +234,15 @@ var rows = await db.Posts
   when optional, with the target's query filters in the join.
 - A value read through an optional navigation is null when there is no related entity. For a non-nullable value
   type that throws what `Nullable<T>.Value` throws, as in EF Core; cast it, `(int?)p.Blog.Owner.Id`, to get null.
+- Members can be values of related collections, which the database computes as EF Core does:
+  `Select(b => new { b.Name, b.Posts.Count, Public = b.Posts.Count(p => p.IsPublic), Top = (int?)b.Posts.Max(p => p.Rating) })`.
+  `Any`, `All`, counts and `Sum`, `Average`, `Min` and `Max` work as in predicates, through references
+  (`p.Blog.Posts.Count()`) and with conditions on the row (`b.Posts.Any(p => p.Rating > b.MinRating)`). C# can compute
+  with them (`b.Posts.Count() * 2`). `Average`, `Min` and `Max` of no rows throw for a non-nullable type, as in EF
+  Core; cast to nullable (`(int?)b.Posts.Max(...)`) or use a nullable selector to get null. `Sum` of no rows is 0.
+- After a `Select` with such values, `Where`, orderings and aggregates can't read them yet (KP2001, KP1007): filter
+  and order by the collection before the `Select`. `Min` and `Max` of an enum or a converted type, and these values
+  in a `Join` result or a `Select` on groups, are KP2009.
 - Projected entities are tracked, identity-resolved and get the includes below them, as in EF Core:
   `Include(p => p.Blog).ThenInclude(b => b.Posts).Select(p => p.Blog)` loads each blog's posts. Includes of
   entities the projection doesn't select are ignored. Without tracking or identity resolution, every projected
@@ -250,8 +259,8 @@ var rows = await db.Posts
   An aggregate after `Select` needs a projection of one property.
 - `Count`, `LongCount` and `Any` ignore the projection, so they don't join its navigations, as in EF Core: with a
   required, filtered reference, `Count()` can be higher than `ToList().Count`.
-- Not supported yet (KP2009): collection navigations (`b.Posts`, `b.Posts.Count`, `b.Posts.Any()`; include them on a
-  projected entity instead), calling methods of the enclosing instance or projecting `this` (compute the value
+- Not supported yet (KP2009): projected collections (`b.Posts`, `b.Posts.Select(p => p.Title).ToList()`; include
+  them on a projected entity instead), calling methods of the enclosing instance or projecting `this` (compute the value
   first), types or members the generated code cannot reach (private nested types and methods), and aggregate
   selectors that compute (`Sum(o => o.Price * o.Quantity)`).
 - The indexed overload `Select((x, i) => ...)` is not supported (KP1006).
@@ -445,7 +454,7 @@ Same behavior as EF Core:
 | KP2006 | No longer reported for entity predicates: two properties can be compared |
 | KP2007 | Move the value into a local variable before the query, or make what it calls accessible to the assembly |
 | KP2008 | Order by a property, or a value computed from properties with operators, `?:` and `??` |
-| KP2009 | Avoid collection navigations and instance methods in projections; aggregate one property; make projected types accessible |
+| KP2009 | Project values of collections (`b.Posts.Count()`) rather than the collections, or include them on a projected entity; avoid instance methods in projections; aggregate one property; make projected types accessible |
 | KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
 | KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
 | KP2012 | Join a filtered `DbSet` on properties: properties or navigations on the outer side, the inner entity's own properties on the inner side |
