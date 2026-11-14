@@ -10,7 +10,7 @@ internal sealed class BoundEntity
 {
     private readonly Dictionary<string, BoundProperty> _propertiesByName;
     private readonly Dictionary<string, BoundNavigation> _navigationsByName;
-    private readonly IReadOnlyCollection<string> _skipNavigationNames;
+    private readonly Dictionary<string, BoundSkipNavigation> _skipNavigationsByName;
     private readonly ConcurrentDictionary<PredicateTemplate, BoundPredicate> _predicates = new();
     private readonly ConcurrentDictionary<ValueTemplate, BoundValue> _values = new();
     private readonly ConcurrentDictionary<IReadOnlyList<string>, int[]> _ordinals = new(ReferenceEqualityComparer.Instance);
@@ -23,7 +23,7 @@ internal sealed class BoundEntity
         IReadOnlyList<BoundProperty>? primaryKey,
         IReadOnlyList<string?> filterKeys,
         IReadOnlyList<BoundNavigation>? navigations = null,
-        IReadOnlyCollection<string>? skipNavigationNames = null,
+        IReadOnlyList<BoundSkipNavigation>? skipNavigations = null,
         IReadOnlyList<BoundForeignKey>? foreignKeys = null)
     {
         ClrType = clrType;
@@ -37,7 +37,7 @@ internal sealed class BoundEntity
         ForeignKeys = foreignKeys ?? [];
         _propertiesByName = properties.ToDictionary(static p => p.Name, StringComparer.Ordinal);
         _navigationsByName = Navigations.ToDictionary(static n => n.Name, StringComparer.Ordinal);
-        _skipNavigationNames = skipNavigationNames ?? [];
+        _skipNavigationsByName = (skipNavigations ?? []).ToDictionary(static n => n.Name, StringComparer.Ordinal);
     }
 
     public Type ClrType { get; }
@@ -78,12 +78,16 @@ internal sealed class BoundEntity
             return navigation;
         }
 
-        throw _skipNavigationNames.Contains(navigationName)
+        throw _skipNavigationsByName.ContainsKey(navigationName)
             ? new NotSupportedException(
                 string.Format(CultureInfo.InvariantCulture, ExceptionMessages.ManyToManyNotSupported, ClrType, navigationName))
             : new InvalidOperationException(
                 string.Format(CultureInfo.InvariantCulture, ExceptionMessages.NavigationNotFound, ClrType, navigationName));
     }
+
+    /// <summary>The many-to-many navigation named <paramref name="navigationName"/>, or <see langword="null"/>.</summary>
+    public BoundSkipNavigation? FindSkipNavigation(string navigationName)
+        => _skipNavigationsByName.TryGetValue(navigationName, out var navigation) ? navigation : null;
 
     /// <summary>Whether the entity maps a property named <paramref name="propertyName"/>.</summary>
     public bool HasProperty(string propertyName) => _propertiesByName.ContainsKey(propertyName);

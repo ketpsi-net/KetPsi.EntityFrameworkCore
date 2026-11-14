@@ -200,8 +200,9 @@ public sealed class PredicateTranslatorTests
     [InlineData("b => b.Posts.Any(p => p.Blog.Posts.Any(q => b.Posts.Any()))", "KP2005", "b.Posts")]
     [InlineData("b => b.Posts.Any(p => p.Id > ids.Count(x => x > p.Id))", "KP2003", "ids.Count(x => x > p.Id)")]
     [InlineData("b => b.Posts.Any(isPost)", "KP2001", "isPost")]
-    [InlineData("b => b.Posts.Count + 1 > 1", "KP2005", "b.Posts.Count")]
-    [InlineData("b => b.Posts.Count > 1", "KP2005", "b.Posts.Count")]
+    [InlineData("b => b.Posts.Sum(p => p.Blog.Posts.Count()) > 1", "KP2005", "p => p.Blog.Posts.Count()")]
+    [InlineData("b => b.Posts.Select(p => p.Id).Distinct().Count() > 1", "KP2005", "b.Posts.Select(p => p.Id).Distinct().Count()")]
+    [InlineData("b => b.Posts.Distinct().Any()", "KP2005", "b.Posts.Distinct().Any()")]
     [InlineData("b => b.Posts == null", "KP2005", "b.Posts")]
     [InlineData("b => b.Name.PadRight(3) == \"a\"", "KP2003", "b.Name.PadRight(3)")]
     public void Translate_WithNavigations_StillReportsTheRest(string lambda, string id, string text)
@@ -232,6 +233,25 @@ public sealed class PredicateTranslatorTests
         Assert.Null(diagnostic);
         Assert.Equal(template, Shorten(predicate!.TemplateCode));
         Assert.Empty(predicate.ValueCodes);
+    }
+
+    [Theory]
+    [InlineData("b => b.Posts.Count > 1", "new T.CountValueTemplate(new T.CollectionTemplate(\"Posts\"))")]
+    [InlineData("b => b.Posts.Count() + 1 > b.Rating", "new T.BinaryValueTemplate(T.ValueOperator.Add, new T.CountValueTemplate(new T.CollectionTemplate(\"Posts\")), new T.SlotValueTemplate(0))")]
+    [InlineData("b => b.Posts.Count(p => p.Id > b.Rating) == 2", "new T.CountValueTemplate(new T.CollectionTemplate(\"Posts\", new T.ValueComparisonTemplate(new T.PropertyValueTemplate(\"Id\"), T.ComparisonOperator.GreaterThan, new T.PropertyValueTemplate(\"^Rating\"))))")]
+    [InlineData("b => b.Posts.Where(p => p.Blog.IsActive).LongCount() > 2L", "new T.CountValueTemplate(new T.CollectionTemplate(\"Posts\", new T.BooleanPropertyTemplate(\"Blog.IsActive\")), isLong: true)")]
+    [InlineData("b => b.Posts.Sum(p => p.Id) > b.Rating", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Sum, new T.PropertyValueTemplate(\"Id\"), S.AggregateValueType.Int32)")]
+    [InlineData("b => b.Posts.Sum(p => p.Blog.Price * 2) > b.Price", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Sum, new T.BinaryValueTemplate(T.ValueOperator.Multiply, new T.PropertyValueTemplate(\"Blog.Price\"), new T.SlotValueTemplate(0)), S.AggregateValueType.Decimal)")]
+    [InlineData("b => b.Posts.Average(p => p.Id) > 1", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Average, new T.PropertyValueTemplate(\"Id\"), S.AggregateValueType.Int32)")]
+    [InlineData("b => b.Posts.Max(p => p.Blog.Name) == b.Name", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Max, new T.PropertyValueTemplate(\"Blog.Name\"), S.AggregateValueType.Column)")]
+    [InlineData("b => b.Posts.Where(p => p.Id > 1).Select(p => p.BlogId).Min() == b.Id", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\", new T.ComparisonTemplate(\"Id\", T.ComparisonOperator.GreaterThan, 0)), S.AggregateFunction.Min, new T.PropertyValueTemplate(\"BlogId\"), S.AggregateValueType.Column)")]
+    [InlineData("b => b.Posts.Max(p => (int?)p.Id) == null", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Max, ")]
+    public void Translate_CollectionValues_AreCountsAndAggregates(string lambda, string part)
+    {
+        var (predicate, diagnostic) = Translate(lambda, allowNavigations: true);
+
+        Assert.Null(diagnostic);
+        Assert.Contains(part, Shorten(predicate!.TemplateCode), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -298,6 +318,7 @@ public sealed class PredicateTranslatorTests
     private static string Shorten(string code)
         => code
             .Replace("global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.", "T.", StringComparison.Ordinal)
+            .Replace("global::KetPsi.EntityFrameworkCore.Sql.", "S.", StringComparison.Ordinal)
             .Replace("global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.", "C.", StringComparison.Ordinal)
             .Replace("global::System.Linq.Expressions.", "E.", StringComparison.Ordinal);
 }

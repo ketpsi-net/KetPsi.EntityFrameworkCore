@@ -22,6 +22,11 @@ public sealed class CollectionNavigationEmitTests
     [InlineData("var r = db.Blogs.Where(b => b.Posts.Any()).Select(b => new { b.Id, b.Name }).ToList();")]
     [InlineData("var r = db.Blogs.Where(b => !b.Posts.Any()).ExecuteDelete();")]
     [InlineData("var r = db.Blogs.Include(b => b.Posts).Where(b => b.Posts.Any(p => p.Id > 1)).ToList();")]
+    [InlineData("var r = db.Blogs.AsNoTracking().OrderByDescending(b => b.Posts.Count).ThenBy(b => b.Posts.Sum(p => p.Id)).ToList();")]
+    [InlineData("var min = 1; var r = db.Blogs.AsNoTracking().Where(b => b.Posts.Count(p => p.Id > min) > min).ToList();")]
+    [InlineData("var r = db.Blogs.AsNoTracking().Where(b => b.Posts.LongCount() > 1L && b.Posts.Average(p => p.Id) > 2.5).ToList();")]
+    [InlineData("var r = db.Blogs.AsNoTracking().Where(b => b.Posts.Max(p => p.Blog.Price) > b.Price).Skip(1).Take(2).ToList();")]
+    [InlineData("var r = db.Blogs.AsNoTracking().Where(b => b.Posts.Select(p => p.Id).Min() == b.Rating).ToList();")]
     public void CollectionShapes_CompileInTheGeneratedCode(string body)
     {
         var run = GeneratorHost.Run(TestSources.WithBody(body));
@@ -48,7 +53,6 @@ public sealed class CollectionNavigationEmitTests
     [Theory]
     [InlineData("var r = db.Blogs.Where(b => b.Id > 1).Select(b => new { b.Id, b.Posts }).Where(x => x.Posts.Any()).ToList();")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).Where(g => g.Any(b => b.Posts.Any())).Select(g => g.Key).ToList();")]
-    [InlineData("var r = db.Blogs.AsNoTracking().OrderBy(b => b.Posts.Count).ToList();")]
     public void CollectionsOutsideTheEntityPredicate_AreStillReported(string body)
     {
         var run = GeneratorHost.Run(TestSources.WithBody(body));

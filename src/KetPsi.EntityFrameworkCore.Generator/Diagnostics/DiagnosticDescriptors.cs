@@ -85,8 +85,8 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor CollectionNotSupported = Error(
         "KP2005",
         "Collection query not supported",
-        "'{0}' queries a related collection in a way that is not supported yet: only Any and All of a collection of " +
-        "the queried entity are translated");
+        "'{0}' queries a related collection in a way that is not supported yet: Any, All, Count, LongCount, Sum, " +
+        "Average, Min and Max of a collection of the queried entity are translated");
 
     public static readonly DiagnosticDescriptor MemberComparisonNotSupported = Error(
         "KP2006",

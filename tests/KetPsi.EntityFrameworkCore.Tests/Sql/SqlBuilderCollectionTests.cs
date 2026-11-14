@@ -132,6 +132,26 @@ public sealed class SqlBuilderCollectionTests : IDisposable
             StringComparison.Ordinal);
 
     [Fact]
+    public void ManyToMany_JoinsTheJoinEntityToTheTarget()
+        => Assert.EndsWith(
+            " WHERE EXISTS (SELECT 1 FROM [Label] AS [t1] INNER JOIN [TopicLabel] AS [t2] ON [t2].[LabelId] = [t1].[Id] " +
+            "WHERE [t0].[Id] = [t2].[TopicId] AND [t1].[Name] = @p0)",
+            Build(SqlQuery.Where(Query(_db.Topics), Exists(nameof(Topic.Labels), new ComparisonTemplate(nameof(Label.Name), ComparisonOperator.Equal, 0)), ["ef"])).CommandText,
+            StringComparison.Ordinal);
+
+    [Fact]
+    public void ManyToManyInverse_AppliesTheTargetsQueryFilters()
+        => Assert.EndsWith(
+            " WHERE (SELECT COUNT(*) FROM [Topics] AS [t1] INNER JOIN [TopicLabel] AS [t2] ON [t2].[TopicId] = [t1].[Id] " +
+            "WHERE [t1].[IsDeleted] = CAST(0 AS bit) AND [t0].[Id] = [t2].[LabelId]) = @p0",
+            Build(SqlQuery.Where(Query(_db.Set<Label>()), Compare(Count(nameof(Label.Topics)), ComparisonOperator.Equal, S(0)), [2])).CommandText,
+            StringComparison.Ordinal);
+
+    [Fact]
+    public void ManyToManyWithoutAJoinEntityClass_IsNotSupported()
+        => Assert.Throws<NotSupportedException>(() => WhereSql(Exists(nameof(Forum.Admins))));
+
+    [Fact]
     public void NestedCollections_NestTheirSubqueries()
         => Assert.Equal(
             "EXISTS (SELECT 1 " + Topics + " AND EXISTS (SELECT 1 FROM [Reply] AS [t2] WHERE [t2].[IsHidden] = CAST(0 AS bit) " +

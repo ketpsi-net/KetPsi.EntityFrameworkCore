@@ -1826,14 +1826,15 @@ internal sealed class SqlBuilder
         var dot = path.LastIndexOf('.');
         var parent = GetTarget(dot < 0 ? RootPath : path[..dot], entity: null);
         var name = path[(dot + 1)..];
-        var navigation = parent.Entity.GetNavigation(name);
-        if (!navigation.IsCollection)
+        var skip = parent.Entity.FindSkipNavigation(name);
+        var navigation = skip is null ? parent.Entity.GetNavigation(name) : null;
+        if (navigation is { IsCollection: false })
         {
             throw new InvalidOperationException(string.Format(
                 CultureInfo.InvariantCulture, ExceptionMessages.NavigationNotCollection, parent.Entity.ClrType, name));
         }
 
-        var target = Bind(navigation.TargetClrType);
+        var target = Bind(skip?.TargetClrType ?? navigation!.TargetClrType);
         var inner = new SqlBuilder(this, target);
         var state = inner._state = new SelectState(_dialect.QualifyTable(target.Table, target.Schema), NextAlias());
         foreach (var filter in _filtersFor(target))
@@ -1841,10 +1842,37 @@ internal sealed class SqlBuilder
             state.Predicates.Add(inner.RenderPredicate(target.BindPredicate(filter.Predicate), filter.Values, negated: false, state.Alias));
         }
 
-        for (var i = 0; i < navigation.SourceKey.Count; i++)
+        if (skip is not null)
         {
-            state.Predicates.Add(
-                Column(navigation.SourceKey[i], parent.Alias) + " = " + Column(target.GetProperty(navigation.TargetKey[i]), state.Alias));
+            // The related rows are the targets the join entity pairs with this row.
+            var join = Bind(skip.JoinClrType ?? throw new NotSupportedException(string.Format(
+                CultureInfo.InvariantCulture, ExceptionMessages.ManyToManyNotSupported, parent.Entity.ClrType, name)));
+            var joinAlias = NextAlias();
+            var conditions = new List<string>();
+            for (var i = 0; i < skip.TargetKey.Count; i++)
+            {
+                conditions.Add(
+                    Column(join.GetProperty(skip.JoinTargetKey[i]), joinAlias) + " = " + Column(target.GetProperty(skip.TargetKey[i]), state.Alias));
+            }
+
+            foreach (var filter in _filtersFor(join))
+            {
+                conditions.Add(RenderPredicate(join.BindPredicate(filter.Predicate), filter.Values, negated: false, joinAlias));
+            }
+
+            state.Joins.Add("INNER JOIN " + _dialect.QualifyTable(join.Table, join.Schema) + " AS " + joinAlias + " ON " + string.Join(" AND ", conditions));
+            for (var i = 0; i < skip.SourceKey.Count; i++)
+            {
+                state.Predicates.Add(Column(skip.SourceKey[i], parent.Alias) + " = " + Column(join.GetProperty(skip.JoinSourceKey[i]), joinAlias));
+            }
+        }
+        else
+        {
+            for (var i = 0; i < navigation!.SourceKey.Count; i++)
+            {
+                state.Predicates.Add(
+                    Column(navigation.SourceKey[i], parent.Alias) + " = " + Column(target.GetProperty(navigation.TargetKey[i]), state.Alias));
+            }
         }
 
         if (collection.Predicate is { } predicate)

@@ -11,6 +11,8 @@ public sealed class Member
     public List<Topic> Started { get; } = [];
 
     public List<Topic> Moderated { get; } = [];
+
+    public List<Forum> AdminOf { get; } = [];
 }
 
 public sealed class Forum
@@ -26,6 +28,8 @@ public sealed class Forum
     public List<Topic> Topics { get; } = [];
 
     public List<Follower> Followers { get; } = [];
+
+    public List<Member> Admins { get; } = [];
 }
 
 public sealed class Topic
@@ -55,6 +59,8 @@ public sealed class Topic
     public List<Reply> Replies { get; } = [];
 
     public List<TopicLabel> TopicLabels { get; } = [];
+
+    public List<Label> Labels { get; } = [];
 }
 
 public sealed class Reply
@@ -75,6 +81,8 @@ public sealed class Label
     public int Id { get; set; }
 
     public string Name { get; set; } = "";
+
+    public List<Topic> Topics { get; } = [];
 }
 
 public sealed class TopicLabel
@@ -95,8 +103,8 @@ public sealed class Follower
 }
 
 /// <summary>
-/// Forums for collection navigations: required, optional and alternate keys, two navigations to the same entity, a
-/// join entity, and topics and replies with query filters.
+/// Forums for collection navigations: required, optional and alternate keys, two navigations to the same entity,
+/// many-to-many with and without a join entity class, and topics and replies with query filters.
 /// </summary>
 public sealed class ForumContext : BindingContext
 {
@@ -122,11 +130,16 @@ public sealed class ForumContext : BindingContext
             b.HasOne(t => t.Moderator).WithMany(m => m.Moderated).HasForeignKey(t => t.ModeratorId).OnDelete(DeleteBehavior.Restrict);
             b.HasMany(t => t.Replies).WithOne().HasForeignKey(r => r.TopicId);
         });
-        modelBuilder.Entity<TopicLabel>(b =>
-        {
-            b.HasKey(l => new { l.TopicId, l.LabelId });
-            b.HasOne<Topic>().WithMany(t => t.TopicLabels).HasForeignKey(l => l.TopicId);
-        });
+        modelBuilder.Entity<Topic>()
+            .HasMany(t => t.Labels)
+            .WithMany(l => l.Topics)
+            .UsingEntity<TopicLabel>(
+                right => right.HasOne(l => l.Label).WithMany().HasForeignKey(l => l.LabelId),
+                left => left.HasOne<Topic>().WithMany(t => t.TopicLabels).HasForeignKey(l => l.TopicId),
+                join => join.HasKey(l => new { l.TopicId, l.LabelId }));
+
+        // Many-to-many without a join entity class: EF Core maps a shared-type entity.
+        modelBuilder.Entity<Forum>().HasMany(f => f.Admins).WithMany(m => m.AdminOf);
         modelBuilder.Entity<Member>().Property(m => m.Name).HasMaxLength(50);
         modelBuilder.Entity<Label>().Property(l => l.Name).HasMaxLength(20);
         modelBuilder.Entity<Reply>().Property(r => r.Text).HasMaxLength(50);

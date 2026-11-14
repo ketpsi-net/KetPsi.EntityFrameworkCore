@@ -64,7 +64,7 @@ internal static class ModelBinder
             GetPrimaryKey(entityType, properties),
             GetFilterKeys(entityType),
             [.. entityType.GetNavigations().Select(navigation => BindNavigation(navigation, properties))],
-            [.. entityType.GetSkipNavigations().Select(static n => n.Name)],
+            [.. entityType.GetSkipNavigations().Select(navigation => BindSkipNavigation(navigation, properties))],
             [.. entityType.GetForeignKeys()
                 .Where(static fk => fk.PrincipalKey.IsPrimaryKey() && (fk.DependentToPrincipal ?? fk.PrincipalToDependent) is not null)
                 .Select(fk => BindForeignKey(fk, properties))]);
@@ -99,6 +99,21 @@ internal static class ModelBinder
             navigation.Inverse?.Name,
             [.. sourceKey.Select(key => properties.First(p => p.Name == key.Name))],
             [.. targetKey.Select(static key => key.Name)]);
+    }
+
+    private static BoundSkipNavigation BindSkipNavigation(ISkipNavigation navigation, BoundProperty[] properties)
+    {
+        // The join entity's foreign key to this entity, and its other one, to the target.
+        var toSource = navigation.ForeignKey;
+        var toTarget = navigation.Inverse?.ForeignKey ?? navigation.JoinEntityType.GetForeignKeys().First(fk => fk != toSource);
+        return new BoundSkipNavigation(
+            navigation.Name,
+            navigation.TargetEntityType.ClrType,
+            navigation.JoinEntityType.HasSharedClrType ? null : navigation.JoinEntityType.ClrType,
+            [.. toSource.PrincipalKey.Properties.Select(key => properties.First(p => p.Name == key.Name))],
+            [.. toSource.Properties.Select(static key => key.Name)],
+            [.. toTarget.Properties.Select(static key => key.Name)],
+            [.. toTarget.PrincipalKey.Properties.Select(static key => key.Name)]);
     }
 
     // In key order, which is the order EF Core's identity map expects key values in. Keyless types have none.
