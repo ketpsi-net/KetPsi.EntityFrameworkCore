@@ -234,7 +234,7 @@ internal sealed class SqlBuilder
         var entity = branch.Target.Entity;
         var builder = new SqlBuilder(entity, dialect, filtersFor(entity), filtersFor, bindEntity: null, branch.Target);
         builder.Apply(new RootNode(entity.ClrType));
-        builder.State.Predicates.Add(builder.RenderKeyMatch(branch.Navigation, parentKeys));
+        builder.State.Predicates.Add(builder.RenderKeyMatch(branch.Navigation.TargetKey, parentKeys));
 
         // Children are grouped by parent in memory; within a parent they come in key order, as with EF Core.
         foreach (var key in entity.PrimaryKey ?? [])
@@ -426,7 +426,14 @@ internal sealed class SqlBuilder
                 // replaced: the generator writes the paths of a Select after it through the entities it projects.
                 EnsureEntityRows();
                 WrapIf(State.Distinct);
-                State.Pending = new Projection(projection.Columns, projection.EntityPaths, projection.Values, projection.ValueSlots);
+                State.Pending = new Projection(
+                    projection.Columns, projection.EntityPaths, projection.Values, projection.ValueSlots, projection.Collections.Count > 0);
+                break;
+            case DistinctNode when State.Pending is { HasCollections: true }:
+                throw new InvalidOperationException(ExceptionMessages.DistinctWithCollections);
+            case ParentKeysNode keys:
+                EnsureEntityRows();
+                State.Predicates.Add(RenderKeyMatch(keys.PropertyNames, keys.Keys));
                 break;
             case DistinctNode:
                 // Distinct applies to the rows the operators selected, and distinct rows have no order, as in EF Core.
@@ -1332,9 +1339,9 @@ internal sealed class SqlBuilder
 
     private static string Append(string path, string name) => path.Length == 0 ? name : path + "." + name;
 
-    private string RenderKeyMatch(BoundNavigation navigation, IReadOnlyCollection<IReadOnlyList<object?>> parentKeys)
+    private string RenderKeyMatch(IReadOnlyList<string> keyNames, IReadOnlyCollection<IReadOnlyList<object?>> parentKeys)
     {
-        var columns = navigation.TargetKey.Select(_entity.GetProperty).ToArray();
+        var columns = keyNames.Select(_entity.GetProperty).ToArray();
         if (columns.Length == 1)
         {
             var list = AddParameter(_dialect.CreateListParameterValue(parentKeys.Select(k => columns[0].ToProvider(k[0]))), property: null);
@@ -2291,7 +2298,11 @@ internal sealed class SqlBuilder
     /// navigation paths.
     /// </summary>
     private sealed record Projection(
-        IReadOnlyList<string> Columns, IReadOnlyList<string> EntityPaths, IReadOnlyList<ValueTemplate> Values, IReadOnlyList<object?> ValueSlots);
+        IReadOnlyList<string> Columns,
+        IReadOnlyList<string> EntityPaths,
+        IReadOnlyList<ValueTemplate> Values,
+        IReadOnlyList<object?> ValueSlots,
+        bool HasCollections = false);
 
     /// <summary>A table a navigation path reaches, and whether it has a row for every row of the query.</summary>
     private sealed record JoinTarget(string Alias, BoundEntity Entity, bool AlwaysExists);

@@ -16,7 +16,9 @@ internal sealed class ProjectionNode(
     IReadOnlyList<string> entityPaths,
     bool readsTheSqlColumns = false,
     IReadOnlyList<ValueTemplate>? values = null,
-    IReadOnlyList<object?>? valueSlots = null)
+    IReadOnlyList<object?>? valueSlots = null,
+    IReadOnlyList<ProjectedCollection>? collections = null,
+    Delegate? collectionReader = null)
     : QueryNode(parent)
 {
     /// <summary>
@@ -27,8 +29,12 @@ internal sealed class ProjectionNode(
     /// <summary>The property paths the reader reads, in the order of its ordinals. A path can repeat.</summary>
     public IReadOnlyList<string> PropertyNames { get; } = propertyNames;
 
-    /// <summary>The columns the statement selects first: <see cref="PropertyNames"/> once each, in first-seen order.</summary>
-    public IReadOnlyList<string> Columns { get; } = [.. propertyNames.Distinct(StringComparer.Ordinal)];
+    /// <summary>
+    /// The columns the statement selects first: <see cref="PropertyNames"/> once each, in first-seen order, then the
+    /// parent keys of <see cref="Collections"/> not among them.
+    /// </summary>
+    public IReadOnlyList<string> Columns { get; } =
+        [.. propertyNames.Concat((collections ?? []).SelectMany(static c => c.KeyPaths)).Distinct(StringComparer.Ordinal)];
 
     /// <summary>
     /// The navigation paths of the entities the reader uses, in the order of its entities. A path can repeat; each
@@ -44,4 +50,16 @@ internal sealed class ProjectionNode(
 
     /// <summary>The value slots of <see cref="Values"/>.</summary>
     public IReadOnlyList<object?> ValueSlots { get; } = valueSlots ?? [];
+
+    /// <summary>
+    /// The collections the projection selects, each loaded with its own statement after the rows are read. The reader
+    /// gets each one's elements after the entities, in this order.
+    /// </summary>
+    public IReadOnlyList<ProjectedCollection> Collections { get; } = collections ?? [];
+
+    /// <summary>
+    /// With <see cref="Collections"/>, the generated reader: a <c>ProjectionReader&lt;Func&lt;T&gt;&gt;</c> that reads a
+    /// row and returns what builds the result once the collections are loaded.
+    /// </summary>
+    public Delegate? CollectionReader { get; } = collectionReader;
 }
