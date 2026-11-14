@@ -28,3 +28,6 @@ internal sealed record BoundStringMatch(StringMatch Match, BoundValue Value, Bou
 internal sealed record BoundLike(BoundValue Value, BoundValue Pattern, BoundValue? Escape) : BoundPredicate;
 
 internal sealed record BoundNullOrEmpty(BoundValue Value, bool OrWhiteSpace) : BoundPredicate;
+
+/// <summary>Whether the related rows exist; rendered as a subquery by the builder, which resolves the collection.</summary>
+internal sealed record BoundExists(CollectionTemplate Collection) : BoundPredicate;

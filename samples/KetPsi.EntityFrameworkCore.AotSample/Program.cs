@@ -503,6 +503,17 @@ await CheckAsync(
     db => Task.FromResult(Ids(db.Products.AsNoTracking().OrderBy(p => p.Name.Length).ThenBy(p => p.Id).Take(3).ToList())),
     "1,2,4");
 
+// Review 11 has one star since the tracked edit above.
+await CheckAsync(
+    "Any, Count, Average and Sum of a collection navigation, in predicates and an order key",
+    db => Task.FromResult(
+        Ids(db.Products.AsNoTracking().Where(p => p.Reviews.Any(r => r.Stars == 5)).OrderBy(p => p.Id).ToList()) + "|" +
+        Ids(db.Products.AsNoTracking().Where(p => !p.Reviews.Any()).OrderBy(p => p.Id).ToList()) + "|" +
+        db.Products.Count(p => p.Reviews.Count >= 2) + "|" +
+        Ids(db.Products.AsNoTracking().Where(p => p.Reviews.Average(r => r.Stars) > 3).OrderBy(p => p.Id).ToList()) + "|" +
+        Ids(db.Products.AsNoTracking().Where(p => p.Reviews.Any()).OrderByDescending(p => p.Reviews.Sum(r => r.Stars)).ThenBy(p => p.Id).ToList())),
+    "1,6|3,4,5,7,8|1|6|1,6,2");
+
 var title = "dune";
 var cheapest = 10m;
 await CheckAsync(

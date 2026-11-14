@@ -61,6 +61,27 @@ internal static class SeedData
         Comment(6, 901, "c6"),
     ];
 
+    // A hidden tag the filter removes, a tag on a soft-deleted post only, and a tag on no post.
+    public static IEnumerable<Tag> Tags() =>
+    [
+        new() { Id = 1, Name = "news" },
+        new() { Id = 2, Name = "tech" },
+        new() { Id = 3, Name = "secret", IsHidden = true },
+        new() { Id = 4, Name = "old" },
+        new() { Id = 5, Name = "unused" },
+    ];
+
+    public static IEnumerable<PostTag> PostTags() =>
+    [
+        new() { PostId = 101, TagId = 1 },
+        new() { PostId = 101, TagId = 2 },
+        new() { PostId = 102, TagId = 2 },
+        new() { PostId = 201, TagId = 3 },
+        new() { PostId = 104, TagId = 4 },
+        new() { PostId = 301, TagId = 1 },
+        new() { PostId = 1001, TagId = 2 },
+    ];
+
     // Every priority and none escalated, open and closed, points that order differently as text than as numbers, an
     // archived ticket the filter hides, and a ticket without notes.
     public static IEnumerable<Ticket> Tickets() =>
@@ -82,12 +103,13 @@ internal static class SeedData
         new() { Id = 51, TicketId = new(5), Text = "n51" },
     ];
 
-    // A hidden category the filter removes, and a category without a prefix.
+    // A hidden category the filter removes, a category without a prefix, and one without gadgets.
     public static IEnumerable<GadgetCategory> GadgetCategories() =>
     [
         new() { Id = 1, Name = "Books", Prefix = "BK" },
         new() { Id = 2, Name = "Games", Prefix = null },
         new() { Id = 3, Name = "_Hidden", Prefix = "H" },
+        new() { Id = 4, Name = "Toys", Prefix = "TY" },
     ];
 
     // Nulls in every nullable column, a price below its cost, a zero discount that divides by zero, wildcards in notes,

@@ -50,7 +50,7 @@ Targets `net9.0`, `net10.0` and `net11.0`, each with its own EF Core major versi
 ## Status
 
 Preview. Done: filtering and ordering on properties and values computed from them (through reference navigations
-too), paging, terminals, `Find`,
+too), `Any`, `All`, counts and aggregates of related collections, paging, terminals, `Find`,
 `ExecuteDelete`, `FromSql` and `SqlQuery`, query filters, tracking, identity resolution, `Include` / `ThenInclude`,
 `Select` (properties, reference navigations, entities and computed members), `Distinct`, `Sum` / `Average` / `Min` /
 `Max`, `GroupBy` with keys, aggregates, `HAVING` and the groups themselves, and inner `Join` in method syntax.

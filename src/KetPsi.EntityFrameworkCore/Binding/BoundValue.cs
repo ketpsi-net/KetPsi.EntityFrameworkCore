@@ -22,3 +22,9 @@ internal sealed record BoundConditionalValue(BoundPredicate Test, BoundValue Whe
 internal sealed record BoundPredicateValue(BoundPredicate Predicate) : BoundValue;
 
 internal sealed record BoundFunctionValue(ValueFunction Function, IReadOnlyList<BoundValue> Arguments) : BoundValue;
+
+/// <summary>The number of related rows; rendered as a subquery by the builder, which resolves the collection.</summary>
+internal sealed record BoundCountValue(CollectionTemplate Collection, bool IsLong) : BoundValue;
+
+/// <summary>An aggregate of the related rows; rendered as a subquery by the builder, which resolves the collection.</summary>
+internal sealed record BoundCollectionAggregate(CollectionAggregateTemplate Template) : BoundValue;

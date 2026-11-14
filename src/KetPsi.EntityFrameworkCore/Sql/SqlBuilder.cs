@@ -49,6 +49,9 @@ internal sealed class SqlBuilder
     private readonly Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> _filtersFor;
     private readonly Func<Type, BoundEntity>? _bindEntity;
     private readonly IncludeTree? _includes;
+
+    // The builder of the statement a subquery belongs to, which owns the aliases and parameters.
+    private readonly SqlBuilder? _outer;
     private readonly List<QueryParameter> _parameters = [];
     private readonly List<EntitySegment> _segments = [];
     private readonly List<CollectionLoad> _collections = [];
@@ -67,6 +70,10 @@ internal sealed class SqlBuilder
     private bool _composed;
     private bool _readsFirstColumn;
     private SelectState? _state;
+
+    // Whether the predicate or value being rendered reads the queried entity's paths, so a related collection can be
+    // queried through them.
+    private bool _readsCollections;
 
     // The properties whose converters read the statement's columns, set when the select list is final.
     private IReadOnlyList<BoundProperty?>? _converted;
@@ -87,7 +94,17 @@ internal sealed class SqlBuilder
         _includes = includes;
     }
 
+    /// <summary>The builder of a subquery on <paramref name="entity"/>, the related entity of a collection navigation.</summary>
+    private SqlBuilder(SqlBuilder outer, BoundEntity entity)
+        : this(entity, outer._dialect, [], outer._filtersFor, outer._bindEntity, includes: null)
+    {
+        _outer = outer;
+    }
+
     private SelectState State => _state ?? throw new UnreachableException("The chain did not start with a root node.");
+
+    // The builder of the whole statement.
+    private SqlBuilder Statement => _outer?.Statement ?? this;
 
     /// <summary>Builds the statement for the chain ending at <paramref name="tail"/>.</summary>
     /// <param name="entity">The queried entity, bound to the model.</param>
@@ -548,41 +565,67 @@ internal sealed class SqlBuilder
         }
     }
 
-    /// <summary>The predicate with each name read through <paramref name="path"/>, such as <c>"$0.Name"</c> for <c>"Name"</c>.</summary>
-    private static PredicateTemplate Prefixed(PredicateTemplate template, string path) => template switch
+    /// <summary>
+    /// The predicate with each name read through <paramref name="path"/>, such as <c>"$0.Name"</c> for <c>"Name"</c>.
+    /// Inside a collection's condition, <paramref name="depth"/> is how many collections in it is, and only the names of
+    /// the row the path reaches are prefixed, such as <c>"^$0.MinScore"</c> for <c>"^MinScore"</c>.
+    /// </summary>
+    private static PredicateTemplate Prefixed(PredicateTemplate template, string path, int depth = 0) => template switch
     {
-        ComparisonTemplate comparison => new ComparisonTemplate(path + "." + comparison.PropertyName, comparison.Comparison, comparison.ValueIndex),
-        BooleanPropertyTemplate boolean => new BooleanPropertyTemplate(path + "." + boolean.PropertyName),
-        NullCheckTemplate nullCheck => new NullCheckTemplate(path + "." + nullCheck.PropertyName, nullCheck.IsNull),
-        InListTemplate inList => new InListTemplate(path + "." + inList.PropertyName, inList.ValueIndex),
-        NotTemplate not => new NotTemplate(Prefixed(not.Operand, path)),
-        AndTemplate and => new AndTemplate(Prefixed(and.Left, path), Prefixed(and.Right, path)),
-        OrTemplate or => new OrTemplate(Prefixed(or.Left, path), Prefixed(or.Right, path)),
+        ComparisonTemplate comparison => new ComparisonTemplate(Name(comparison.PropertyName, path, depth), comparison.Comparison, comparison.ValueIndex),
+        BooleanPropertyTemplate boolean => new BooleanPropertyTemplate(Name(boolean.PropertyName, path, depth)),
+        NullCheckTemplate nullCheck => new NullCheckTemplate(Name(nullCheck.PropertyName, path, depth), nullCheck.IsNull),
+        InListTemplate inList => new InListTemplate(Name(inList.PropertyName, path, depth), inList.ValueIndex),
+        NotTemplate not => new NotTemplate(Prefixed(not.Operand, path, depth)),
+        AndTemplate and => new AndTemplate(Prefixed(and.Left, path, depth), Prefixed(and.Right, path, depth)),
+        OrTemplate or => new OrTemplate(Prefixed(or.Left, path, depth), Prefixed(or.Right, path, depth)),
         ValueComparisonTemplate comparison => new ValueComparisonTemplate(
-            Prefixed(comparison.Left, path), comparison.Comparison, Prefixed(comparison.Right, path)),
-        BooleanValueTemplate boolean => new BooleanValueTemplate(Prefixed(boolean.Value, path)),
-        StringMatchTemplate match => new StringMatchTemplate(match.Match, Prefixed(match.Value, path), Prefixed(match.Part, path)),
+            Prefixed(comparison.Left, path, depth), comparison.Comparison, Prefixed(comparison.Right, path, depth)),
+        BooleanValueTemplate boolean => new BooleanValueTemplate(Prefixed(boolean.Value, path, depth)),
+        StringMatchTemplate match => new StringMatchTemplate(match.Match, Prefixed(match.Value, path, depth), Prefixed(match.Part, path, depth)),
         LikeTemplate like => new LikeTemplate(
-            Prefixed(like.Value, path), Prefixed(like.Pattern, path), like.Escape is null ? null : Prefixed(like.Escape, path)),
-        NullOrEmptyTemplate empty => new NullOrEmptyTemplate(Prefixed(empty.Value, path), empty.OrWhiteSpace),
+            Prefixed(like.Value, path, depth), Prefixed(like.Pattern, path, depth), like.Escape is null ? null : Prefixed(like.Escape, path, depth)),
+        NullOrEmptyTemplate empty => new NullOrEmptyTemplate(Prefixed(empty.Value, path, depth), empty.OrWhiteSpace),
+        ExistsTemplate exists => new ExistsTemplate(Prefixed(exists.Collection, path, depth)),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
     /// <summary>The value with each name read through <paramref name="path"/>.</summary>
-    private static ValueTemplate Prefixed(ValueTemplate template, string path) => template switch
+    private static ValueTemplate Prefixed(ValueTemplate template, string path, int depth = 0) => template switch
     {
-        PropertyValueTemplate property => new PropertyValueTemplate(path + "." + property.PropertyName),
+        PropertyValueTemplate property => new PropertyValueTemplate(Name(property.PropertyName, path, depth)),
         SlotValueTemplate => template,
-        BinaryValueTemplate binary => new BinaryValueTemplate(binary.Operator, Prefixed(binary.Left, path), Prefixed(binary.Right, path)),
-        UnaryValueTemplate unary => new UnaryValueTemplate(unary.Operator, Prefixed(unary.Operand, path)),
-        ConvertValueTemplate convert => new ConvertValueTemplate(Prefixed(convert.Operand, path), convert.Type),
-        CoalesceValueTemplate coalesce => new CoalesceValueTemplate(Prefixed(coalesce.Left, path), Prefixed(coalesce.Right, path)),
+        BinaryValueTemplate binary => new BinaryValueTemplate(binary.Operator, Prefixed(binary.Left, path, depth), Prefixed(binary.Right, path, depth)),
+        UnaryValueTemplate unary => new UnaryValueTemplate(unary.Operator, Prefixed(unary.Operand, path, depth)),
+        ConvertValueTemplate convert => new ConvertValueTemplate(Prefixed(convert.Operand, path, depth), convert.Type),
+        CoalesceValueTemplate coalesce => new CoalesceValueTemplate(Prefixed(coalesce.Left, path, depth), Prefixed(coalesce.Right, path, depth)),
         ConditionalValueTemplate conditional => new ConditionalValueTemplate(
-            Prefixed(conditional.Test, path), Prefixed(conditional.WhenTrue, path), Prefixed(conditional.WhenFalse, path)),
-        PredicateValueTemplate predicate => new PredicateValueTemplate(Prefixed(predicate.Predicate, path)),
-        FunctionValueTemplate function => new FunctionValueTemplate(function.Function, [.. function.Arguments.Select(a => Prefixed(a, path))]),
+            Prefixed(conditional.Test, path, depth), Prefixed(conditional.WhenTrue, path, depth), Prefixed(conditional.WhenFalse, path, depth)),
+        PredicateValueTemplate predicate => new PredicateValueTemplate(Prefixed(predicate.Predicate, path, depth)),
+        FunctionValueTemplate function => new FunctionValueTemplate(function.Function, [.. function.Arguments.Select(a => Prefixed(a, path, depth))]),
+        CountValueTemplate count => new CountValueTemplate(Prefixed(count.Collection, path, depth), count.IsLong),
+        CollectionAggregateTemplate aggregate => new CollectionAggregateTemplate(
+            Prefixed(aggregate.Collection, path, depth), aggregate.Function, Prefixed(aggregate.Selector, path, depth + 1), aggregate.ValueType),
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
+
+    // A collection's own names are one level in: only those that read the row its path starts from are prefixed.
+    private static CollectionTemplate Prefixed(CollectionTemplate collection, string path, int depth)
+        => new(
+            depth == 0 ? path + "." + collection.NavigationPath : collection.NavigationPath,
+            collection.Predicate is null ? null : Prefixed(collection.Predicate, path, depth + 1));
+
+    // A name of the row at depth, which starts with as many '^' as collections the name is inside.
+    private static string Name(string name, string path, int depth)
+    {
+        var outer = 0;
+        while (outer < name.Length && name[outer] == '^')
+        {
+            outer++;
+        }
+
+        return outer == depth ? name[..depth] + path + "." + name[depth..] : name;
+    }
 
     private void EnsureRootComposable()
     {
@@ -974,7 +1017,16 @@ internal sealed class SqlBuilder
 
         var (resolve, column) = PathColumns();
         var predicate = PredicateBinder.Bind(ExpandNavigationChecks(template), resolve, _entity.ClrType);
-        return RenderPredicate(predicate, values, negated: false, column);
+        var reads = _readsCollections;
+        _readsCollections = true;
+        try
+        {
+            return RenderPredicate(predicate, values, negated: false, column);
+        }
+        finally
+        {
+            _readsCollections = reads;
+        }
     }
 
     /// <summary>A computed value of the queried entity at the current level, such as an order key; its names are property paths.</summary>
@@ -987,7 +1039,16 @@ internal sealed class SqlBuilder
 
         var (resolve, column) = PathColumns();
         var value = PredicateBinder.Bind(ExpandNavigationChecks(template), resolve, _entity.ClrType);
-        return RenderValue(value, values, column, hint: null);
+        var reads = _readsCollections;
+        _readsCollections = true;
+        try
+        {
+            return RenderValue(value, values, column, hint: null);
+        }
+        finally
+        {
+            _readsCollections = reads;
+        }
     }
 
     /// <summary>Binds property paths to the columns they read, joining the navigations they go through.</summary>
@@ -1020,6 +1081,7 @@ internal sealed class SqlBuilder
         StringMatchTemplate match => ValueNames(match.Value).Concat(ValueNames(match.Part)),
         LikeTemplate like => ValueNames(like.Value).Concat(ValueNames(like.Pattern)).Concat(like.Escape is null ? [] : ValueNames(like.Escape)),
         NullOrEmptyTemplate empty => ValueNames(empty.Value),
+        ExistsTemplate exists => [exists.Collection.NavigationPath],
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
@@ -1035,6 +1097,8 @@ internal sealed class SqlBuilder
             .Concat(ValueNames(conditional.WhenTrue)).Concat(ValueNames(conditional.WhenFalse)),
         PredicateValueTemplate predicate => TemplateNames(predicate.Predicate),
         FunctionValueTemplate function => function.Arguments.SelectMany(ValueNames),
+        CountValueTemplate count => [count.Collection.NavigationPath],
+        CollectionAggregateTemplate aggregate => [aggregate.Collection.NavigationPath],
         _ => throw new UnreachableException(template.GetType().ToString()),
     };
 
@@ -1112,6 +1176,11 @@ internal sealed class SqlBuilder
     /// <summary>The navigation a path ends with and the path of the entity that has it, or null when it ends with a property.</summary>
     private (string ParentPath, BoundNavigation Navigation)? NavigationAt(string path)
     {
+        if (IsOuterName(path))
+        {
+            return OuterBuilder(path).NavigationAt(path[1..]);
+        }
+
         if (JoinNode.IsJoinPath(path))
         {
             return null;
@@ -1144,6 +1213,11 @@ internal sealed class SqlBuilder
     /// </summary>
     private (SqlColumn Column, BoundProperty Property) ResolvePath(string path)
     {
+        if (IsOuterName(path))
+        {
+            return OuterBuilder(path).ResolvePath(path[1..]);
+        }
+
         var dot = path.LastIndexOf('.');
         if (dot < 0)
         {
@@ -1441,6 +1515,7 @@ internal sealed class SqlBuilder
         BoundStringMatch match => RenderStringMatch(match, values, negated, column),
         BoundLike like => RenderLike(like, values, negated, column),
         BoundNullOrEmpty empty => RenderNullOrEmpty(empty, values, negated, column),
+        BoundExists exists => (negated ? "NOT EXISTS (" : "EXISTS (") + RenderSubquery(exists.Collection, values, static _ => ExistsProjection) + ")",
         _ => throw new UnreachableException(predicate.GetType().ToString()),
     };
 
@@ -1703,6 +1778,119 @@ internal sealed class SqlBuilder
         }
     }
 
+    /// <summary>
+    /// <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c> of the related rows, as EF Core writes them: <c>Sum</c> of no rows
+    /// is zero, and the others are null, even when the selector is never null.
+    /// </summary>
+    private SqlValue RenderCollectionAggregate(CollectionAggregateTemplate template, IReadOnlyList<object?> values)
+    {
+        SqlValue selector = default;
+        var sql = RenderSubquery(template.Collection, values, inner =>
+        {
+            selector = inner.RenderEntityValue(template.Selector, values);
+            return _dialect.Aggregate(template.Function, selector.Sql, template.ValueType);
+        });
+
+        var type = (template.Function, template.ValueType) switch
+        {
+            (AggregateFunction.Min or AggregateFunction.Max, _) => selector.ClrType,
+            (AggregateFunction.Average, AggregateValueType.Int32 or AggregateValueType.Int64 or AggregateValueType.Double) => typeof(double),
+            (_, AggregateValueType.Int32) => typeof(int),
+            (_, AggregateValueType.Int64) => typeof(long),
+            (_, AggregateValueType.Double) => typeof(double),
+            (_, AggregateValueType.Single) => typeof(float),
+            (_, AggregateValueType.Decimal) => typeof(decimal),
+            _ => throw new ArgumentOutOfRangeException(nameof(template), template.ValueType, ExceptionMessages.GroupAggregateNeedsNumericType),
+        };
+
+        return new SqlValue("(" + sql + ")", IsNullable: template.Function != AggregateFunction.Sum, type, ReadsRow: true);
+    }
+
+    /// <summary>
+    /// The correlated subquery on the related rows of a collection navigation: their table with its query filters,
+    /// matched to the row the navigation path starts from by the navigation's keys, and filtered by the collection's
+    /// condition, as EF Core writes it.
+    /// </summary>
+    /// <param name="collection">The collection.</param>
+    /// <param name="values">The value slots.</param>
+    /// <param name="projection">Renders what the subquery selects, with the builder of the subquery.</param>
+    /// <exception cref="NotSupportedException">The collection is read outside a predicate or an ordering of the queried entity.</exception>
+    private string RenderSubquery(CollectionTemplate collection, IReadOnlyList<object?> values, Func<SqlBuilder, string> projection)
+    {
+        if (!_readsCollections || IsOuterName(collection.NavigationPath))
+        {
+            throw new NotSupportedException(ExceptionMessages.CollectionQueryNotSupportedHere);
+        }
+
+        var path = collection.NavigationPath;
+        var dot = path.LastIndexOf('.');
+        var parent = GetTarget(dot < 0 ? RootPath : path[..dot], entity: null);
+        var name = path[(dot + 1)..];
+        var skip = parent.Entity.FindSkipNavigation(name);
+        var navigation = skip is null ? parent.Entity.GetNavigation(name) : null;
+        if (navigation is { IsCollection: false })
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture, ExceptionMessages.NavigationNotCollection, parent.Entity.ClrType, name));
+        }
+
+        var target = Bind(skip?.TargetClrType ?? navigation!.TargetClrType);
+        var inner = new SqlBuilder(this, target);
+        var state = inner._state = new SelectState(_dialect.QualifyTable(target.Table, target.Schema), NextAlias());
+        foreach (var filter in _filtersFor(target))
+        {
+            state.Predicates.Add(inner.RenderPredicate(target.BindPredicate(filter.Predicate), filter.Values, negated: false, state.Alias));
+        }
+
+        if (skip is not null)
+        {
+            // The related rows are the targets the join entity pairs with this row.
+            var join = Bind(skip.JoinClrType ?? throw new NotSupportedException(string.Format(
+                CultureInfo.InvariantCulture, ExceptionMessages.ManyToManyNotSupported, parent.Entity.ClrType, name)));
+            var joinAlias = NextAlias();
+            var conditions = new List<string>();
+            for (var i = 0; i < skip.TargetKey.Count; i++)
+            {
+                conditions.Add(
+                    Column(join.GetProperty(skip.JoinTargetKey[i]), joinAlias) + " = " + Column(target.GetProperty(skip.TargetKey[i]), state.Alias));
+            }
+
+            foreach (var filter in _filtersFor(join))
+            {
+                conditions.Add(RenderPredicate(join.BindPredicate(filter.Predicate), filter.Values, negated: false, joinAlias));
+            }
+
+            state.Joins.Add("INNER JOIN " + _dialect.QualifyTable(join.Table, join.Schema) + " AS " + joinAlias + " ON " + string.Join(" AND ", conditions));
+            for (var i = 0; i < skip.SourceKey.Count; i++)
+            {
+                state.Predicates.Add(Column(skip.SourceKey[i], parent.Alias) + " = " + Column(join.GetProperty(skip.JoinSourceKey[i]), joinAlias));
+            }
+        }
+        else
+        {
+            for (var i = 0; i < navigation!.SourceKey.Count; i++)
+            {
+                state.Predicates.Add(
+                    Column(navigation.SourceKey[i], parent.Alias) + " = " + Column(target.GetProperty(navigation.TargetKey[i]), state.Alias));
+            }
+        }
+
+        if (collection.Predicate is { } predicate)
+        {
+            state.Predicates.Add(inner.RenderEntityPredicate(predicate, values));
+        }
+
+        var select = projection(inner);
+        return "SELECT " + select + " FROM " + RenderFrom(state);
+    }
+
+    /// <summary>Whether a name reads the row a collection navigation starts from, such as <c>^MinRating</c>.</summary>
+    private static bool IsOuterName(string name) => name.StartsWith('^');
+
+    private SqlBuilder OuterBuilder(string name)
+        => _outer ?? throw new InvalidOperationException(
+            string.Format(CultureInfo.InvariantCulture, ExceptionMessages.OuterNameWithoutCollection, name));
+
     /// <summary>A computed <see cref="bool"/> used as a predicate: true where it is true, and its negation where it is false or null.</summary>
     private string RenderBooleanValue(BoundBooleanValue boolean, IReadOnlyList<object?> values, bool negated, Func<BoundProperty, string> column)
     {
@@ -1804,6 +1992,16 @@ internal sealed class SqlBuilder
 
             case BoundFunctionValue function:
                 return RenderFunction(function, values, column);
+
+            case BoundCountValue count:
+                return new SqlValue(
+                    "(" + RenderSubquery(count.Collection, values, _ => _dialect.Count(count.IsLong)) + ")",
+                    IsNullable: false,
+                    count.IsLong ? typeof(long) : typeof(int),
+                    ReadsRow: true);
+
+            case BoundCollectionAggregate aggregate:
+                return RenderCollectionAggregate(aggregate.Template, values);
 
             case BoundPredicateValue predicate:
             {
@@ -2038,16 +2236,16 @@ internal sealed class SqlBuilder
         string name;
         do
         {
-            name = _dialect.ParameterName(_parameterCount++);
+            name = _dialect.ParameterName(Statement._parameterCount++);
         }
-        while (_givenParameterNames.Contains(name.TrimStart('@')));
+        while (Statement._givenParameterNames.Contains(name.TrimStart('@')));
 
         // A value compared with a converted property is sent as the column holds it, as EF Core sends it.
-        _parameters.Add(new QueryParameter(name, property?.Converter is null ? value : property.ToProvider(value) ?? DBNull.Value, property));
+        Statement._parameters.Add(new QueryParameter(name, property?.Converter is null ? value : property.ToProvider(value) ?? DBNull.Value, property));
         return name;
     }
 
-    private string NextAlias() => _dialect.QuoteIdentifier(AliasPrefix + (_aliasCount++).ToString(CultureInfo.InvariantCulture));
+    private string NextAlias() => _dialect.QuoteIdentifier(AliasPrefix + (Statement._aliasCount++).ToString(CultureInfo.InvariantCulture));
 
     /// <summary>
     /// A selected column: its SQL, and its name in the rows, which is the column name unless renamed. A computed

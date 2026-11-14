@@ -17,6 +17,7 @@ public sealed class PredicateTranslatorTests
         int[] array = [1, 2];
         var request = new Request(1, "y");
         var anon = new { Limit = 4 };
+        Func<Post, bool> isPost = p => p.Id > 0;
         """;
 
     private const string Right = "((E.BinaryExpression)body).Right";
@@ -196,9 +197,12 @@ public sealed class PredicateTranslatorTests
 
     [Theory]
     [InlineData("b => b.Author == b.Author", "KP2002", "b.Author")]
-    [InlineData("b => b.Posts.Any()", "KP2005", "b.Posts.Any()")]
-    [InlineData("b => b.Posts.Count + 1 > 1", "KP2005", "b.Posts.Count")]
-    [InlineData("b => b.Posts.Count > 1", "KP2005", "b.Posts.Count")]
+    [InlineData("b => b.Posts.Any(p => p.Blog.Posts.Any(q => b.Posts.Any()))", "KP2005", "b.Posts")]
+    [InlineData("b => b.Posts.Any(p => p.Id > ids.Count(x => x > p.Id))", "KP2003", "ids.Count(x => x > p.Id)")]
+    [InlineData("b => b.Posts.Any(isPost)", "KP2001", "isPost")]
+    [InlineData("b => b.Posts.Sum(p => p.Blog.Posts.Count()) > 1", "KP2005", "p => p.Blog.Posts.Count()")]
+    [InlineData("b => b.Posts.Select(p => p.Id).Distinct().Count() > 1", "KP2005", "b.Posts.Select(p => p.Id).Distinct().Count()")]
+    [InlineData("b => b.Posts.Distinct().Any()", "KP2005", "b.Posts.Distinct().Any()")]
     [InlineData("b => b.Posts == null", "KP2005", "b.Posts")]
     [InlineData("b => b.Name.PadRight(3) == \"a\"", "KP2003", "b.Name.PadRight(3)")]
     public void Translate_WithNavigations_StillReportsTheRest(string lambda, string id, string text)
@@ -209,6 +213,67 @@ public sealed class PredicateTranslatorTests
         Assert.Equal(id, diagnostic!.Descriptor.Id);
         Assert.Equal(text, diagnostic.MessageArgs[0]);
     }
+
+    [Theory]
+    [InlineData("b => b.Posts.Any()", "new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\"))")]
+    [InlineData("b => !b.Posts.Any()", "new T.NotTemplate(new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\")))")]
+    [InlineData("b => Enumerable.Any(b.Posts)", "new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\"))")]
+    [InlineData("b => b.Posts.Any(p => p.Id > b.Rating)", "new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\", new T.ValueComparisonTemplate(new T.PropertyValueTemplate(\"Id\"), T.ComparisonOperator.GreaterThan, new T.PropertyValueTemplate(\"^Rating\"))))")]
+    [InlineData("b => b.Posts.Any(p => p.Blog.Author == null)", "new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\", new T.NullCheckTemplate(\"Blog.Author\", isNull: true)))")]
+    [InlineData("b => b.Posts.Any(p => b.IsActive)", "new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\", new T.BooleanPropertyTemplate(\"^IsActive\")))")]
+    [InlineData("b => b.Posts.All(p => p.BlogId == b.Id)", "new T.NotTemplate(new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\", new T.NotTemplate(new T.ValueComparisonTemplate(new T.PropertyValueTemplate(\"BlogId\"), T.ComparisonOperator.Equal, new T.PropertyValueTemplate(\"^Id\"))))))")]
+    [InlineData("b => b.Posts.Where(p => p.Blog.IsActive).Where(p => !p.Blog.IsActive).Any()", "new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\", new T.AndTemplate(new T.BooleanPropertyTemplate(\"Blog.IsActive\"), new T.NotTemplate(new T.BooleanPropertyTemplate(\"Blog.IsActive\")))))")]
+    [InlineData("b => b.Posts.Any(p => p.Blog.Posts.Any(q => q.Id > b.Rating + p.Id))", "new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\", new T.ExistsTemplate(new T.CollectionTemplate(\"Blog.Posts\", new T.ValueComparisonTemplate(new T.PropertyValueTemplate(\"Id\"), T.ComparisonOperator.GreaterThan, new T.BinaryValueTemplate(T.ValueOperator.Add, new T.PropertyValueTemplate(\"^^Rating\"), new T.PropertyValueTemplate(\"^Id\")))))))")]
+    [InlineData("b => b.Posts.Any() == b.IsActive", "new T.ValueComparisonTemplate(new T.PredicateValueTemplate(new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\"))), T.ComparisonOperator.Equal, new T.PropertyValueTemplate(\"IsActive\"))")]
+    [InlineData("b => b.IsActive || b.Posts.Any()", "new T.OrTemplate(new T.BooleanPropertyTemplate(\"IsActive\"), new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\")))")]
+    public void Translate_CollectionTests_AreExistsOfTheRelatedRows(string lambda, string template)
+    {
+        var (predicate, diagnostic) = Translate(lambda, allowNavigations: true);
+
+        Assert.Null(diagnostic);
+        Assert.Equal(template, Shorten(predicate!.TemplateCode));
+        Assert.Empty(predicate.ValueCodes);
+    }
+
+    [Theory]
+    [InlineData("b => b.Posts.Count > 1", "new T.CountValueTemplate(new T.CollectionTemplate(\"Posts\"))")]
+    [InlineData("b => b.Posts.Count() + 1 > b.Rating", "new T.BinaryValueTemplate(T.ValueOperator.Add, new T.CountValueTemplate(new T.CollectionTemplate(\"Posts\")), new T.SlotValueTemplate(0))")]
+    [InlineData("b => b.Posts.Count(p => p.Id > b.Rating) == 2", "new T.CountValueTemplate(new T.CollectionTemplate(\"Posts\", new T.ValueComparisonTemplate(new T.PropertyValueTemplate(\"Id\"), T.ComparisonOperator.GreaterThan, new T.PropertyValueTemplate(\"^Rating\"))))")]
+    [InlineData("b => b.Posts.Where(p => p.Blog.IsActive).LongCount() > 2L", "new T.CountValueTemplate(new T.CollectionTemplate(\"Posts\", new T.BooleanPropertyTemplate(\"Blog.IsActive\")), isLong: true)")]
+    [InlineData("b => b.Posts.Sum(p => p.Id) > b.Rating", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Sum, new T.PropertyValueTemplate(\"Id\"), S.AggregateValueType.Int32)")]
+    [InlineData("b => b.Posts.Sum(p => p.Blog.Price * 2) > b.Price", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Sum, new T.BinaryValueTemplate(T.ValueOperator.Multiply, new T.PropertyValueTemplate(\"Blog.Price\"), new T.SlotValueTemplate(0)), S.AggregateValueType.Decimal)")]
+    [InlineData("b => b.Posts.Average(p => p.Id) > 1", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Average, new T.PropertyValueTemplate(\"Id\"), S.AggregateValueType.Int32)")]
+    [InlineData("b => b.Posts.Max(p => p.Blog.Name) == b.Name", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Max, new T.PropertyValueTemplate(\"Blog.Name\"), S.AggregateValueType.Column)")]
+    [InlineData("b => b.Posts.Where(p => p.Id > 1).Select(p => p.BlogId).Min() == b.Id", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\", new T.ComparisonTemplate(\"Id\", T.ComparisonOperator.GreaterThan, 0)), S.AggregateFunction.Min, new T.PropertyValueTemplate(\"BlogId\"), S.AggregateValueType.Column)")]
+    [InlineData("b => b.Posts.Max(p => (int?)p.Id) == null", "new T.CollectionAggregateTemplate(new T.CollectionTemplate(\"Posts\"), S.AggregateFunction.Max, ")]
+    public void Translate_CollectionValues_AreCountsAndAggregates(string lambda, string part)
+    {
+        var (predicate, diagnostic) = Translate(lambda, allowNavigations: true);
+
+        Assert.Null(diagnostic);
+        Assert.Contains(part, Shorten(predicate!.TemplateCode), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Translate_ValuesInsideACollection_AreComputedFromTheCaptures()
+    {
+        var (predicate, diagnostic) = Translate("b => b.Rating > min && b.Posts.Where(p => p.Id > min).Any(p => p.BlogId != (int)total)", allowNavigations: true);
+
+        Assert.Null(diagnostic);
+        Assert.Equal(
+            "new T.AndTemplate(new T.ComparisonTemplate(\"Rating\", T.ComparisonOperator.GreaterThan, 0), new T.ExistsTemplate(new T.CollectionTemplate(\"Posts\", " +
+            "new T.AndTemplate(new T.ComparisonTemplate(\"Id\", T.ComparisonOperator.GreaterThan, 1), new T.ComparisonTemplate(\"BlogId\", T.ComparisonOperator.NotEqual, 2)))))",
+            Shorten(predicate!.TemplateCode));
+        Assert.Equal(["C.Read(((E.BinaryExpression)((E.BinaryExpression)body).Left).Right)", "(((int)captures[1]!))", "((int)((long)captures[2]!))"], predicate.ValueCodes.Select(Shorten));
+        Assert.True(predicate.ReadsBody);
+        Assert.True(predicate.ReadsCaptures);
+    }
+
+    [Theory]
+    [InlineData("b => b.Posts.Any()")]
+    [InlineData("b => b.Posts.All(p => p.Id > 1)")]
+    public void Translate_WithoutNavigations_ReportsCollections(string lambda)
+        => Assert.Equal("KP2005", Translate(lambda).Diagnostic!.Descriptor.Id);
 
     [Fact]
     public void Generator_ReportsTranslationDiagnosticAtConstruct()
@@ -243,7 +308,7 @@ public sealed class PredicateTranslatorTests
         var compilation = GeneratorHost.Compile(TestSources.WithBody(Locals + $"\nvar q = db.Blogs.Where({lambda});"));
         var tree = compilation.SyntaxTrees.Single();
         var where = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>()
-            .Single(i => i.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Where" });
+            .First(i => i.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "Where" });
         var syntax = where.ArgumentList.Arguments[0].Expression;
 
         return PredicateTranslator.Translate(
@@ -253,6 +318,7 @@ public sealed class PredicateTranslatorTests
     private static string Shorten(string code)
         => code
             .Replace("global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.", "T.", StringComparison.Ordinal)
+            .Replace("global::KetPsi.EntityFrameworkCore.Sql.", "S.", StringComparison.Ordinal)
             .Replace("global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.", "C.", StringComparison.Ordinal)
             .Replace("global::System.Linq.Expressions.", "E.", StringComparison.Ordinal);
 }

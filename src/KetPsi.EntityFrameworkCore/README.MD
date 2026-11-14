@@ -70,6 +70,10 @@ targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 i
   `ToString()` of strings and integers; and `EF.Functions.Like`.
 - `string.Equals(value)`, enums, nullable properties.
 - `list.Contains(b.Property)` over arrays and lists, sent as one JSON parameter through `OPENJSON`.
+- Related collections: `Any` and `All` (`b.Posts.Any(p => p.Rating >= b.MinRating)`), counts (`b.Posts.Count`,
+  `Count(...)`, `LongCount`) and `Sum`, `Average`, `Min` and `Max`, after `Where` too, through references, nested,
+  and through many-to-many navigations with a join entity class. Each is a correlated subquery, as in EF Core, and
+  the related entity's query filters apply inside it. They work in predicates and order keys.
 - Properties through reference navigations, such as `p.Blog.Name == name`, joined like an included reference
   (`INNER JOIN` when required, `LEFT JOIN` when optional), and `p.Blog == null`, which checks the foreign key.
 - Values: constants, locals, parameters, fields and properties of them, static members, and anything computed from
@@ -100,8 +104,7 @@ own, such as strongly typed keys (`readonly record struct BlogId(int Value)`), w
 operator. Comparisons and ordering use the stored values, as in EF Core.
 
 Not supported yet: converters on class types other than `string` and `byte[]` (KP3002), owned and complex types, JSON columns, inheritance, many-to-many navigations
-without a join entity, collection navigations inside predicates (`b.Posts.Any()`), and navigations inside query
-filters.
+without a join entity class, and navigations inside query filters.
 
 ### Include
 

@@ -19,6 +19,7 @@ internal sealed class PredicateTranslator
 
     private const string Expressions = "global::System.Linq.Expressions";
     private const string Templates = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates";
+    private const string Sql = "global::KetPsi.EntityFrameworkCore.Sql";
     private const string CapturedValues = "global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues";
     private const string ValueProperty = "Value";
     private const string GetValueOrDefaultMethod = "GetValueOrDefault";
@@ -28,15 +29,18 @@ internal sealed class PredicateTranslator
     private const string ContainsMethod = "Contains";
     private const string EqualsMethod = "Equals";
     private const string HasValueProperty = "HasValue";
+    private const string Enumerable = "System.Linq.Enumerable";
 
     private readonly SemanticModel _model;
-    private readonly IParameterSymbol _parameter;
     private readonly Func<ExpressionSyntax, string>? _readValue;
     private readonly Func<ExpressionSyntax, PredicateOperand?>? _operands;
     private readonly bool _allowNavigations;
     private readonly CancellationToken _cancellationToken;
     private readonly List<string> _valuePaths;
     private readonly CapturedValueWriter _writer;
+
+    // The parameters of the lambdas being translated: the predicate's, then that of each collection's condition it is in.
+    private readonly List<IParameterSymbol> _scopes;
     private bool _readsBody;
 
     // Inside a computed value, values are computed from the captures: the tree's conversions make paths unreliable.
@@ -52,13 +56,13 @@ internal sealed class PredicateTranslator
         CancellationToken cancellationToken)
     {
         _model = model;
-        _parameter = parameter;
         _readValue = readValue;
         _operands = operands;
         _allowNavigations = allowNavigations;
         _valuePaths = valueSlots ?? [];
         _cancellationToken = cancellationToken;
         _writer = new CapturedValueWriter(model, parameter, cancellationToken);
+        _scopes = [parameter];
     }
 
     /// <summary>Translates <paramref name="lambda"/>, returning either the predicate or why it cannot be translated.</summary>
@@ -357,6 +361,11 @@ internal sealed class PredicateTranslator
         var receiver = (invocation.Expression as MemberAccessExpressionSyntax)?.Expression;
         var arguments = invocation.ArgumentList.Arguments;
 
+        if (TranslateCollectionTest(invocation, method, receiver) is { } collectionTest)
+        {
+            return collectionTest;
+        }
+
         // Contains, StartsWith and EndsWith of a string, with a string or a character; not with a StringComparison.
         if (operation is { Instance: { Type.SpecialType: SpecialType.System_String } text, Arguments.Length: 1 } match
             && method.Name is ContainsMethod or "StartsWith" or "EndsWith"
@@ -406,6 +415,223 @@ internal sealed class PredicateTranslator
         throw Fail(
             ReferencesParameter(invocation) ? DiagnosticDescriptors.MethodNotSupported : DiagnosticDescriptors.ExpressionNotSupported,
             invocation);
+    }
+
+    /// <summary>
+    /// <c>Any</c> or <c>All</c> of a collection navigation, such as <c>x.Posts.Any(p =&gt; p.Rating &gt; 3)</c> or
+    /// <c>x.Posts.Where(p =&gt; p.IsPublic).All(p =&gt; p.Rating &gt; 3)</c>; null for anything else. <c>All(c)</c> is
+    /// written as no row with <c>!c</c>, as EF Core writes it.
+    /// </summary>
+    private string? TranslateCollectionTest(InvocationExpressionSyntax invocation, IMethodSymbol method, ExpressionSyntax? receiver)
+    {
+        if (method.Name is not ("Any" or "All") || EnumerableCall(invocation, method, receiver) is not var (source, lambdas)
+            || lambdas.Count > 1 || method.Name == "All" && lambdas.Count == 0)
+        {
+            return null;
+        }
+
+        if (CollectionSource(source) is not var (navigation, conditions))
+        {
+            return ReadsCollection(source) ? throw Fail(DiagnosticDescriptors.CollectionNotSupported, invocation) : null;
+        }
+
+        if (lambdas.Count == 1)
+        {
+            var condition = Condition(lambdas[0]);
+            conditions.Add(method.Name == "All" ? $"new {Templates}.NotTemplate({condition})" : condition);
+        }
+
+        var exists = $"new {Templates}.ExistsTemplate({Collection(navigation, conditions)})";
+        return method.Name == "All" ? $"new {Templates}.NotTemplate({exists})" : exists;
+    }
+
+    /// <summary>
+    /// The source and lambda arguments of a call to a method of <see cref="System.Linq.Enumerable"/>, whether called
+    /// as an extension or not; null for any other call, or when collections can't be read here.
+    /// </summary>
+    private (ExpressionSyntax Source, List<ExpressionSyntax> Lambdas)? EnumerableCall(
+        InvocationExpressionSyntax invocation, IMethodSymbol method, ExpressionSyntax? receiver)
+    {
+        // Collections are queried on the entity: not over the values of a group or a projection, and not in query filters.
+        if (!_allowNavigations || _operands is not null || _readValue is not null
+            || (method.ReducedFrom ?? method).ContainingType.ToDisplayString() != Enumerable)
+        {
+            return null;
+        }
+
+        var arguments = invocation.ArgumentList.Arguments.Select(static a => a.Expression).ToList();
+        if (method.ReducedFrom is not null)
+        {
+            return receiver is null ? null : (receiver, arguments);
+        }
+
+        return arguments.Count == 0 ? null : (arguments[0], arguments.Skip(1).ToList());
+    }
+
+    /// <summary>
+    /// The collection navigation a source reads, such as <c>Posts</c> for <c>x.Posts</c> or <c>Blog.Posts</c> for
+    /// <c>x.Blog.Posts</c>, and the conditions of the <c>Where</c> calls on it; null when it is no collection navigation.
+    /// </summary>
+    private (string Navigation, List<string> Conditions)? CollectionSource(ExpressionSyntax source)
+    {
+        if (!_allowNavigations || _operands is not null || _readValue is not null)
+        {
+            return null;
+        }
+
+        source = StripParentheses(source);
+        if (source is InvocationExpressionSyntax call
+            && _model.GetSymbolInfo(call, _cancellationToken).Symbol is IMethodSymbol { Name: "Where" } where
+            && EnumerableCall(call, where, (call.Expression as MemberAccessExpressionSyntax)?.Expression) is var (inner, lambdas)
+            && lambdas.Count == 1)
+        {
+            if (CollectionSource(inner) is not var (navigation, conditions))
+            {
+                return null;
+            }
+
+            conditions.Add(Condition(lambdas[0]));
+            return (navigation, conditions);
+        }
+
+        if (!_allowNavigations || source is not MemberAccessExpressionSyntax member || PropertyPath(member, out var depth) is not { } chain
+            || !EntityShapeBuilder.IsCollectionNavigation(chain[chain.Count - 1].Type))
+        {
+            return null;
+        }
+
+        // A collection reached through reference navigations of the row the condition is on.
+        for (var i = 0; i < chain.Count - 1; i++)
+        {
+            if (EntityShapeBuilder.IsCollectionNavigation(chain[i].Type) || EntityShapeBuilder.NavigationTarget(chain[i].Type) is null)
+            {
+                throw Fail(DiagnosticDescriptors.CollectionNotSupported, source);
+            }
+        }
+
+        // A collection of an outer row inside a collection's condition is not queried yet.
+        return depth == 0
+            ? (string.Join(".", chain.Select(static p => p.Name)), new List<string>())
+            : throw Fail(DiagnosticDescriptors.CollectionNotSupported, source);
+    }
+
+    /// <summary>
+    /// <c>Count</c>, <c>LongCount</c>, <c>Sum</c>, <c>Average</c>, <c>Min</c> or <c>Max</c> of a collection navigation,
+    /// such as <c>x.Posts.Count(p =&gt; p.IsPublic)</c>, <c>x.Posts.Sum(p =&gt; p.Rating)</c> or
+    /// <c>x.Posts.Select(p =&gt; p.Rating).Max()</c>; null for any other call.
+    /// </summary>
+    private string? TranslateCollectionValue(IInvocationOperation operation)
+    {
+        // The method as called: an extension call is reduced, unlike the operation's target method.
+        if (operation.Syntax is not InvocationExpressionSyntax invocation
+            || _model.GetSymbolInfo(invocation, _cancellationToken).Symbol is not IMethodSymbol method
+            || method.Name is not ("Count" or "LongCount" or "Sum" or "Average" or "Min" or "Max")
+            || EnumerableCall(invocation, method, (invocation.Expression as MemberAccessExpressionSyntax)?.Expression) is not var (source, lambdas)
+            || lambdas.Count > 1)
+        {
+            return null;
+        }
+
+        if (method.Name is "Count" or "LongCount")
+        {
+            if (CollectionSource(source) is not var (counted, countConditions))
+            {
+                return ReadsCollection(source) ? throw Fail(DiagnosticDescriptors.CollectionNotSupported, invocation) : null;
+            }
+
+            if (lambdas.Count == 1)
+            {
+                countConditions.Add(Condition(lambdas[0]));
+            }
+
+            var isLong = method.Name == "LongCount" ? ", isLong: true" : "";
+            return $"new {Templates}.CountValueTemplate({Collection(counted, countConditions)}{isLong})";
+        }
+
+        // The selector is the aggregate's lambda, or that of a Select before it.
+        var selector = lambdas.Count == 1 ? lambdas[0] : null;
+        if (selector is null && StripParentheses(source) is InvocationExpressionSyntax select
+            && _model.GetSymbolInfo(select, _cancellationToken).Symbol is IMethodSymbol { Name: "Select" } selectMethod
+            && EnumerableCall(select, selectMethod, (select.Expression as MemberAccessExpressionSyntax)?.Expression) is var (selected, selectLambdas)
+            && selectLambdas.Count == 1)
+        {
+            (selector, source) = (selectLambdas[0], selected);
+        }
+
+        if (selector is null || CollectionSource(source) is not var (navigation, conditions))
+        {
+            return ReadsCollection(source) ? throw Fail(DiagnosticDescriptors.CollectionNotSupported, invocation) : null;
+        }
+
+        // Sum and Average work in the selector's numeric type; Min and Max in the column's.
+        var valueType = method.Name is "Min" or "Max"
+            ? "Column"
+            : Underlying((_model.GetSymbolInfo(StripParentheses(selector), _cancellationToken).Symbol as IMethodSymbol)?.ReturnType)?.SpecialType switch
+            {
+                SpecialType.System_Int32 => "Int32",
+                SpecialType.System_Int64 => "Int64",
+                SpecialType.System_Decimal => "Decimal",
+                SpecialType.System_Double => "Double",
+                SpecialType.System_Single => "Single",
+                _ => throw Fail(DiagnosticDescriptors.ExpressionNotSupported, invocation),
+            };
+
+        var value = InScope(selector, TranslateValue);
+
+        // SQL can't aggregate a subquery, such as x.Posts.Sum(p => p.Comments.Count()).
+        if (value.Contains($"{Templates}.CollectionTemplate("))
+        {
+            throw Fail(DiagnosticDescriptors.CollectionNotSupported, selector);
+        }
+
+        return $"new {Templates}.CollectionAggregateTemplate({Collection(navigation, conditions)}, " +
+            $"{Sql}.AggregateFunction.{method.Name}, {value}, {Sql}.AggregateValueType.{valueType})";
+    }
+
+    // Whether an expression reads a collection navigation of a row, such as x.Posts in x.Posts.Distinct().
+    private bool ReadsCollection(ExpressionSyntax node)
+        => node.DescendantNodesAndSelf().OfType<MemberAccessExpressionSyntax>().Any(member =>
+            PropertyPath(member, out _) is { } chain && EntityShapeBuilder.IsCollectionNavigation(chain[chain.Count - 1].Type));
+
+    private static string Collection(string navigation, List<string> conditions)
+        => conditions.Count == 0
+            ? $"new {Templates}.CollectionTemplate(\"{navigation}\")"
+            : $"new {Templates}.CollectionTemplate(\"{navigation}\", {conditions.Aggregate((left, right) => $"new {Templates}.AndTemplate({left}, {right})")})";
+
+    /// <summary>
+    /// The condition a lambda over the related rows tests, such as <c>p =&gt; p.Rating &gt; b.MinRating</c>. Its names
+    /// are property paths of the related entity, and those of the rows around it start with <c>^</c>, one for each level
+    /// out. Its values are computed from the captured variables.
+    /// </summary>
+    private string Condition(ExpressionSyntax argument) => InScope(argument, body => TranslatePredicate(body, path: ""));
+
+    // Translates the body of a lambda over the related rows, with its parameter as the innermost row.
+    private string InScope(ExpressionSyntax argument, Func<ExpressionSyntax, string> translate)
+    {
+        var parameterSyntax = StripParentheses(argument) switch
+        {
+            SimpleLambdaExpressionSyntax simple => simple.Parameter,
+            ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: 1 } parenthesized => parenthesized.ParameterList.Parameters[0],
+            _ => null,
+        };
+
+        if (parameterSyntax is null || ((LambdaExpressionSyntax)StripParentheses(argument)).Body is not ExpressionSyntax body
+            || _model.GetDeclaredSymbol(parameterSyntax, _cancellationToken) is not { } parameter)
+        {
+            throw Fail(DiagnosticDescriptors.ExpressionNotSupported, argument);
+        }
+
+        _scopes.Add(parameter);
+        _valueDepth++;
+        try
+        {
+            return translate(body);
+        }
+        finally
+        {
+            _valueDepth--;
+            _scopes.RemoveAt(_scopes.Count - 1);
+        }
     }
 
     // a.Equals(b) and string.Equals(a, b) of strings, without a StringComparison, which EF Core cannot translate.
@@ -563,6 +789,15 @@ internal sealed class PredicateTranslator
             // A value of a group, such as an aggregate, before the methods of its value.
             case IInvocationOperation when _operands is not null && _operands(syntax) is { } groupValue:
                 return $"new {Templates}.PropertyValueTemplate(\"{groupValue.Name}\")";
+
+            // Count and the aggregates of a collection navigation: x.Posts.Count(), x.Posts.Sum(p => p.Rating).
+            case IInvocationOperation invocation when TranslateCollectionValue(invocation) is { } collectionValue:
+                return collectionValue;
+
+            // x.Posts.Count of a list or collection.
+            case IPropertyReferenceOperation { Property.Name: "Count", Instance.Syntax: ExpressionSyntax counted }
+                when CollectionSource(counted) is var (navigation, conditions):
+                return $"new {Templates}.CountValueTemplate({Collection(navigation, conditions)})";
 
             case IInvocationOperation invocation when StringFunction(invocation) is { } function:
                 return function;
@@ -761,7 +996,7 @@ internal sealed class PredicateTranslator
             return _operands(node);
         }
 
-        if (node is not MemberAccessExpressionSyntax member || PropertyPath(member) is not { } chain
+        if (node is not MemberAccessExpressionSyntax member || PropertyPath(member, out _) is not { } chain
             || !_allowNavigations && chain.Count > 1 || !EntityShapeBuilder.IsReadableScalar(chain[chain.Count - 1].Type))
         {
             return null;
@@ -832,9 +1067,9 @@ internal sealed class PredicateTranslator
 
         if (node is MemberAccessExpressionSyntax member)
         {
-            if (_allowNavigations && PropertyPath(member) is { } chain)
+            if (_allowNavigations && PropertyPath(member, out var depth) is { } chain)
             {
-                return ThroughNavigations(chain, node);
+                return ThroughNavigations(chain, node, depth);
             }
 
             if (IsParameter(member.Expression))
@@ -872,7 +1107,7 @@ internal sealed class PredicateTranslator
     /// The property path a chain of reference navigations ends with, such as <c>Blog.Name</c> for <c>x.Blog.Name</c>.
     /// A collection on the way, a member of a scalar, or a chain that ends with a navigation is a diagnostic.
     /// </summary>
-    private PredicateOperand ThroughNavigations(IReadOnlyList<IPropertySymbol> chain, ExpressionSyntax node)
+    private PredicateOperand ThroughNavigations(IReadOnlyList<IPropertySymbol> chain, ExpressionSyntax node, int depth)
     {
         for (var i = 0; i < chain.Count - 1; i++)
         {
@@ -891,7 +1126,7 @@ internal sealed class PredicateTranslator
 
         var last = chain[chain.Count - 1];
         return EntityShapeBuilder.IsReadableScalar(last.Type)
-            ? new PredicateOperand(string.Join(".", chain.Select(static p => p.Name)), last.Type)
+            ? new PredicateOperand(Outer(depth) + string.Join(".", chain.Select(static p => p.Name)), last.Type)
             : throw Fail(
                 EntityShapeBuilder.IsCollectionNavigation(last.Type) ? DiagnosticDescriptors.CollectionNotSupported : DiagnosticDescriptors.NavigationNotSupported,
                 node);
@@ -901,19 +1136,23 @@ internal sealed class PredicateTranslator
     private string? NavigationPath(ExpressionSyntax node)
     {
         if (!_allowNavigations || _operands is not null || StripParentheses(node) is not MemberAccessExpressionSyntax member
-            || PropertyPath(member) is not { } chain)
+            || PropertyPath(member, out var depth) is not { } chain)
         {
             return null;
         }
 
         return chain.All(static p => !EntityShapeBuilder.IsCollectionNavigation(p.Type) && EntityShapeBuilder.NavigationTarget(p.Type) is not null)
-            ? string.Join(".", chain.Select(static p => p.Name))
+            ? Outer(depth) + string.Join(".", chain.Select(static p => p.Name))
             : null;
     }
 
-    /// <summary>The properties a member chain reads from the lambda parameter, outermost first; null for anything else.</summary>
-    private List<IPropertySymbol>? PropertyPath(MemberAccessExpressionSyntax member)
+    /// <summary>
+    /// The properties a member chain reads from a lambda parameter, outermost first, and how many collection conditions
+    /// out that parameter's row is; null for anything else.
+    /// </summary>
+    private List<IPropertySymbol>? PropertyPath(MemberAccessExpressionSyntax member, out int depth)
     {
+        depth = 0;
         var chain = new List<IPropertySymbol>();
         ExpressionSyntax current = member;
         while (StripParentheses(current) is MemberAccessExpressionSyntax access)
@@ -927,7 +1166,13 @@ internal sealed class PredicateTranslator
             current = access.Expression;
         }
 
-        return IsParameter(current) ? chain : null;
+        if (!IsParameter(current))
+        {
+            return null;
+        }
+
+        depth = _scopes.Count - 1 - ScopeOf(current);
+        return chain;
     }
 
     /// <summary>
@@ -967,7 +1212,7 @@ internal sealed class PredicateTranslator
             case IdentifierNameSyntax identifier:
                 return _model.GetSymbolInfo(identifier, _cancellationToken).Symbol switch
                 {
-                    IParameterSymbol parameter => !SymbolEqualityComparer.Default.Equals(parameter, _parameter),
+                    IParameterSymbol parameter => !_scopes.Contains(parameter, SymbolEqualityComparer.Default),
                     ILocalSymbol or IFieldSymbol or IPropertySymbol => true,
                     _ => false,
                 };
@@ -992,9 +1237,31 @@ internal sealed class PredicateTranslator
             && _model.GetSymbolInfo(member, _cancellationToken).Symbol is IPropertySymbol property
             && !EntityShapeBuilder.IsReadableScalar(property.Type);
 
-    private bool IsParameter(ExpressionSyntax node)
-        => StripParentheses(node) is IdentifierNameSyntax identifier
-            && SymbolEqualityComparer.Default.Equals(_model.GetSymbolInfo(identifier, _cancellationToken).Symbol, _parameter);
+    // The parameter of the predicate, or of a collection's condition it is in.
+    private bool IsParameter(ExpressionSyntax node) => ScopeOf(node) >= 0;
+
+    // The index in the scopes of the parameter a node is, or -1.
+    private int ScopeOf(ExpressionSyntax node)
+    {
+        if (StripParentheses(node) is not IdentifierNameSyntax identifier
+            || _model.GetSymbolInfo(identifier, _cancellationToken).Symbol is not IParameterSymbol parameter)
+        {
+            return -1;
+        }
+
+        for (var i = _scopes.Count - 1; i >= 0; i--)
+        {
+            if (SymbolEqualityComparer.Default.Equals(parameter, _scopes[i]))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    // The prefix of a name of the row a number of collection conditions out.
+    private static string Outer(int depth) => depth == 0 ? "" : new string('^', depth);
 
     private bool ReferencesParameter(SyntaxNode node)
         => node.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any(IsParameter);

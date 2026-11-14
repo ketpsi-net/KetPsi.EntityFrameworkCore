@@ -96,6 +96,16 @@ internal static class ExceptionMessages
     public const string CollectionNavigationInProjection =
         "KetPsi.EntityFrameworkCore cannot project the collection navigation '{1}' of '{0}' yet; include it on a projected entity instead.";
 
+    public const string CollectionQueryNotSupportedHere =
+        "KetPsi.EntityFrameworkCore queries a related collection, such as x.Posts.Any(), only in a predicate or an " +
+        "ordering of the queried entity.";
+
+    public const string NavigationNotCollection =
+        "The navigation '{0}.{1}' is not a collection.";
+
+    public const string OuterNameWithoutCollection =
+        "'{0}' reads the row a collection navigation starts from, which only a name inside the collection's condition can.";
+
     public const string AggregateNeedsColumnOnly =
         "An aggregate works on one column, but the projection selects an entity.";
 
