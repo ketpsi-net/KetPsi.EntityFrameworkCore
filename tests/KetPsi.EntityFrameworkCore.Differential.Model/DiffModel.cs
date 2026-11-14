@@ -66,6 +66,29 @@ public sealed class Post
 
     /// <summary>Without an initializer, so whoever loads the comments creates the collection.</summary>
     public ICollection<Comment>? Comments { get; set; }
+
+    /// <summary>Many-to-many through <see cref="PostTag"/>.</summary>
+    public List<Tag> Tags { get; set; } = [];
+}
+
+/// <summary>A tag of posts, whose filter hides hidden tags.</summary>
+public sealed class Tag
+{
+    public int Id { get; set; }
+
+    public string Name { get; set; } = "";
+
+    public bool IsHidden { get; set; }
+
+    public List<Post> Posts { get; set; } = [];
+}
+
+/// <summary>The join entity class between posts and tags.</summary>
+public sealed class PostTag
+{
+    public int PostId { get; set; }
+
+    public int TagId { get; set; }
 }
 
 public sealed class Comment
@@ -203,6 +226,10 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
 
     public DbSet<Comment> Comments => Set<Comment>();
 
+    public DbSet<Tag> Tags => Set<Tag>();
+
+    public DbSet<PostTag> PostTags => Set<PostTag>();
+
     public DbSet<Ticket> Tickets => Set<Ticket>();
 
     public DbSet<TicketNote> TicketNotes => Set<TicketNote>();
@@ -260,6 +287,22 @@ public sealed class DiffDb(string connectionString, int tenantId, CommandCounter
             c.Property(x => x.Id).ValueGeneratedNever();
             c.Property(x => x.Text).HasMaxLength(50);
             c.HasOne(x => x.Post).WithMany(p => p.Comments).HasForeignKey(x => x.PostId);
+        });
+
+        modelBuilder.Entity<Tag>(t =>
+        {
+            t.ToTable("Tags", "diff");
+            t.Property(x => x.Id).ValueGeneratedNever();
+            t.Property(x => x.Name).HasMaxLength(20);
+            t.HasQueryFilter(x => !x.IsHidden);
+            t.HasMany(x => x.Posts).WithMany(p => p.Tags).UsingEntity<PostTag>(
+                right => right.HasOne<Post>().WithMany().HasForeignKey(x => x.PostId),
+                left => left.HasOne<Tag>().WithMany().HasForeignKey(x => x.TagId),
+                join =>
+                {
+                    join.ToTable("PostTags", "diff");
+                    join.HasKey(x => new { x.PostId, x.TagId });
+                });
         });
 
         // A filter on a converted bool, so filters send the stored value too.

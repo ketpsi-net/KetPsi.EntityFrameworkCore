@@ -30,6 +30,8 @@ public sealed class SqlServerFixture : IAsyncLifetime
 
         db.Posts.AddRange(SeedData.Posts());
         db.Comments.AddRange(SeedData.Comments());
+        db.Tags.AddRange(SeedData.Tags());
+        db.PostTags.AddRange(SeedData.PostTags());
         db.Tickets.AddRange(SeedData.Tickets());
         db.TicketNotes.AddRange(SeedData.TicketNotes());
         db.GadgetCategories.AddRange(SeedData.GadgetCategories());
