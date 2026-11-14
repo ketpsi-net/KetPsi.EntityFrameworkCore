@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 namespace KetPsi.EntityFrameworkCore.Infrastructure;
 
 /// <summary>
-/// The operators and terminals generated interceptors call on a query projected by <see cref="SqlQuery.Select"/>.
+/// The operators and terminals generated interceptors call on a query projected by <c>SqlQuery.Select</c>.
 /// Unlike <see cref="SqlQuery"/>, the element type is unconstrained: it can be a value type or an anonymous type.
 /// Applications don't call this.
 /// </summary>

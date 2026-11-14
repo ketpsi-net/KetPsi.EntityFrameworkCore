@@ -1,4 +1,5 @@
 using KetPsi.EntityFrameworkCore.Binding;
+using KetPsi.EntityFrameworkCore.Execution;
 using KetPsi.EntityFrameworkCore.Filters;
 using KetPsi.EntityFrameworkCore.Infrastructure;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
@@ -323,6 +324,95 @@ public sealed class SqlBuilderCollectionTests : IDisposable
                 [],
                 static (_, _, _) => 0)).Tail, filtered: true).CommandText);
 
+    // --- Values in projections.
+
+    [Fact]
+    public void CountInAProjection_IsSelectedAfterTheColumns()
+        => Assert.Equal(
+            "SELECT [t0].[Name], (SELECT COUNT(*) " + Topics + ") FROM [Forums] AS [t0]",
+            Build(Select(Query(_db.Forums), [nameof(Forum.Name)], [], [Count("Topics")])).CommandText);
+
+    [Fact]
+    public void AnyInAProjection_IsACase()
+        => Assert.Equal(
+            "SELECT CASE WHEN EXISTS (SELECT 1 " + Topics + " AND [t1].[Score] >= [t0].[MinScore]) THEN CAST(1 AS bit) ELSE CAST(0 AS bit) END " +
+            "FROM [Forums] AS [t0]",
+            Build(Select(
+                Query(_db.Forums),
+                [],
+                [],
+                [new PredicateValueTemplate(Exists("Topics", Compare(P(nameof(Topic.Score)), ComparisonOperator.GreaterThanOrEqual, P("^" + nameof(Forum.MinScore)))))])).CommandText);
+
+    [Fact]
+    public void ValuesInAProjection_ReadTheirSlots()
+    {
+        var statement = Build(Select(
+            Query(_db.Forums),
+            [nameof(Forum.Id)],
+            [],
+            [Count("Topics", new ComparisonTemplate(nameof(Topic.Score), ComparisonOperator.GreaterThan, 0)), Aggregate(AggregateFunction.Max, nameof(Topic.Score), AggregateValueType.Column)],
+            3));
+
+        Assert.Equal(
+            "SELECT [t0].[Id], (SELECT COUNT(*) " + Topics + " AND [t1].[Score] > @p0), " +
+            "(SELECT MAX([t2].[Score]) FROM [Topics] AS [t2] WHERE [t2].[IsDeleted] = CAST(0 AS bit) AND [t0].[Id] = [t2].[ForumId]) FROM [Forums] AS [t0]",
+            statement.CommandText);
+        Assert.Equal(nameof(Topic.Score), Assert.Single(statement.Parameters).Property!.Name);
+    }
+
+    [Fact]
+    public void ValuesInAProjection_AreReadAfterThePropertiesAndBeforeTheEntities()
+    {
+        var tail = Select(Query(_db.Forums), [nameof(Forum.Name), nameof(Forum.Id), nameof(Forum.Name)], [""], [Count("Topics"), Count("Followers")]);
+
+        Assert.Equal(
+            "SELECT [t0].[Name], [t0].[Id], (SELECT COUNT(*) " + Topics + "), (SELECT COUNT(*) FROM [Follower] AS [t2] WHERE [t0].[Code] = [t2].[ForumCode]), " +
+            Cols<Forum>("t0") + " FROM [Forums] AS [t0]",
+            Build(tail).CommandText);
+        Assert.Equal([0, 1, 0, 2, 3], ProjectionRunner.Ordinals((ProjectionNode)tail));
+    }
+
+    [Fact]
+    public void ValueInAPagedProjection_IsSelectedOnThePage()
+        => Assert.Equal(
+            "SELECT [t0].[Name], (SELECT COUNT(*) " + Topics + ") FROM [Forums] AS [t0] ORDER BY [t0].[Id] OFFSET @p0 ROWS FETCH NEXT @p1 ROWS ONLY",
+            Build(Select(SqlQuery.Take(SqlQuery.Skip(SqlQuery.OrderBy(Query(_db.Forums), nameof(Forum.Id)), 1), 2), [nameof(Forum.Name)], [], [Count("Topics")])).CommandText);
+
+    [Fact]
+    public void ValueInAPagedProjectionThroughANavigation_ReadsTheDerivedTable()
+        => Assert.Equal(
+            "SELECT [t2].[Name], (SELECT COUNT(*) FROM [Reply] AS [t3] WHERE [t3].[IsHidden] = CAST(0 AS bit) AND [t1].[Id] = [t3].[TopicId]) " +
+            "FROM (SELECT " + Cols<Topic>("t0") + " FROM [Topics] AS [t0] ORDER BY [t0].[Id] OFFSET @p0 ROWS FETCH NEXT @p1 ROWS ONLY) AS [t1] " +
+            "INNER JOIN [Forums] AS [t2] ON [t1].[ForumId] = [t2].[Id] ORDER BY [t1].[Id]",
+            Build(Select(SqlQuery.Take(SqlQuery.Skip(SqlQuery.OrderBy(Query(_db.Topics), nameof(Topic.Id)), 1), 2), ["Forum.Name"], [], [Count("Replies")])).CommandText);
+
+    [Fact]
+    public void DistinctValues_AreSelectedDistinct()
+        => Assert.Equal(
+            "SELECT DISTINCT (SELECT COUNT(*) " + Topics + ") FROM [Forums] AS [t0]",
+            Build(((ProjectedQueryable<int>)SqlProjection.Distinct(Projected(Select(Query(_db.Forums), [], [], [Count("Topics")])))).Tail).CommandText);
+
+    [Fact]
+    public void FirstOfAProjectionWithValues_LimitsTheRows()
+        => Assert.Equal(
+            "SELECT TOP(1) [t0].[Name], (SELECT COUNT(*) " + Topics + ") FROM [Forums] AS [t0]",
+            Build(Select(Query(_db.Forums), [nameof(Forum.Name)], [], [Count("Topics")]), QueryTerminal.Rows, rowLimit: 1).CommandText);
+
+    [Fact]
+    public void CountOfAProjectionWithValues_LeavesThemOut()
+        => Assert.Equal(
+            "SELECT COUNT(*) FROM [Forums] AS [t0]",
+            Build(Select(Query(_db.Forums), [nameof(Forum.Name)], [], [Count("Topics")]), QueryTerminal.Count).CommandText);
+
+    [Fact]
+    public void AggregateOfAValue_IsNotSupported()
+        => Assert.Throws<NotSupportedException>(
+            () => Build(Select(Query(_db.Forums), [], [], [Count("Topics")]), QueryTerminal.Aggregate, aggregate: new SqlAggregate(AggregateFunction.Sum, null, AggregateValueType.Int32)));
+
+    [Fact]
+    public void ProjectionOfNothing_Throws()
+        => Assert.Throws<ArgumentException>(() => SqlQuery.Select(Query(_db.Forums), [], [], [], [], static (_, _, _) => 0));
+
     // --- Templates.
 
     [Fact]
@@ -373,13 +463,22 @@ public sealed class SqlBuilderCollectionTests : IDisposable
         where T : class
         => Build(((SqlQueryable<T>)query).Tail, filtered);
 
-    private SqlStatement Build(QueryNode tail, bool filtered = true)
+    private SqlStatement Build(QueryNode tail, bool filtered = true) => Build(tail, QueryTerminal.Rows, filtered: filtered);
+
+    private SqlStatement Build(QueryNode tail, QueryTerminal terminal, int? rowLimit = null, SqlAggregate? aggregate = null, bool filtered = true)
     {
         var entity = BindType(RootType(tail));
         return SqlBuilder.Build(
-            entity, tail, SqlServerDialect.Instance, QueryTerminal.Rows, rowLimit: null, [], aggregate: null,
+            entity, tail, SqlServerDialect.Instance, terminal, rowLimit, [], aggregate,
             filtered ? FiltersFor : static _ => [], BindType);
     }
+
+    // A projection reading the columns, entities and values, with the value slots.
+    private static QueryNode Select<T>(IQueryable<T> source, string[] columns, string[] entities, ValueTemplate[] values, params object?[] slots)
+        where T : class
+        => ((ProjectedQueryable<int>)SqlQuery.Select(source, columns, entities, values, slots, static (_, _, _) => 0)).Tail;
+
+    private IQueryable<int> Projected(QueryNode projection) => new ProjectedQueryable<int>(_db, projection, static (_, _, _) => 0);
 
     private static IReadOnlyList<ResolvedQueryFilter> FiltersFor(BoundEntity entity)
         => entity.ClrType == typeof(Topic) ? [new ResolvedQueryFilter(Key: null, NotDeleted, [])]

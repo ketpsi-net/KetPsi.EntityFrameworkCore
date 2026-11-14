@@ -1,3 +1,5 @@
+using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
+
 namespace KetPsi.EntityFrameworkCore.Query;
 
 /// <summary>
@@ -9,7 +11,12 @@ namespace KetPsi.EntityFrameworkCore.Query;
 /// <c>"Blog.Owner.Name"</c> is <c>x.Blog.Owner.Name</c>, and the entity path <c>""</c> is <c>x</c> itself.
 /// </remarks>
 internal sealed class ProjectionNode(
-    QueryNode parent, IReadOnlyList<string> propertyNames, IReadOnlyList<string> entityPaths, bool readsTheSqlColumns = false)
+    QueryNode parent,
+    IReadOnlyList<string> propertyNames,
+    IReadOnlyList<string> entityPaths,
+    bool readsTheSqlColumns = false,
+    IReadOnlyList<ValueTemplate>? values = null,
+    IReadOnlyList<object?>? valueSlots = null)
     : QueryNode(parent)
 {
     /// <summary>
@@ -28,4 +35,13 @@ internal sealed class ProjectionNode(
     /// occurrence is materialized as EF Core does, which without tracking or identity resolution is its own instance.
     /// </summary>
     public IReadOnlyList<string> EntityPaths { get; } = entityPaths;
+
+    /// <summary>
+    /// The values computed in SQL that the reader reads after <see cref="Columns"/>, in the order of its ordinals,
+    /// such as <c>x.Posts.Count()</c>.
+    /// </summary>
+    public IReadOnlyList<ValueTemplate> Values { get; } = values ?? [];
+
+    /// <summary>The value slots of <see cref="Values"/>.</summary>
+    public IReadOnlyList<object?> ValueSlots { get; } = valueSlots ?? [];
 }

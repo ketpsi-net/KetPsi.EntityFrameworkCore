@@ -103,15 +103,20 @@ internal static class ProjectionRunner
 
     /// <summary>
     /// For each property name the reader was created with, its ordinal in the statement, which selects
-    /// <see cref="ProjectionNode.Columns"/> in order.
+    /// <see cref="ProjectionNode.Columns"/> in order, then for each of its values, its ordinal after them.
     /// </summary>
     internal static int[] Ordinals(ProjectionNode projection)
     {
         var columns = projection.Columns;
-        var ordinals = new int[projection.PropertyNames.Count];
-        for (var i = 0; i < ordinals.Length; i++)
+        var ordinals = new int[projection.PropertyNames.Count + projection.Values.Count];
+        for (var i = 0; i < projection.PropertyNames.Count; i++)
         {
             ordinals[i] = IndexOf(columns, projection.PropertyNames[i]);
+        }
+
+        for (var i = 0; i < projection.Values.Count; i++)
+        {
+            ordinals[projection.PropertyNames.Count + i] = columns.Count + i;
         }
 
         return ordinals;

@@ -251,6 +251,41 @@ public static class SqlQuery
         return new ProjectedQueryable<TResult>(query.Context, new ProjectionNode(query.Tail, propertyNames, entityPaths), reader);
     }
 
+    /// <summary>
+    /// Appends <c>Select</c> with values computed in SQL, such as <c>x.Posts.Count()</c>: the reader reads each one at
+    /// the ordinal after those of <paramref name="propertyNames"/>, in order.
+    /// </summary>
+    /// <param name="source">The entity query.</param>
+    /// <param name="propertyNames">The property paths the reader reads, in the order of its ordinals.</param>
+    /// <param name="entityPaths">The navigation paths of the entities the reader uses, in the order of its entities.</param>
+    /// <param name="values">The computed values the reader reads after the properties, in order.</param>
+    /// <param name="slotValues">The value slots of <paramref name="values"/>.</param>
+    /// <param name="reader">The generated reader: the <c>Select</c> lambda's body over the row's columns, values and entities.</param>
+    /// <exception cref="ArgumentException">The projection reads no property, value or entity.</exception>
+    public static IQueryable<TResult> Select<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TResult>(
+        IQueryable<TSource> source,
+        IReadOnlyList<string> propertyNames,
+        IReadOnlyList<string> entityPaths,
+        IReadOnlyList<ValueTemplate> values,
+        object?[] slotValues,
+        ProjectionReader<TResult> reader)
+        where TSource : class
+    {
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        ArgumentNullException.ThrowIfNull(entityPaths);
+        ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(slotValues);
+        ArgumentNullException.ThrowIfNull(reader);
+        if (propertyNames.Count == 0 && entityPaths.Count == 0 && values.Count == 0)
+        {
+            throw new ArgumentException(ExceptionMessages.ProjectionRequiresColumns, nameof(propertyNames));
+        }
+
+        var query = ToSqlQueryable(source);
+        var projection = new ProjectionNode(query.Tail, propertyNames, entityPaths, values: values, valueSlots: slotValues);
+        return new ProjectedQueryable<TResult>(query.Context, projection, reader);
+    }
+
     /// <summary>Appends <c>Join</c> with its result selector, which is a projection of both entities.</summary>
     /// <param name="outer">The entity query.</param>
     /// <param name="inner">The joined entity query: a set with filters, of the same context.</param>
