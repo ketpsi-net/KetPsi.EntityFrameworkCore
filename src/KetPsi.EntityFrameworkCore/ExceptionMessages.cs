@@ -90,8 +90,17 @@ internal static class ExceptionMessages
     public const string AggregateNeedsOneColumn =
         "An aggregate without a selector works on a query projected to one property, such as Select(x => x.Price).Sum().";
 
+    public const string AggregateOfSubquery =
+        "An aggregate cannot work on a value computed by a subquery, such as Select(x => x.Posts.Count()).Sum().";
+
+    public const string ProjectionRequiresCollections =
+        "A projection with a collection reader selects at least one collection.";
+
+    public const string DistinctWithCollections =
+        "Distinct cannot follow a projection that selects a collection, as in EF Core.";
+
     public const string ProjectionRequiresColumns =
-        "A projection reads at least one entity property or entity.";
+        "A projection reads at least one entity property, computed value or entity.";
 
     public const string CollectionNavigationInProjection =
         "KetPsi.EntityFrameworkCore cannot project the collection navigation '{1}' of '{0}' yet; include it on a projected entity instead.";

@@ -514,6 +514,22 @@ await CheckAsync(
         Ids(db.Products.AsNoTracking().Where(p => p.Reviews.Any()).OrderByDescending(p => p.Reviews.Sum(r => r.Stars)).ThenBy(p => p.Id).ToList())),
     "1,6|3,4,5,7,8|1|6|1,6,2");
 
+await CheckAsync(
+    "Values and collections of a collection navigation in a projection",
+    db => Task.FromResult(string.Join(";", db.Products
+        .Where(p => p.Id <= 3)
+        .OrderBy(p => p.Id)
+        .Select(p => new
+        {
+            p.Id,
+            p.Reviews.Count,
+            Top = (int?)p.Reviews.Max(r => r.Stars),
+            Stars = p.Reviews.OrderByDescending(r => r.Stars).Select(r => r.Stars).ToArray(),
+        })
+        .ToList()
+        .Select(x => Invariant($"{x.Id}:{x.Count}:{x.Top?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-"}:{string.Join(",", x.Stars)}")))),
+    "1:2:5:5,1;2:1:3:3;3:0:-:");
+
 var title = "dune";
 var cheapest = 10m;
 await CheckAsync(

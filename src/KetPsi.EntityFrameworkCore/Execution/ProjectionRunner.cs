@@ -1,7 +1,10 @@
+using System.Collections;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using KetPsi.EntityFrameworkCore.Binding;
+using KetPsi.EntityFrameworkCore.Filters;
 using KetPsi.EntityFrameworkCore.Infrastructure;
 using KetPsi.EntityFrameworkCore.Query;
 using KetPsi.EntityFrameworkCore.Sql;
@@ -19,6 +22,11 @@ internal static class ProjectionRunner
 {
     public static IEnumerable<T> Enumerate<T>(ProjectedQueryable<T> query)
     {
+        if (HasCollections(query))
+        {
+            return ReadRows(query, rowLimit: null);
+        }
+
         if (PrepareEntities(query, rowLimit: null) is { } entities)
         {
             return LoadEntities(entities);
@@ -30,6 +38,11 @@ internal static class ProjectionRunner
 
     public static IAsyncEnumerable<T> EnumerateAsync<T>(ProjectedQueryable<T> query, CancellationToken cancellationToken)
     {
+        if (HasCollections(query))
+        {
+            return ReadAllAsync(query, cancellationToken);
+        }
+
         if (PrepareEntities(query, rowLimit: null) is { } entities)
         {
             return LoadEntitiesAsync(entities, cancellationToken);
@@ -103,15 +116,20 @@ internal static class ProjectionRunner
 
     /// <summary>
     /// For each property name the reader was created with, its ordinal in the statement, which selects
-    /// <see cref="ProjectionNode.Columns"/> in order.
+    /// <see cref="ProjectionNode.Columns"/> in order, then for each of its values, its ordinal after them.
     /// </summary>
     internal static int[] Ordinals(ProjectionNode projection)
     {
         var columns = projection.Columns;
-        var ordinals = new int[projection.PropertyNames.Count];
-        for (var i = 0; i < ordinals.Length; i++)
+        var ordinals = new int[projection.PropertyNames.Count + projection.Values.Count];
+        for (var i = 0; i < projection.PropertyNames.Count; i++)
         {
             ordinals[i] = IndexOf(columns, projection.PropertyNames[i]);
+        }
+
+        for (var i = 0; i < projection.Values.Count; i++)
+        {
+            ordinals[projection.PropertyNames.Count + i] = columns.Count + i;
         }
 
         return ordinals;
@@ -136,6 +154,11 @@ internal static class ProjectionRunner
 
     private static List<T> ReadRows<T>(ProjectedQueryable<T> query, int? rowLimit)
     {
+        if (HasCollections(query))
+        {
+            return ReadWithCollectionsAsync(query, rowLimit, isAsync: false, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        }
+
         if (PrepareEntities(query, rowLimit) is { } entities)
         {
             return entities.Loader.Load(entities.Statement, entities.Read);
@@ -147,6 +170,11 @@ internal static class ProjectionRunner
 
     private static async Task<List<T>> ReadRowsAsync<T>(ProjectedQueryable<T> query, int? rowLimit, CancellationToken cancellationToken)
     {
+        if (HasCollections(query))
+        {
+            return await ReadWithCollectionsAsync(query, rowLimit, isAsync: true, cancellationToken).ConfigureAwait(false);
+        }
+
         if (PrepareEntities(query, rowLimit) is { } entities)
         {
             return await entities.Loader.LoadAsync(entities.Statement, entities.Read, cancellationToken).ConfigureAwait(false);
@@ -241,6 +269,164 @@ internal static class ProjectionRunner
             statement,
             new IncludeLoader(context, dialect, tracking, filtersFor, bind),
             (row, read) => reader(row, ordinals, read));
+    }
+
+    private static bool HasCollections<T>(ProjectedQueryable<T> query) => query.Projection is ProjectionNode { Collections.Count: > 0 };
+
+    // The collections load with the keys of every row read, so every row is read before any is returned.
+    private static async IAsyncEnumerable<T> ReadAllAsync<T>(ProjectedQueryable<T> query, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        foreach (var result in await ReadRowsAsync(query, rowLimit: null, cancellationToken).ConfigureAwait(false))
+        {
+            yield return result;
+        }
+    }
+
+    /// <summary>
+    /// Reads a projection that selects collections: the rows with their entities, then each collection with one more
+    /// statement that matches the keys of the rows' parents, as an included collection is loaded. Each result is built
+    /// once its collections are loaded, so a collection can be an array or a set.
+    /// </summary>
+    private static async ValueTask<List<T>> ReadWithCollectionsAsync<T>(
+        ProjectedQueryable<T> query, int? rowLimit, bool isAsync, CancellationToken cancellationToken)
+    {
+        var projection = (ProjectionNode)query.Projection;
+        var context = query.Context;
+        var bind = QueryRunner.Binder(context);
+        var entity = QueryRunner.RootEntity(bind, QueryRunner.RootOf(query.Tail));
+        var includes = IncludeTree.FromChain(entity, query.Tail, bind);
+        var dialect = SqlDialects.Resolve(context.Database.ProviderName);
+        var filtersFor = QueryRunner.FiltersFor(context, query.Tail);
+        var tracking = QueryRunner.ResolveTracking(query.Tail, context.ChangeTracker.QueryTrackingBehavior);
+        if (tracking == QueryTrackingBehavior.NoTracking)
+        {
+            foreach (var path in projection.EntityPaths)
+            {
+                includes?.Find(path)?.EnsureNoCycle();
+            }
+        }
+
+        var statement = SqlBuilder.BuildRows(entity, query.Tail, dialect, includes, filtersFor, rowLimit, bind);
+        var loader = new IncludeLoader(context, dialect, tracking, filtersFor, bind);
+        var ordinals = Ordinals(projection);
+        var reader = (ProjectionReader<Func<T>>)projection.CollectionReader!;
+        var collections = projection.Collections;
+        var parentKeys = new KeyReader[collections.Count];
+        var parents = new List<(object?[] Key, IList Items)>[collections.Count];
+        for (var i = 0; i < collections.Count; i++)
+        {
+            var collection = collections[i];
+            parentKeys[i] = new KeyReader([.. collection.KeyPaths.Select((path, k) =>
+                (IndexOf(projection.Columns, path), collection.Navigation.SourceKey[k].ClrType))]);
+            parents[i] = [];
+        }
+
+        var builders = await loader.LoadAsync(statement, (row, roots) =>
+        {
+            // Each row gets lists of its own, which its reader can keep and its builder converts.
+            var entities = new object?[roots.Length + collections.Count];
+            roots.CopyTo(entities, 0);
+            for (var i = 0; i < collections.Count; i++)
+            {
+                var items = collections[i].Projection.CreateItems();
+                entities[roots.Length + i] = items;
+                parents[i].Add((parentKeys[i].Read(row), items));
+            }
+
+            return reader(row, ordinals, entities);
+        }, isAsync, cancellationToken).ConfigureAwait(false);
+
+        for (var i = 0; i < collections.Count; i++)
+        {
+            var collectionIncludes = collections[i].Projection.EntityPaths.Contains("")
+                ? includes?.Find(collections[i].Projection.NavigationPath)
+                : null;
+            await LoadCollectionAsync(collections[i], parents[i], collectionIncludes, loader, dialect, filtersFor, bind, isAsync, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return builders.ConvertAll(static build => build());
+    }
+
+    private static async ValueTask LoadCollectionAsync(
+        ProjectedCollection collection,
+        List<(object?[] Key, IList Items)> parents,
+        IncludeTree? includes,
+        IncludeLoader loader,
+        ISqlDialect dialect,
+        Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> filtersFor,
+        Func<Type, BoundEntity> bind,
+        bool isAsync,
+        CancellationToken cancellationToken)
+    {
+        // A parent without a key, such as one through a missing optional reference, has no elements.
+        var keys = new Dictionary<object?[], List<IList>>(KeyReader.Comparer);
+        foreach (var (key, items) in parents)
+        {
+            if (key.Any(static value => value is null))
+            {
+                continue;
+            }
+
+            if (!keys.TryGetValue(key, out var lists))
+            {
+                keys.Add(key, lists = []);
+            }
+
+            lists.Add(items);
+        }
+
+        if (keys.Count == 0)
+        {
+            return;
+        }
+
+        var navigation = collection.Navigation;
+        var projected = collection.Projection;
+        var target = bind(navigation.TargetClrType);
+        QueryNode chain = new ParentKeysNode(new RootNode(target.ClrType), navigation.TargetKey, [.. keys.Keys]);
+        if (projected.Predicate is { } predicate)
+        {
+            chain = new WhereNode(chain, predicate, projected.SlotValues);
+        }
+
+        // The related entity's key orders the elements last, as EF Core orders them.
+        var ordered = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var ordering in projected.Orderings)
+        {
+            chain = new OrderNode(chain, ordering.PropertyPath, ordering.Descending, isThenBy: ordered.Count > 0);
+            ordered.Add(ordering.PropertyPath);
+        }
+
+        foreach (var key in target.PrimaryKey ?? [])
+        {
+            if (ordered.Add(key.Name))
+            {
+                chain = new OrderNode(chain, key.Name, descending: false, isThenBy: ordered.Count > 1);
+            }
+        }
+
+        // The element reader reads its own paths; the foreign key that matches the parents follows them.
+        var element = new ProjectionNode(chain, [.. projected.PropertyNames, .. navigation.TargetKey], projected.EntityPaths);
+        var statement = SqlBuilder.BuildRows(target, element, dialect, includes, filtersFor, rowLimit: null, bind);
+        var ordinals = Ordinals(element);
+        var foreignKey = new KeyReader([.. navigation.TargetKey.Select((name, k) =>
+            (ordinals[projected.PropertyNames.Count + k], target.GetProperty(name).ClrType))]);
+
+        await loader.LoadAsync(statement, (row, roots) =>
+        {
+            // SQL Server can match string keys that differ in case; EF Core's fixup compares them exactly.
+            if (keys.TryGetValue(foreignKey.Read(row), out var lists))
+            {
+                var item = projected.ReadElement(row, ordinals, roots);
+                foreach (var items in lists)
+                {
+                    items.Add(item);
+                }
+            }
+
+            return true;
+        }, isAsync, cancellationToken).ConfigureAwait(false);
     }
 
     private sealed record PreparedRows<T>(ISqlDialect Dialect, SqlStatement Statement, Func<DbDataReader, T> Materialize);

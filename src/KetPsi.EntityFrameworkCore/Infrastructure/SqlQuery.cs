@@ -1,6 +1,8 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using KetPsi.EntityFrameworkCore.Binding;
 using KetPsi.EntityFrameworkCore.Execution;
 using KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 using KetPsi.EntityFrameworkCore.Query;
@@ -249,6 +251,124 @@ public static class SqlQuery
 
         var query = ToSqlQueryable(source);
         return new ProjectedQueryable<TResult>(query.Context, new ProjectionNode(query.Tail, propertyNames, entityPaths), reader);
+    }
+
+    /// <summary>
+    /// Appends <c>Select</c> with values computed in SQL, such as <c>x.Posts.Count()</c>: the reader reads each one at
+    /// the ordinal after those of <paramref name="propertyNames"/>, in order.
+    /// </summary>
+    /// <param name="source">The entity query.</param>
+    /// <param name="propertyNames">The property paths the reader reads, in the order of its ordinals.</param>
+    /// <param name="entityPaths">The navigation paths of the entities the reader uses, in the order of its entities.</param>
+    /// <param name="values">The computed values the reader reads after the properties, in order.</param>
+    /// <param name="slotValues">The value slots of <paramref name="values"/>.</param>
+    /// <param name="reader">The generated reader: the <c>Select</c> lambda's body over the row's columns, values and entities.</param>
+    /// <exception cref="ArgumentException">The projection reads no property, value or entity.</exception>
+    public static IQueryable<TResult> Select<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TResult>(
+        IQueryable<TSource> source,
+        IReadOnlyList<string> propertyNames,
+        IReadOnlyList<string> entityPaths,
+        IReadOnlyList<ValueTemplate> values,
+        object?[] slotValues,
+        ProjectionReader<TResult> reader)
+        where TSource : class
+    {
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        ArgumentNullException.ThrowIfNull(entityPaths);
+        ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(slotValues);
+        ArgumentNullException.ThrowIfNull(reader);
+        if (propertyNames.Count == 0 && entityPaths.Count == 0 && values.Count == 0)
+        {
+            throw new ArgumentException(ExceptionMessages.ProjectionRequiresColumns, nameof(propertyNames));
+        }
+
+        var query = ToSqlQueryable(source);
+        var projection = new ProjectionNode(query.Tail, propertyNames, entityPaths, values: values, valueSlots: slotValues);
+        return new ProjectedQueryable<TResult>(query.Context, projection, reader);
+    }
+
+    /// <summary>
+    /// Appends <c>Select</c> with collections, such as <c>x.Posts</c> or <c>x.Posts.Select(p =&gt; p.Title).ToList()</c>:
+    /// each is loaded with one more statement after the rows are read, by the keys of their parents. The reader reads a
+    /// row and returns what builds the result once the collections are loaded, with each collection's elements, as a
+    /// <c>List&lt;TElement&gt;</c>, after the entities.
+    /// </summary>
+    /// <param name="source">The entity query.</param>
+    /// <param name="propertyNames">The property paths the reader reads, in the order of its ordinals.</param>
+    /// <param name="entityPaths">The navigation paths of the entities the reader uses, in the order of its entities.</param>
+    /// <param name="values">The computed values the reader reads after the properties, in order.</param>
+    /// <param name="slotValues">The value slots of <paramref name="values"/>.</param>
+    /// <param name="collections">The projected collections, in the order the reader gets them.</param>
+    /// <param name="reader">The generated reader.</param>
+    /// <exception cref="InvalidOperationException">A navigation path does not end at a collection navigation.</exception>
+    /// <exception cref="NotSupportedException">A collection is many-to-many.</exception>
+    public static IQueryable<TResult> Select<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TResult>(
+        IQueryable<TSource> source,
+        IReadOnlyList<string> propertyNames,
+        IReadOnlyList<string> entityPaths,
+        IReadOnlyList<ValueTemplate> values,
+        object?[] slotValues,
+        IReadOnlyList<CollectionProjection> collections,
+        ProjectionReader<Func<TResult>> reader)
+        where TSource : class
+    {
+        ArgumentNullException.ThrowIfNull(propertyNames);
+        ArgumentNullException.ThrowIfNull(entityPaths);
+        ArgumentNullException.ThrowIfNull(values);
+        ArgumentNullException.ThrowIfNull(slotValues);
+        ArgumentNullException.ThrowIfNull(collections);
+        ArgumentNullException.ThrowIfNull(reader);
+        if (collections.Count == 0)
+        {
+            throw new ArgumentException(ExceptionMessages.ProjectionRequiresCollections, nameof(collections));
+        }
+
+        var query = ToSqlQueryable(source);
+        var bind = QueryRunner.Binder(query.Context);
+        var root = QueryRunner.RootEntity(bind, QueryRunner.RootOf(query.Tail));
+        var projection = new ProjectionNode(
+            query.Tail,
+            propertyNames,
+            entityPaths,
+            values: values,
+            valueSlots: slotValues,
+            collections: [.. collections.Select(c => Bind(root, c, bind))],
+            collectionReader: reader);
+
+        // The results are built by the collection reader once the collections are loaded.
+        return new ProjectedQueryable<TResult>(query.Context, projection, static (_, _, _) => throw new UnreachableException());
+    }
+
+    // The collection navigation at the end of a path's references, and the parent key its foreign key matches.
+    private static ProjectedCollection Bind(BoundEntity root, CollectionProjection collection, Func<Type, BoundEntity> bind)
+    {
+        var names = collection.NavigationPath.Split('.');
+        var entity = root;
+        for (var i = 0; i < names.Length - 1; i++)
+        {
+            var reference = entity.GetNavigation(names[i]);
+            if (reference.IsCollection)
+            {
+                throw new NotSupportedException(string.Format(
+                    CultureInfo.InvariantCulture, ExceptionMessages.CollectionNavigationInProjection, entity.ClrType, names[i]));
+            }
+
+            entity = bind(reference.TargetClrType);
+        }
+
+        var navigation = entity.GetNavigation(names[^1]);
+        if (!navigation.IsCollection)
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture, ExceptionMessages.NavigationNotCollection, entity.ClrType, names[^1]));
+        }
+
+        var prefix = string.Join(".", names[..^1]);
+        return new ProjectedCollection(
+            collection,
+            navigation,
+            [.. navigation.SourceKey.Select(key => prefix.Length == 0 ? key.Name : prefix + "." + key.Name)]);
     }
 
     /// <summary>Appends <c>Join</c> with its result selector, which is a projection of both entities.</summary>

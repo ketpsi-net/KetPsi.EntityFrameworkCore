@@ -51,6 +51,127 @@ public sealed class CollectionNavigationEmitTests
     }
 
     [Theory]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, Count = b.Posts.Count() }).ToList();")]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.Any()).ToList();")]
+    [InlineData("var min = 2; var r = db.Blogs.Select(b => new { b.Name, Some = b.Posts.Count(p => p.Id > min), All = b.Posts.All(p => p.Id > b.Rating) }).ToList();")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Posts.Count, Long = b.Posts.LongCount(), Avg = b.Posts.Average(p => p.Id), Max = (int?)b.Posts.Max(p => p.Id), Sum = b.Posts.Sum(p => p.Blog.Price) }).ToList();")]
+    [InlineData("var bonus = 1; var r = db.Blogs.Select(b => new { b.Id, Next = b.Posts.Count() * 2 + bonus, Label = b.Name + b.Posts.Count }).ToList();")]
+    [InlineData("var r = db.Posts.Select(p => new { p.Id, Siblings = p.Blog.Posts.Count(q => q.Id != p.Id) }).ToList();")]
+    [InlineData("var r = db.Blogs.Select(b => new { b, Count = b.Posts.Count }).ToList();")]
+    [InlineData("var r = await db.Blogs.Select(b => b.Posts.Count()).Distinct().ToListAsync(ct);")]
+    [InlineData("var r = db.Blogs.OrderBy(b => b.Id).Skip(1).Take(2).Select(b => new { b.Name, C = b.Posts.Count() }).FirstOrDefault();")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, C = b.Posts.Count() }).Count();")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, Max = b.Posts.Select(p => p.Id).Max() }).OrderBy(x => x.Id).Skip(1).ToList();")]
+    [InlineData("var r = db.Blogs.Where(b => b.Posts.Any()).Select(b => new { b.Id, Max = b.Posts.Where(p => p.Id > 1).Max(p => (int?)p.Id) }).ToList();")]
+    public void CollectionValuesInProjections_CompileInTheGeneratedCode(string body)
+    {
+        var run = GeneratorHost.Run(TestSources.WithBody(body));
+
+        Assert.Empty(run.Diagnostics);
+        Assert.Empty(run.OutputProblems());
+    }
+
+    [Fact]
+    public void ValuesInAProjection_AreReadAfterTheColumnsAndPassedToTheRuntime()
+    {
+        var run = GeneratorHost.Run(TestSources.WithBody("var r = db.Blogs.Select(b => new { C = b.Posts.Count(), b.Name, M = b.Posts.Max(p => p.Id) }).ToList();"));
+
+        var generated = run.Generated(InterceptorEmitter.HintName);
+        Assert.Contains(
+            "new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueTemplate[] { new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.CountValueTemplate(",
+            generated,
+            StringComparison.Ordinal);
+        Assert.Contains("C = (reader.IsDBNull(ordinals[1])", generated, StringComparison.Ordinal);
+        Assert.Contains("Name = (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))", generated, StringComparison.Ordinal);
+
+        // Max of no posts is null, which an int cannot hold, as in EF Core.
+        Assert.Contains(
+            "M = (reader.IsDBNull(ordinals[2]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : reader.GetInt32(ordinals[2]))",
+            generated,
+            StringComparison.Ordinal);
+        Assert.Empty(run.OutputProblems());
+    }
+
+    [Theory]
+    [InlineData("new { L = b.Name + suffix, C = b.Posts.Count(p => p.Id > min) }", "((string)captures[0]!)", "new object?[] { (((int)captures[1]!)) }")]
+    [InlineData("new { C = b.Posts.Count(p => p.Id > min), L = b.Name + suffix }", "((string)captures[1]!)", "new object?[] { (((int)captures[0]!)) }")]
+    public void CapturesOfValuesAndComputedMembers_AreNumberedInSourceOrder(string selector, string suffix, string slots)
+    {
+        var run = GeneratorHost.Run(TestSources.WithBody($"var suffix = \"!\"; var min = 2; var r = db.Blogs.Select(b => {selector}).ToList();"));
+
+        var generated = run.Generated(InterceptorEmitter.HintName);
+        Assert.Contains("var captures = global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.ReadAll(selector);", generated, StringComparison.Ordinal);
+        Assert.Contains(suffix, generated, StringComparison.Ordinal);
+        Assert.Contains(slots, generated, StringComparison.Ordinal);
+        Assert.Empty(run.OutputProblems());
+    }
+
+    [Theory]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.Count()).Sum();", "KP1007")]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.Max(p => p.Blog.Status)).ToList();", "KP2009")]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.Distinct().Count()).ToList();", "KP2005")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, C = b.Posts.Count() }).Where(x => x.C > 1).ToList();", "KP2001")]
+    [InlineData("var r = db.Blogs.Join(db.Posts, b => b.Id, p => p.BlogId, (b, p) => new { b.Id, C = b.Posts.Count() }).ToList();", "KP2009")]
+    [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).Select(g => g.Sum(b => b.Posts.Count())).ToList();", "KP2011")]
+    public void UnsupportedCollectionValuesInProjections_AreReported(string body, string id)
+    {
+        var run = GeneratorHost.Run(TestSources.WithBody(body));
+
+        Assert.Equal(id, Assert.Single(run.Diagnostics).Id);
+    }
+
+    [Theory]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Name, b.Posts }).ToList();")]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts).ToList();")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, Ids = b.Posts.Where(p => p.Id > 1).OrderByDescending(p => p.Id).ThenBy(p => p.Blog.Name).Select(p => p.Id).ToArray() }).ToList();")]
+    [InlineData("var min = 1; var suffix = \"!\"; var r = db.Blogs.Select(b => new { L = b.Name + suffix, Posts = b.Posts.Where(p => p.Id > min).Select(p => new { p.Id, Blog = p.Blog.Name + suffix }).ToList() }).ToList();")]
+    [InlineData("var r = db.Blogs.Select(b => new { b, Ids = b.Posts.Select(p => p.Id) }).ToList();")]
+    [InlineData("var r = db.Posts.Select(p => new { p.Id, Siblings = p.Blog.Posts.Select(q => q.Id).ToList() }).ToList();")]
+    [InlineData("var r = await db.Blogs.Select(b => new { b.Id, b.Posts.Count, Posts = b.Posts.ToList() }).FirstOrDefaultAsync(ct);")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, Ps = b.Posts.Select(p => new { p.Id }) }).ToList();")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, Ps = b.Posts.Select(p => new { p.Id, p.Blog }).ToArray() }).ToList();")]
+    [InlineData("var r = db.Blogs.Where(b => b.Id > 1).OrderBy(b => b.Id).Skip(1).Take(2).Select(b => new { b.Id, b.Posts }).ToList();")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, Last = b.Posts.Select(p => p.Id).ToList().Count }).ToList();")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, Author = b.Author == null ? 0 : b.Author.Id, b.Posts }).ToList();")]
+    public void ProjectedCollections_CompileInTheGeneratedCode(string body)
+    {
+        var run = GeneratorHost.Run(TestSources.WithBody(body));
+
+        Assert.Empty(run.Diagnostics);
+        Assert.Empty(run.OutputProblems());
+    }
+
+    [Fact]
+    public void ProjectedCollection_IsCreatedBeforeTheQuery_AndTheResultIsBuiltLater()
+    {
+        var run = GeneratorHost.Run(TestSources.WithBody(
+            "var min = 1; var r = db.Blogs.Select(b => new { b.Name, Ids = b.Posts.Where(p => p.Id > min).OrderBy(p => p.Id).Select(p => p.Id).ToList() }).ToList();"));
+
+        var generated = run.Generated(InterceptorEmitter.HintName);
+        Assert.Contains("var __kpcollection0 = Collection(\"Posts\", ", generated, StringComparison.Ordinal);
+        Assert.Contains("new object?[] { (((int)captures[0]!)) }", generated, StringComparison.Ordinal);
+        Assert.Contains("new global::KetPsi.EntityFrameworkCore.Infrastructure.CollectionOrdering(\"Id\", false)", generated, StringComparison.Ordinal);
+        Assert.Contains("new global::KetPsi.EntityFrameworkCore.Infrastructure.CollectionProjection[] { __kpcollection0 },", generated, StringComparison.Ordinal);
+        Assert.Contains("var __kp_read1 = Items(entities[0], __kpcollection0); return Build(() => new { Name = __kp_read0, Ids = __kp_read1 });", generated, StringComparison.Ordinal);
+        Assert.Empty(run.OutputProblems());
+    }
+
+    [Theory]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.Skip(1).ToList()).ToList();", "KP2009")]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.Where(p => p.Id > b.Rating).ToList()).ToList();", "KP2009")]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.OrderBy(p => p.Id)).ToList();", "KP2009")]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.Select(p => p.Blog.Posts.Count()).ToList()).ToList();", "KP2009")]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.Select(p => p.Id).First()).ToList();", "KP2009")]
+    [InlineData("var r = db.Blogs.Select(b => b.Posts.OrderBy(p => p.Id + 1).ToList()).ToList();", "KP2009")]
+    [InlineData("var r = db.Blogs.Select(b => new { b.Id, b.Posts }).Distinct().ToList();", "KP1007")]
+    public void UnsupportedProjectedCollections_AreReported(string body, string id)
+    {
+        var run = GeneratorHost.Run(TestSources.WithBody(body));
+
+        Assert.Equal(id, Assert.Single(run.Diagnostics).Id);
+    }
+
+    [Theory]
     [InlineData("var r = db.Blogs.Where(b => b.Id > 1).Select(b => new { b.Id, b.Posts }).Where(x => x.Posts.Any()).ToList();")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).Where(g => g.Any(b => b.Posts.Any())).Select(g => g.Key).ToList();")]
     public void CollectionsOutsideTheEntityPredicate_AreStillReported(string body)

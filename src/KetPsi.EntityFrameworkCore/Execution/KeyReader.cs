@@ -27,6 +27,12 @@ internal sealed class KeyReader
         _key = [.. properties.Select(p => (offset + Ordinal(entity, p), p.ClrType))];
     }
 
+    /// <param name="key">The ordinal of each key column in the row, with its property's CLR type, in key order.</param>
+    public KeyReader(IReadOnlyList<(int Ordinal, Type ClrType)> key)
+    {
+        _key = [.. key];
+    }
+
     /// <summary>The ordinal of the first key column, which is null when a left join found no row.</summary>
     public int FirstOrdinal => _key[0].Ordinal;
 

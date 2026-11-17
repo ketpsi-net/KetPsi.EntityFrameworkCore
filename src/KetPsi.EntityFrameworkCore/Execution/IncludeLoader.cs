@@ -78,7 +78,11 @@ internal sealed class IncludeLoader
         return (_, entities) => entities[root]!;
     }
 
-    private async ValueTask<List<T>> LoadAsync<T>(
+    /// <summary>
+    /// Runs <paramref name="statement"/> and its collection loads, synchronously or not, and returns what
+    /// <paramref name="read"/> builds from each row and its root entities, in row order.
+    /// </summary>
+    public async ValueTask<List<T>> LoadAsync<T>(
         IncludeStatement statement, Func<DbDataReader, object?[], T> read, bool isAsync, CancellationToken cancellationToken)
     {
         var plan = new StatementPlan(statement);

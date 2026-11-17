@@ -41,7 +41,7 @@ internal sealed class SqlBuilder
     private const string GroupValueName = "c";
 
     // An entity query reads its entity, which is the projection of the root path.
-    private static readonly Projection EntityProjection = new([], [RootPath]);
+    private static readonly Projection EntityProjection = new([], [RootPath], [], []);
 
     private readonly BoundEntity _entity;
     private readonly ISqlDialect _dialect;
@@ -234,7 +234,7 @@ internal sealed class SqlBuilder
         var entity = branch.Target.Entity;
         var builder = new SqlBuilder(entity, dialect, filtersFor(entity), filtersFor, bindEntity: null, branch.Target);
         builder.Apply(new RootNode(entity.ClrType));
-        builder.State.Predicates.Add(builder.RenderKeyMatch(branch.Navigation, parentKeys));
+        builder.State.Predicates.Add(builder.RenderKeyMatch(branch.Navigation.TargetKey, parentKeys));
 
         // Children are grouped by parent in memory; within a parent they come in key order, as with EF Core.
         foreach (var key in entity.PrimaryKey ?? [])
@@ -419,14 +419,21 @@ internal sealed class SqlBuilder
 
                 State.Ordering.AddRange(State.Keys.Select(static k => new Ordering(k.Column, Descending: false)));
                 State.Keys = null;
-                State.Pending = new Projection(projection.Columns, projection.EntityPaths);
+                State.Pending = new Projection(projection.Columns, projection.EntityPaths, [], []);
                 break;
             case ProjectionNode projection:
                 // Distinct entity rows are made distinct before they are projected. A projection not selected yet is
                 // replaced: the generator writes the paths of a Select after it through the entities it projects.
                 EnsureEntityRows();
                 WrapIf(State.Distinct);
-                State.Pending = new Projection(projection.Columns, projection.EntityPaths);
+                State.Pending = new Projection(
+                    projection.Columns, projection.EntityPaths, projection.Values, projection.ValueSlots, projection.Collections.Count > 0);
+                break;
+            case DistinctNode when State.Pending is { HasCollections: true }:
+                throw new InvalidOperationException(ExceptionMessages.DistinctWithCollections);
+            case ParentKeysNode keys:
+                EnsureEntityRows();
+                State.Predicates.Add(RenderKeyMatch(keys.PropertyNames, keys.Keys));
                 break;
             case DistinctNode:
                 // Distinct applies to the rows the operators selected, and distinct rows have no order, as in EF Core.
@@ -947,6 +954,12 @@ internal sealed class SqlBuilder
             columns.Add(ResolveColumn(path));
         }
 
+        // Values computed in SQL, such as a count of a collection, come next; the entities' columns follow them.
+        foreach (var value in projection.Values)
+        {
+            columns.Add(Computed(RenderEntityValue(value, projection.ValueSlots).Sql));
+        }
+
         var offsets = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var path in projection.EntityPaths)
         {
@@ -1326,9 +1339,9 @@ internal sealed class SqlBuilder
 
     private static string Append(string path, string name) => path.Length == 0 ? name : path + "." + name;
 
-    private string RenderKeyMatch(BoundNavigation navigation, IReadOnlyCollection<IReadOnlyList<object?>> parentKeys)
+    private string RenderKeyMatch(IReadOnlyList<string> keyNames, IReadOnlyCollection<IReadOnlyList<object?>> parentKeys)
     {
-        var columns = navigation.TargetKey.Select(_entity.GetProperty).ToArray();
+        var columns = keyNames.Select(_entity.GetProperty).ToArray();
         if (columns.Length == 1)
         {
             var list = AddParameter(_dialect.CreateListParameterValue(parentKeys.Select(k => columns[0].ToProvider(k[0]))), property: null);
@@ -1391,7 +1404,8 @@ internal sealed class SqlBuilder
     // The entity columns a derived table selects: every one, or only those a pending projection reads.
     private IEnumerable<BoundProperty> RootProperties(Projection? pending)
     {
-        if (pending is null || pending.EntityPaths.Contains(RootPath))
+        // A computed value, such as a collection's subquery, can read any column, its keys included.
+        if (pending is null || pending.EntityPaths.Contains(RootPath) || pending.Values.Count > 0)
         {
             return _entity.Properties;
         }
@@ -2213,9 +2227,13 @@ internal sealed class SqlBuilder
             throw new InvalidOperationException(ExceptionMessages.AggregateNeedsColumnOnly);
         }
 
-        return State.Columns is [var single]
-            ? single
-            : throw new InvalidOperationException(ExceptionMessages.AggregateNeedsOneColumn);
+        return State.Columns switch
+        {
+            // SQL Server can't aggregate a subquery; EF Core rewrites it with OUTER APPLY.
+            [{ IsComputed: true }] => throw new NotSupportedException(ExceptionMessages.AggregateOfSubquery),
+            [var single] => single,
+            _ => throw new InvalidOperationException(ExceptionMessages.AggregateNeedsOneColumn),
+        };
     }
 
     // The projected columns, or every entity column for an entity query.
@@ -2275,8 +2293,16 @@ internal sealed class SqlBuilder
 
     private readonly record struct Ordering(SqlColumn Column, bool Descending);
 
-    /// <summary>What a projection selects: property paths, then the entities at navigation paths.</summary>
-    private sealed record Projection(IReadOnlyList<string> Columns, IReadOnlyList<string> EntityPaths);
+    /// <summary>
+    /// What a projection selects: property paths, then values computed in SQL with their slots, then the entities at
+    /// navigation paths.
+    /// </summary>
+    private sealed record Projection(
+        IReadOnlyList<string> Columns,
+        IReadOnlyList<string> EntityPaths,
+        IReadOnlyList<ValueTemplate> Values,
+        IReadOnlyList<object?> ValueSlots,
+        bool HasCollections = false);
 
     /// <summary>A table a navigation path reaches, and whether it has a row for every row of the query.</summary>
     private sealed record JoinTarget(string Alias, BoundEntity Entity, bool AlwaysExists);
