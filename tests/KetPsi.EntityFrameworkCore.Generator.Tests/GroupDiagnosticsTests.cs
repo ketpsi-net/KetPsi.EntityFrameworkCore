@@ -5,6 +5,12 @@ namespace KetPsi.EntityFrameworkCore.Generator.Tests;
 public sealed class GroupDiagnosticsTests
 {
     [Theory]
+    [InlineData("var r = db.Blogs.GroupBy(b => b.Rating > 3).Select(g => new { g.Key, C = g.Count() }).ToList();")]
+    [InlineData("var r = db.Blogs.GroupBy(b => new { b.Status, Big = b.Rating > 3, Half = b.Rating / 2 }).Select(g => new { g.Key.Big, g.Key.Half, C = g.Count() }).ToList();")]
+    [InlineData("var two = 2; var r = db.Blogs.GroupBy(b => b.Rating * two).Where(g => g.Count() > 1).OrderBy(g => g.Key).Select(g => new { g.Key, S = g.Sum(b => b.Price) }).ToList();")]
+    [InlineData("var r = db.Blogs.GroupBy(b => b.Name.Substring(0, 1).ToUpper()).Select(g => new { First = g.Key, C = g.Count() }).Skip(1).Take(2).ToList();")]
+    [InlineData("var r = db.Blogs.GroupBy(b => b.Views ?? 0, b => b.Price).Select(g => new { g.Key, Max = g.Max() }).ToList();")]
+    [InlineData("var r = db.Blogs.GroupBy(b => b.Rating > 3).Count();")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Status).Select(g => new { g.Key, Count = g.Count() }).ToList();")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Rating).Select(g => g.Key).ToList();")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Status).Select(g => new { g.Key, S = g.Sum(b => b.Rating), A = g.Average(b => b.Price), Mi = g.Min(b => b.Name), Ma = g.Max(b => b.Views), L = g.LongCount() }).ToList();")]
@@ -44,11 +50,10 @@ public sealed class GroupDiagnosticsTests
     }
 
     [Theory]
-    [InlineData("var r = db.Blogs.GroupBy(b => b.Rating > 3).Select(g => g.Count()).ToList();", "KP2010", "b.Rating > 3")]
     [InlineData("var r = db.Blogs.GroupBy(b => 1).Select(g => g.Count()).ToList();", "KP2010", "1")]
+    [InlineData("var r = db.Blogs.GroupBy(b => b.Rating > 3).ToList();", "KP1008", "ToList")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Author).Select(g => g.Count()).ToList();", "KP2010", "b.Author")]
     [InlineData("var r = db.Blogs.GroupBy(b => ValueTuple.Create(b.Status, b.Rating)).Select(g => g.Count()).ToList();", "KP2010", "ValueTuple.Create(b.Status, b.Rating)")]
-    [InlineData("var r = db.Blogs.GroupBy(b => new { b.Status, Big = b.Rating > 3 }).Select(g => g.Count()).ToList();", "KP2010", "Big = b.Rating > 3")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Status).Select(g => g.OrderBy(b => b.Id).First()).ToList();", "KP2011", "g.OrderBy(b => b.Id).First()")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Status).Select(g => new { g.Key, Items = g.ToList() }).ToList();", "KP2011", "g.ToList()")]
     [InlineData("var r = db.Blogs.GroupBy(b => b.Status).Select(g => g).ToList();", "KP2011", "g")]

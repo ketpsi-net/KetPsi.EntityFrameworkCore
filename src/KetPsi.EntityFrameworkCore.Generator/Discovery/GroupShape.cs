@@ -43,11 +43,20 @@ internal enum GroupKeyKind
     Anonymous,
 }
 
-/// <summary>A part of the key: the property it reads from the grouped entity, through reference navigations.</summary>
+/// <summary>
+/// A part of the key: the property it reads from the grouped entity, through reference navigations, or a value the
+/// database computes from the row, such as <c>x.CreatedAt.Year</c>.
+/// </summary>
 /// <param name="MemberName">The member of a composite key, or <see langword="null"/> for a single key.</param>
-/// <param name="Path">The properties read from the entity, the last one a column.</param>
+/// <param name="Path">The properties read from the entity, the last one a column; empty for a computed part.</param>
 /// <param name="Owner">The entity that declares the column.</param>
-internal sealed record KeyPart(string? MemberName, IReadOnlyList<IPropertySymbol> Path, INamedTypeSymbol Owner);
+/// <param name="TemplateCode">For a computed part, C# that constructs its value template.</param>
+/// <param name="Type">For a computed part, its type.</param>
+internal sealed record KeyPart(
+    string? MemberName, IReadOnlyList<IPropertySymbol> Path, INamedTypeSymbol Owner, string? TemplateCode = null, ITypeSymbol? Type = null)
+{
+    public bool IsComputed => TemplateCode is not null;
+}
 
 /// <summary>
 /// What the group's elements are: the entity itself, one of its properties, or an anonymous type of its properties.

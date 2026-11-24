@@ -394,9 +394,13 @@ var stats = await db.Posts
     .ToListAsync(ct);
 ```
 
-- Keys: a property, one through reference navigations (`p => p.Blog.Name`, joined like an included reference), or an
-  anonymous type of them. Computed, constant and entity keys are KP2010, and so are `ValueTuple.Create` keys, which EF
-  Core cannot translate either.
+- Keys: a property, one through reference navigations (`p => p.Blog.Name`, joined like an included reference), a value
+  the database computes from the row (`o => o.CreatedAt.Year`, `o => o.Price > 100`, `o => o.Quantity / 10`,
+  `o => o.Name.Substring(0, 1)`, `o => o.Discount ?? 0`), or an anonymous type of them
+  (`o => new { o.CreatedAt.Year, o.CreatedAt.Month }`). The rows are grouped by the expression itself; a null in a
+  computed key read into a non-nullable type throws, as in EF Core. Constant keys (`o => 1`), enum or converted
+  computed keys, and entity keys are KP2010, and so are `ValueTuple.Create` keys, which EF Core cannot translate
+  either. The groups of a computed key can only be selected from (KP1008), not returned with `ToList`.
 - Group values: `g.Key` and its members, `g.Count()`, `g.LongCount()`, `g.Count(predicate)` and
   `g.Where(predicate).Count()` (`COUNT(CASE WHEN ...)`), `g.Sum/Average/Min/Max(x => x.Property)`, and
   `g.Select(x => x.Property).Distinct().Count()` (`COUNT(DISTINCT ...)`). With an element selector that reads one
@@ -496,7 +500,7 @@ Same behavior as EF Core:
 | KP2007 | Move the value into a local variable before the query, or make what it calls accessible to the assembly |
 | KP2008 | Order by a property, or a value computed from properties with operators, `?:` and `??` |
 | KP2009 | Keep projected collections to `Where`, `OrderBy`/`ThenBy` and one `Select`, ending in `ToList()` or `ToArray()`, without reading the projected row; avoid instance methods in projections; aggregate one property; make projected types accessible |
-| KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
+| KP2010 | Group by properties, ones through reference navigations, values computed from the row, or an anonymous type of them |
 | KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
 | KP2012 | Join a filtered `DbSet` on properties: properties or navigations on the outer side, the inner entity's own properties on the inner side |
 | KP2013 | Set a mapped property of the updated entity itself in `ExecuteUpdate` (`p => p.Title`), with a value the database can compute |

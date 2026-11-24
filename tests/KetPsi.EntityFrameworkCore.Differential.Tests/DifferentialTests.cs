@@ -677,6 +677,22 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "UpdateGadgetsAsync", [] },
             { "UpdateTrackedGadget", [] },
             { "UpdateTicketsConverted", [] },
+            { "GadgetsByCreatedYear", [] },
+            { "GadgetsByYearAndMonth", [] },
+            { "GadgetsByExpensive", [] },
+            { "GadgetsByQuantityBucket", [] },
+            { "GadgetsByFirstLetter", [] },
+            { "GadgetsByShippedYear", [] },
+            { "GadgetsByNullableShippedYear", [] },
+            { "GadgetsByScaledQuantity", [3] },
+            { "YearsWithManyGadgets", [] },
+            { "GadgetMonthsPaged", [] },
+            { "CountGadgetDays", [] },
+            { "GadgetsByCategoryAndStocked", [] },
+            { "GadgetPricesByDiscount", [] },
+            { "GadgetsByRoundedPrice", [] },
+            { "GadgetsByCreatedDate", [] },
+            { "GadgetsByCategoryName", [] },
         };
 
 #if NET10_0_OR_GREATER
@@ -748,7 +764,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "GadgetsOrderedByNameLength", "GadgetsOrderedByTotal", "GadgetsOrderedByCodeOrName", "GadgetsOrderedByActive",
         "GadgetsOrderedByLowerName", "GadgetsOrderedByDiscount", "GadgetsOrderedByCategoryAndName", "GadgetsOrderedByVariable",
         "GadgetsPagedByTotal", "AuthorsOrderedByBlogCount", "BlogsOrderedByPostCount", "BlogsPagedByPostCount",
-        "CategoriesOrderedByAverageRating", "BlogCountsPaged", "BlogPostsPaged",
+        "CategoriesOrderedByAverageRating", "BlogCountsPaged", "BlogPostsPaged", "GadgetMonthsPaged",
     };
 
     private static string Key(string query, object?[] arguments)

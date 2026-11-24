@@ -179,8 +179,9 @@ a `Select` on the groups reads `g.Key`, its members and aggregates of one proper
 and `OrderBy` on the groups, before or after the `Select`, become `HAVING` and `ORDER BY`; paging, `Distinct`,
 aggregates and terminals can follow the `Select`. `Count` and `Any` of the groups run on the database. Returning the
 groups themselves (`ToList`, `foreach`) reads the rows ordered by the key and groups them in memory, as EF Core does,
-with tracked elements. Not supported yet: the group's rows inside a `Select` (`g.First()`, `g.ToList()`), aggregates
-through navigations, and computed or constant keys.
+with tracked elements. Keys can be computed from the row (`o => o.CreatedAt.Year`, `o => new { o.CreatedAt.Year,
+Big = o.Price > 100 }`); those groups are selected from rather than returned. Not supported yet: the group's rows inside
+a `Select` (`g.First()`, `g.ToList()`), aggregates through navigations, and constant keys.
 
 ## Native AOT
 
@@ -219,7 +220,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP1009 | Query syntax over a query, which interceptors cannot replace; use method syntax |
 | KP2001–KP2008 | Expression, navigation, method, `EF.Functions`, collection, property comparison, value or order key not translatable; a value is KP2007 only when the generated code can't compute it, such as a call to a private method |
 | KP2009 | Projection not supported: a projected collection with other operators or reading the projected row, a `Min` or `Max` of an enum or converted type, an instance method or `this`, a computed aggregate selector, or a type the generated code cannot reach |
-| KP2010 | `GroupBy` key not supported: a computed, constant, entity or `ValueTuple.Create` key |
+| KP2010 | `GroupBy` key not supported: a constant, entity, enum or converted computed, or `ValueTuple.Create` key |
 | KP2011 | Group expression not supported: the group's rows (`g.First()`, `g.ToList()`), an aggregate through a navigation or with a computed selector |
 | KP2012 | Join not supported: an inner sequence that is not a filtered `DbSet`, an inner key through a navigation, or a computed key |
 | KP2013 | `ExecuteUpdate` setter not supported: a property through a navigation or not mapped |

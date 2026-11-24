@@ -573,6 +573,11 @@ internal static class InterceptorEmitter
             .Close()
             .Line();
 
+        if (groupBy.KeyParameter is { } keyParameter)
+        {
+            writer.Line($"var keyCaptures = {CapturedValues}.ReadAll({keyParameter});");
+        }
+
         // A result selector returns its own results, never the groups, so it reads no element.
         var result = groupBy.Result;
         string elementPaths, elementEntityPaths, elementReader;
@@ -591,7 +596,16 @@ internal static class InterceptorEmitter
         writer
             .Line($"var groups = {SqlGrouping}.GroupBy<{entity}, {key}, {element}>(")
             .Line("    query,")
-            .Line($"    {Strings(groupBy.KeyPaths)},")
+            .Line($"    {Strings(groupBy.KeyPaths)},");
+        if (groupBy.KeyValues.Count > 0)
+        {
+            // The computed parts of the key, and the values their templates read.
+            writer
+                .Line($"    new {ValueTemplate}?[] {{ {string.Join(", ", groupBy.KeyValues)} }},")
+                .Line($"    {Slots(groupBy.KeySlots)},");
+        }
+
+        writer
             .Line($"    ({ProjectionReader}<{key}>)(object){ReaderHelper}({groupBy.KeyReaderCode}),")
             .Line($"    {elementPaths},")
             .Line($"    {elementEntityPaths},")

@@ -448,6 +448,8 @@ internal sealed class SqlBuilder
                 WrapIf(State.Limit is not null || State.Distinct);
                 State.Limit = AddParameter(take.Count, property: null);
                 break;
+            case ProjectionNode when State.Keys is not null && State.Keys.Any(static k => k.Column.IsComputed):
+                throw new NotSupportedException(ExceptionMessages.GroupRowsWithComputedKey);
             case ProjectionNode projection when State.Keys is not null:
                 // The groups themselves: EF Core reads each row's key and element ordered by the key, and groups them in
                 // memory. Groups filtered or ordered by an aggregate can only be selected from.
@@ -486,7 +488,9 @@ internal sealed class SqlBuilder
                 EnsureNotProjected();
                 WrapIf(State.HasPaging || State.Distinct);
                 State.Ordering.Clear();
-                State.Keys = [.. group.KeyPaths.Select(ResolveKey)];
+                State.Keys = [.. group.KeyPaths.Select((path, i) => group.KeyValues?[i] is { } computed
+                    ? ComputedKey(computed, group.KeySlots)
+                    : ResolveKey(path))];
                 break;
             case HavingNode having:
                 EnsureGroupsNotPaged();
@@ -700,6 +704,28 @@ internal sealed class SqlBuilder
     }
 
     /// <summary>The column a key path reads, joining the navigations it goes through.</summary>
+    // A key computed from the row, such as DATEPART(year, ...): the rows are grouped by the expression itself, as SQL
+    // Server allows; EF Core selects it in a derived table first, which groups the same rows.
+    private GroupKey ComputedKey(ValueTemplate template, IReadOnlyList<object?> values)
+    {
+        var value = RenderEntityValue(template, values);
+        var type = value.ClrType ?? typeof(object);
+        var storeType = type == typeof(int) ? "int"
+            : type == typeof(long) ? "bigint"
+            : type == typeof(short) ? "smallint"
+            : type == typeof(byte) ? "tinyint"
+            : type == typeof(bool) ? "bit"
+            : type == typeof(decimal) ? "decimal(38, 17)"
+            : type == typeof(double) ? "float"
+            : type == typeof(float) ? "real"
+            : type == typeof(DateTime) ? "datetime2"
+            : type == typeof(DateOnly) ? "date"
+            : type == typeof(TimeSpan) || type == typeof(TimeOnly) ? "time"
+            : type == typeof(Guid) ? "uniqueidentifier"
+            : "nvarchar(max)";
+        return new GroupKey(Computed(value.Sql), new BoundProperty(GroupValueName, GroupValueName, storeType, value.IsNullable || value.IsNull, type, IsShadow: false));
+    }
+
     private GroupKey ResolveKey(string path)
     {
         var dot = path.LastIndexOf('.');

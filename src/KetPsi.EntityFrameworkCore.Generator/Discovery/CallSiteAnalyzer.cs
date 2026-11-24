@@ -40,6 +40,8 @@ internal static partial class CallSiteAnalyzer
     private const string ReasonGroupsAfterFilter =
         "groups filtered or ordered by the database are only read through a Select of their key and aggregates";
     private const string GroupingType = "System.Linq.IGrouping<TKey, TElement>";
+    private const string ReasonGroupsWithComputedKey =
+        "the groups of a computed key are only read through a Select of their key and aggregates";
 
     // Names of every method the classification below handles; anything else is not looked at.
     private static readonly HashSet<string> OperatorNames = new(StringComparer.Ordinal)
@@ -636,7 +638,9 @@ internal static partial class CallSiteAnalyzer
             case Family.Enumerable when parameters.Length == 1 && name is "ToList" or "ToArray":
                 return grouped.IsFiltered
                     ? site.Reject(DiagnosticDescriptors.OperatorOnGroupsNotSupported, method.Name, ReasonGroupsAfterFilter)
-                    : site.OnGroups(name == "ToList" ? OperatorKind.ToList : OperatorKind.ToArray, group, lambdaOrdinal: null, isAsync);
+                    : group.KeyParts.Any(static p => p.IsComputed)
+                        ? site.Reject(DiagnosticDescriptors.OperatorOnGroupsNotSupported, method.Name, ReasonGroupsWithComputedKey)
+                        : site.OnGroups(name == "ToList" ? OperatorKind.ToList : OperatorKind.ToArray, group, lambdaOrdinal: null, isAsync);
             case Family.Enumerable or Family.DbSet:
                 // Enumerating the groups runs the query.
                 return null;
@@ -1098,6 +1102,7 @@ internal static partial class CallSiteAnalyzer
             model = model with
             {
                 ElementParameter = hasElementSelector && model.ElementCaptureCount > 0 ? signature.Parameters[2].Name : null,
+                KeyParameter = model.KeySlots.Count > 0 ? signature.Parameters[1].Name : null,
                 Result = model.Result is { } result ? result with { CaptureParameter = signature.Parameters[signature.Parameters.Count - 1].Name } : null,
             };
 

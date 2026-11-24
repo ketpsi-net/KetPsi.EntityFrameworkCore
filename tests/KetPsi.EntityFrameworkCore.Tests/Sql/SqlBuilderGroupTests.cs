@@ -47,6 +47,42 @@ public sealed class SqlBuilderGroupTests : SqlBuilderTestBase, IDisposable
             Sql(Select(GroupBy(Items, nameof(Item.IsActive), nameof(Item.Score)), GroupValue.Key(1), Key0, CountAll)));
 
     [Fact]
+    public void ComputedKey_GroupsByTheExpression_WithItsParametersOnce()
+    {
+        var doubled = new BinaryValueTemplate(ValueOperator.Multiply, new PropertyValueTemplate(nameof(Item.Score)), new SlotValueTemplate(0));
+        var groups = SqlGrouping.GroupBy<Item, object, Item>(
+            Items, ["", nameof(Item.IsActive)], [doubled, null], [2], static (_, _, _) => null!, [], [""], static (_, _, entities) => (Item)entities[0]!);
+
+        Assert.Equal(
+            "SELECT [t0].[Score] * @p0, [t0].[IsActive], COUNT(*) FROM " + Table + " GROUP BY [t0].[Score] * @p0, [t0].[IsActive]",
+            Sql(Select(groups, Key0, GroupValue.Key(1), CountAll)));
+    }
+
+    [Fact]
+    public void ComputedKey_HavingAndOrdering_ReadTheExpression()
+    {
+        var length = new FunctionValueTemplate(ValueFunction.Length, new PropertyValueTemplate(nameof(Item.Name)));
+        var groups = SqlGrouping.GroupBy<Item, object, Item>(
+            Items, [""], [length], [], static (_, _, _) => null!, [], [""], static (_, _, entities) => (Item)entities[0]!);
+        var ordered = SqlGrouping.OrderByDescending(SqlGrouping.Where(groups, new ComparisonTemplate("0", ComparisonOperator.GreaterThan, 0), [CountAll], [1]), Key0, []);
+
+        Assert.Equal(
+            "SELECT CAST(LEN([t0].[Name]) AS int), COUNT(*) FROM " + Table + " GROUP BY CAST(LEN([t0].[Name]) AS int) HAVING COUNT(*) > @p0 ORDER BY CAST(LEN([t0].[Name]) AS int) DESC",
+            Sql(Select(ordered, Key0, CountAll)));
+    }
+
+    [Fact]
+    public void ComputedKey_GroupRows_AreNotSupported()
+    {
+        var groups = SqlGrouping.GroupBy<Item, object, Item>(
+            Items, [""], [new FunctionValueTemplate(ValueFunction.Abs, new PropertyValueTemplate(nameof(Item.Id)))], [], static (_, _, _) => null!, [], [""], static (_, _, entities) => (Item)entities[0]!);
+
+        Assert.Throws<NotSupportedException>(() => GroupRowsSql(groups, nameof(Item.Id)));
+        Assert.Throws<ArgumentException>(() => SqlGrouping.GroupBy<Item, object, Item>(
+            Items, [""], [null], [], static (_, _, _) => null!, [], [""], static (_, _, entities) => (Item)entities[0]!));
+    }
+
+    [Fact]
     public void CountWithPredicate_CountsTheMatchingRows()
         => Assert.Equal(
             "SELECT COUNT(CASE WHEN [t0].[Id] > @p0 THEN 1 END), COUNT_BIG(CASE WHEN [t0].[Id] > @p1 THEN 1 END)" + GroupByScore,

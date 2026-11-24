@@ -182,6 +182,9 @@ internal static class ExceptionMessages
     public const string FindValueTypeMismatch =
         "The key value at position {0} of the call to 'DbSet<{1}>.Find' was of type '{2}', which does not match the property type of '{3}'.";
 
+    public const string GroupRowsWithComputedKey =
+        "The groups of a GroupBy with a computed key cannot be returned yet; select their key and aggregates instead.";
+
     public const string UpdateWithoutSetters =
         "An ExecuteUpdate call must set at least one property, as in EF Core.";
 

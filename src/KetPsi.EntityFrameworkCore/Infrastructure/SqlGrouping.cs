@@ -77,6 +77,57 @@ public static class SqlGrouping
         return new GroupedQueryable<TKey, TElement>(query.Context, group, keyReader, elementReader);
     }
 
+    /// <summary>
+    /// Appends <c>GroupBy</c> with a computed key, such as <c>x =&gt; x.CreatedAt.Year</c> or
+    /// <c>x =&gt; new { x.CreatedAt.Year, Big = x.Price &gt; 100 }</c>: each part is a property path or a value the database
+    /// computes, which the rows are grouped by, as EF Core groups them. The groups themselves cannot be returned; select
+    /// their key and aggregates.
+    /// </summary>
+    /// <param name="source">The entity query.</param>
+    /// <param name="keyPaths">For each key part, its property path, or an empty string for a computed part.</param>
+    /// <param name="keyValues">For each key part, its computed value, or <see langword="null"/> for a property path.</param>
+    /// <param name="keySlots">The value slots of <paramref name="keyValues"/>.</param>
+    /// <param name="keyReader">The generated key reader: its ordinals are those of the key parts, in order.</param>
+    /// <param name="elementPropertyNames">The property paths the element reader reads, in the order of its ordinals.</param>
+    /// <param name="elementEntityPaths">The navigation paths of the entities the element reader uses.</param>
+    /// <param name="elementReader">The generated element reader.</param>
+    /// <exception cref="ArgumentException">The key has no part, or a part is neither a path nor a computed value.</exception>
+    public static IQueryable<IGrouping<TKey, TElement>> GroupBy<[DynamicallyAccessedMembers(EntityMembers.Required)] TSource, TKey, TElement>(
+        IQueryable<TSource> source,
+        IReadOnlyList<string> keyPaths,
+        IReadOnlyList<ValueTemplate?> keyValues,
+        object?[] keySlots,
+        ProjectionReader<TKey> keyReader,
+        IReadOnlyList<string> elementPropertyNames,
+        IReadOnlyList<string> elementEntityPaths,
+        ProjectionReader<TElement> elementReader)
+        where TSource : class
+    {
+        ArgumentNullException.ThrowIfNull(keyPaths);
+        ArgumentNullException.ThrowIfNull(keyValues);
+        ArgumentNullException.ThrowIfNull(keySlots);
+        ArgumentNullException.ThrowIfNull(keyReader);
+        ArgumentNullException.ThrowIfNull(elementPropertyNames);
+        ArgumentNullException.ThrowIfNull(elementEntityPaths);
+        ArgumentNullException.ThrowIfNull(elementReader);
+        if (keyPaths.Count == 0 || keyValues.Count != keyPaths.Count)
+        {
+            throw new ArgumentException(ExceptionMessages.GroupKeyRequired, nameof(keyPaths));
+        }
+
+        for (var i = 0; i < keyPaths.Count; i++)
+        {
+            if (keyValues[i] is null)
+            {
+                ArgumentException.ThrowIfNullOrEmpty(keyPaths[i], nameof(keyPaths));
+            }
+        }
+
+        var query = SqlQuery.ToSqlQueryable(source);
+        var group = new GroupByNode(query.Tail, [.. keyPaths], [.. elementPropertyNames], [.. elementEntityPaths], [.. keyValues], keySlots);
+        return new GroupedQueryable<TKey, TElement>(query.Context, group, keyReader, elementReader);
+    }
+
     /// <summary>Appends <c>Where</c> on the groups: the predicate becomes a <c>HAVING</c> condition.</summary>
     /// <param name="source">The grouped query.</param>
     /// <param name="predicate">The predicate over <paramref name="operands"/>: property name <c>"0"</c> is <c>operands[0]</c>.</param>
