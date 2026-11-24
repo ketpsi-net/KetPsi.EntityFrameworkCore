@@ -161,6 +161,21 @@ internal static class QueryRunner
         return QueryExecutor.ExecuteNonQueryAsync(query.Context, dialect, statement, cancellationToken);
     }
 
+    public static int ExecuteUpdate<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(SqlQueryable<T> query, IReadOnlyList<UpdateSetter> setters)
+        where T : class
+    {
+        var (dialect, statement) = PrepareUpdate(query, setters);
+        return QueryExecutor.ExecuteNonQuery(query.Context, dialect, statement);
+    }
+
+    public static Task<int> ExecuteUpdateAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query, IReadOnlyList<UpdateSetter> setters, CancellationToken cancellationToken)
+        where T : class
+    {
+        var (dialect, statement) = PrepareUpdate(query, setters);
+        return QueryExecutor.ExecuteNonQueryAsync(query.Context, dialect, statement, cancellationToken);
+    }
+
     /// <summary>The tracking behavior of a query: the last <c>AsTracking</c> or <c>AsNoTracking</c>, else the context default.</summary>
     internal static QueryTrackingBehavior ResolveTracking(QueryNode tail, QueryTrackingBehavior contextDefault)
     {
@@ -282,6 +297,19 @@ internal static class QueryRunner
         var dialect = SqlDialects.Resolve(context.Database.ProviderName);
         var statement = SqlBuilder.BuildDelete(
             entity, query.Tail, dialect, IncludeTree.FromChain(entity, query.Tail, bind), FiltersFor(context, query.Tail), bind);
+        return (dialect, statement);
+    }
+
+    private static (ISqlDialect Dialect, SqlStatement Statement) PrepareUpdate<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        SqlQueryable<T> query, IReadOnlyList<UpdateSetter> setters)
+        where T : class
+    {
+        var context = query.Context;
+        var bind = Binder(context);
+        var entity = RootEntity(bind, query.Root);
+        var dialect = SqlDialects.Resolve(context.Database.ProviderName);
+        var statement = SqlBuilder.BuildUpdate(
+            entity, query.Tail, dialect, IncludeTree.FromChain(entity, query.Tail, bind), FiltersFor(context, query.Tail), setters, bind);
         return (dialect, statement);
     }
 

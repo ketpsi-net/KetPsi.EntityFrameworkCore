@@ -8,6 +8,8 @@ internal static class ExceptionMessages
     public const string SumNeedsNumericType =
         "Sum and Average work in int, long, decimal, double or float.";
 
+    public const string UpdateWithoutAssignments = "An UPDATE statement sets at least one column.";
+
     public const string FunctionArgumentCount =
         "{0} takes {1} argument(s).";
 

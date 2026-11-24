@@ -327,6 +327,21 @@ public sealed class SqlServerDialect : ISqlDialect
     }
 
     /// <inheritdoc/>
+    public string Update(string alias, IReadOnlyList<string> assignments, string from)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(alias);
+        ArgumentNullException.ThrowIfNull(assignments);
+        ArgumentException.ThrowIfNullOrEmpty(from);
+        if (assignments.Count == 0)
+        {
+            throw new ArgumentException(ExceptionMessages.UpdateWithoutAssignments, nameof(assignments));
+        }
+
+        var update = "UPDATE " + alias + " SET " + string.Join(", ", assignments) + " FROM " + from;
+        return SetsNoCountOff ? NoCountOff + update : update;
+    }
+
+    /// <inheritdoc/>
     public string Exists(string subquery)
     {
         ArgumentException.ThrowIfNullOrEmpty(subquery);

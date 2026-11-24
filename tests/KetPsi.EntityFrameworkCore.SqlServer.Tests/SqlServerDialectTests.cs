@@ -206,6 +206,20 @@ public sealed class SqlServerDialectTests
 
     // EF Core 11 sends SET NOCOUNT OFF first, so the row count is right on a server that has NOCOUNT on.
     [Fact]
+    public void Update_SetsTheAssignmentsOnTheAliasedTable()
+        => Assert.Equal(
+            (typeof(DbContext).Assembly.GetName().Version!.Major >= 11 ? "SET NOCOUNT OFF; " : "")
+                + "UPDATE [b] SET [b].[Name] = @p0, [b].[Rating] = [b].[Rating] + 1 FROM [Blogs] AS [b] WHERE [b].[Id] = @p1",
+            Dialect.Update("[b]", ["[b].[Name] = @p0", "[b].[Rating] = [b].[Rating] + 1"], "[Blogs] AS [b] WHERE [b].[Id] = @p1"));
+
+    [Fact]
+    public void Update_WithoutAssignments_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => Dialect.Update("[b]", [], "[Blogs] AS [b]"));
+        Assert.ThrowsAny<ArgumentException>(() => Dialect.Update("", ["[b].[Name] = @p0"], "[Blogs] AS [b]"));
+    }
+
+    [Fact]
     public void Delete_DeletesFromTheAliasedTable()
         => Assert.Equal(
             (typeof(DbContext).Assembly.GetName().Version!.Major >= 11 ? "SET NOCOUNT OFF; " : "")

@@ -621,6 +621,27 @@ public static class SqlQuery
         where T : class
         => QueryRunner.ExecuteDeleteAsync(ToSqlQueryable(source), cancellationToken);
 
+    /// <summary>
+    /// Sets properties on the rows the query selects and returns how many were updated: <c>ExecuteUpdate</c>. Entities the
+    /// context already tracks keep their values, as in EF Core.
+    /// </summary>
+    /// <param name="source">The entity query.</param>
+    /// <param name="setters">The properties to set and their values, in order.</param>
+    /// <exception cref="InvalidOperationException">There is no setter.</exception>
+    public static int ExecuteUpdate<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(IQueryable<T> source, IReadOnlyList<UpdateSetter> setters)
+        where T : class
+        => QueryRunner.ExecuteUpdate(ToSqlQueryable(source), setters);
+
+    /// <summary>Sets properties on the rows the query selects and returns how many were updated: <c>ExecuteUpdateAsync</c>.</summary>
+    /// <param name="source">The entity query.</param>
+    /// <param name="setters">The properties to set and their values, in order.</param>
+    /// <param name="cancellationToken">Cancels the statement.</param>
+    /// <exception cref="InvalidOperationException">There is no setter.</exception>
+    public static Task<int> ExecuteUpdateAsync<[DynamicallyAccessedMembers(EntityMembers.Required)] T>(
+        IQueryable<T> source, IReadOnlyList<UpdateSetter> setters, CancellationToken cancellationToken = default)
+        where T : class
+        => QueryRunner.ExecuteUpdateAsync(ToSqlQueryable(source), setters, cancellationToken);
+
     /// <summary>Finds an entity by its primary key: <c>DbSet.Find</c>.</summary>
     /// <param name="set">The set the entity belongs to.</param>
     /// <param name="keyValues">The key values in key order; with a <see langword="null"/> the result is <see langword="null"/>.</param>

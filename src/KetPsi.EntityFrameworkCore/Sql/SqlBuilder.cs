@@ -247,6 +247,45 @@ internal sealed class SqlBuilder
     }
 
     /// <summary>
+    /// Builds the <c>ExecuteUpdate</c> statement for the chain ending at <paramref name="tail"/>, as EF Core does: the
+    /// rows the chain selects get the setters' values, computed from each row. A chain without paging updates its own
+    /// <c>FROM</c>, joins included; one with paging updates the rows whose keys a derived table selects.
+    /// </summary>
+    /// <param name="entity">The queried entity, bound to the model.</param>
+    /// <param name="tail">The last node of the chain: entity operators only, no projection or grouping.</param>
+    /// <param name="dialect">The database dialect.</param>
+    /// <param name="includes">The navigations included from the queried entity, joined as for <c>ExecuteDelete</c>.</param>
+    /// <param name="filtersFor">The query filters to apply to an entity, already resolved against the context.</param>
+    /// <param name="setters">The properties to set, in order.</param>
+    /// <param name="bindEntity">Binds the target entity of a navigation the chain reads through.</param>
+    /// <exception cref="InvalidOperationException">There is no setter, as EF Core reports.</exception>
+    /// <exception cref="NotSupportedException">The chain pages a keyless entity, whose rows the derived table cannot name.</exception>
+    public static SqlStatement BuildUpdate(
+        BoundEntity entity,
+        QueryNode tail,
+        ISqlDialect dialect,
+        IncludeTree? includes,
+        Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> filtersFor,
+        IReadOnlyList<UpdateSetter> setters,
+        Func<Type, BoundEntity>? bindEntity = null)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(tail);
+        ArgumentNullException.ThrowIfNull(dialect);
+        ArgumentNullException.ThrowIfNull(filtersFor);
+        ArgumentNullException.ThrowIfNull(setters);
+        if (setters.Count == 0)
+        {
+            throw new InvalidOperationException(ExceptionMessages.UpdateWithoutSetters);
+        }
+
+        var builder = new SqlBuilder(entity, dialect, filtersFor(entity), filtersFor, bindEntity, includes);
+        builder.ApplyChain(tail);
+
+        return new SqlStatement(builder.FinishUpdate(setters), builder._parameters);
+    }
+
+    /// <summary>
     /// Builds the <c>ExecuteDelete</c> statement for the chain ending at <paramref name="tail"/>, as EF Core does: the
     /// rows the chain selects are deleted from the queried table. A chain without paging deletes from its own
     /// <c>FROM</c>, joins included; one with paging deletes the rows whose keys a subquery selects.
@@ -908,6 +947,51 @@ internal sealed class SqlBuilder
         return _dialect.Delete(alias, table + " WHERE EXISTS (SELECT 1 FROM (" + selected + ") AS " + keys + " WHERE " + matches + ")");
     }
 
+    /// <summary>
+    /// Sets the properties on the rows the chain selects, as EF Core writes <c>ExecuteUpdate</c>: on the statement's own
+    /// <c>FROM</c>, joins included, without paging; with paging, on the rows whose keys a derived table selects.
+    /// </summary>
+    private string FinishUpdate(IReadOnlyList<UpdateSetter> setters)
+    {
+        EnsureRootComposable();
+        EnsureNotProjected();
+        JoinIncludedReferences(_includes, RootPath);
+
+        // Without paging the rows are the ones the statement's FROM selects; distinct entity rows are the same rows.
+        if (!State.IsDerived && !State.HasPaging)
+        {
+            return _dialect.Update(State.Alias, Assignments(setters), RenderFrom(State));
+        }
+
+        var key = _entity.PrimaryKey ?? throw new NotSupportedException(string.Format(
+            CultureInfo.InvariantCulture, ExceptionMessages.UpdatePagedKeyless, _entity.ClrType));
+        var selected = RenderSelect(State, string.Join(", ", key.Select(k => Column(k, State.Alias))), includeOrdering: State.HasPaging);
+
+        // The values are computed from the updated row, which the keys of the selected ones are joined to.
+        var outer = new SqlBuilder(this, _entity);
+        var alias = NextAlias();
+        outer._state = new SelectState(_dialect.QualifyTable(_entity.Table, _entity.Schema), alias);
+        var assignments = outer.Assignments(setters);
+        var keys = NextAlias();
+        var matches = string.Join(" AND ", key.Select(k => Column(k, alias) + " = " + keys + "." + _dialect.QuoteIdentifier(k.ColumnName)));
+        outer.State.Joins.Add("INNER JOIN (" + selected + ") AS " + keys + " ON " + matches);
+        return _dialect.Update(alias, assignments, RenderFrom(outer.State));
+    }
+
+    // column = value for each setter: a value is sent typed and converted like the column it sets, as EF Core sends it.
+    private List<string> Assignments(IReadOnlyList<UpdateSetter> setters)
+    {
+        var assignments = new List<string>(setters.Count);
+        foreach (var setter in setters)
+        {
+            var property = _entity.GetProperty(setter.PropertyName);
+            var value = RenderEntityValue(setter.Value, setter.Values, property);
+            assignments.Add(Column(property, State.Alias) + " = " + (value.IsNull ? "NULL" : value.Sql));
+        }
+
+        return assignments;
+    }
+
     // EF Core joins the references included on the deleted entity, which a required one with a filtered target can narrow.
     private void JoinIncludedReferences(IncludeTree? includes, string path)
     {
@@ -1043,11 +1127,11 @@ internal sealed class SqlBuilder
     }
 
     /// <summary>A computed value of the queried entity at the current level, such as an order key; its names are property paths.</summary>
-    private SqlValue RenderEntityValue(ValueTemplate template, IReadOnlyList<object?> values)
+    private SqlValue RenderEntityValue(ValueTemplate template, IReadOnlyList<object?> values, BoundProperty? hint = null)
     {
         if (ValueNames(template).All(_entity.HasProperty))
         {
-            return RenderValue(_entity.BindValue(template), values, ColumnsAt(State.Alias), hint: null);
+            return RenderValue(_entity.BindValue(template), values, ColumnsAt(State.Alias), hint);
         }
 
         var (resolve, column) = PathColumns();
@@ -1056,7 +1140,7 @@ internal sealed class SqlBuilder
         _readsCollections = true;
         try
         {
-            return RenderValue(value, values, column, hint: null);
+            return RenderValue(value, values, column, hint);
         }
         finally
         {

@@ -93,6 +93,8 @@ public sealed class SqlDialectsTests
 
         public string MathFunction(SqlMathFunction function, IReadOnlyList<string> arguments) => throw new NotSupportedException();
 
+        public string Update(string alias, IReadOnlyList<string> assignments, string from) => throw new NotSupportedException();
+
         public string Like(string value, string pattern, string? escape) => throw new NotSupportedException();
 
         public string LikeEscapeLiteral => throw new NotSupportedException();
