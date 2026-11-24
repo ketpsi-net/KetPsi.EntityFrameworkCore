@@ -70,6 +70,12 @@ public sealed class Gadget
     public int? ShopId { get; set; }
 
     public Shop? Shop { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+
+    public DateTime? ShippedAt { get; set; }
+
+    public DateOnly Day { get; set; }
 }
 
 /// <summary>Gadgets for computed values: sizes, precision, an enum stored as text, a required and an optional reference.</summary>

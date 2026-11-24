@@ -57,6 +57,12 @@ internal enum GroupCallKind
 /// <param name="Entities">The entities the element reads, which need a reader and navigation accessors.</param>
 /// <param name="Result">For a result selector, the values and reader of the <c>Select</c> it stands for.</param>
 /// <param name="ElementParameter">For an element selector, the interceptor parameter whose tree holds its captured values.</param>
+/// <param name="KeyValues">
+/// For a key with computed parts, C# that constructs each part's value template, or <c>null</c> for a property path;
+/// empty when every part is a property.
+/// </param>
+/// <param name="KeySlots">C# that computes each value slot of <paramref name="KeyValues"/> from <c>keyCaptures</c>.</param>
+/// <param name="KeyParameter">The interceptor parameter whose expression tree holds the key's captured values.</param>
 internal sealed record GroupByModel(
     string EntityType,
     EquatableArray<string> KeyPaths,
@@ -67,4 +73,7 @@ internal sealed record GroupByModel(
     int ElementCaptureCount,
     EquatableArray<EntityShape> Entities,
     GroupCallModel? Result = null,
-    string? ElementParameter = null);
+    string? ElementParameter = null,
+    EquatableArray<string> KeyValues = default,
+    EquatableArray<string> KeySlots = default,
+    string? KeyParameter = null);

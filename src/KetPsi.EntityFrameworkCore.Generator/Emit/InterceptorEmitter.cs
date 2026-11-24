@@ -24,6 +24,8 @@ internal static class InterceptorEmitter
     private const string CapturedValues = "global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues";
     private const string PredicateTemplate = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PredicateTemplate";
     private const string ValueTemplate = "global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueTemplate";
+    private const string UpdateSetter = "global::KetPsi.EntityFrameworkCore.Infrastructure.UpdateSetter";
+    private const string UpdateSetters = "global::KetPsi.EntityFrameworkCore.Infrastructure.UpdateSetters";
     private const string CollectionProjection = "global::KetPsi.EntityFrameworkCore.Infrastructure.CollectionProjection";
     private const string CollectionOrdering = "global::KetPsi.EntityFrameworkCore.Infrastructure.CollectionOrdering";
     private const string Enumerable = "global::System.Linq.Enumerable";
@@ -45,7 +47,9 @@ internal static class InterceptorEmitter
             && (kind != OperatorKind.Select || site.Projection is not null)
             && (kind != OperatorKind.Join || site.Join is not null && site.Projection is not null)
             && (kind is not (OperatorKind.SqlQuery or OperatorKind.SqlQueryRaw) || site.SqlQuery is not null && site.Projection is not null)
-            && (!IsAggregate(kind) || site.Aggregate is not null);
+            && (!IsAggregate(kind) || site.Aggregate is not null)
+            && (kind != OperatorKind.ExecuteUpdate || site.Update is not null)
+            && (kind != OperatorKind.SetProperty || site.Setter is not null);
 
     public static string Emit(IReadOnlyList<CallSite> sites)
     {
@@ -191,6 +195,18 @@ internal static class InterceptorEmitter
             return;
         }
 
+        if (site.Operator == OperatorKind.ExecuteUpdate)
+        {
+            WriteExecuteUpdate(writer, site, source, fallback);
+            return;
+        }
+
+        if (site.Operator == OperatorKind.SetProperty)
+        {
+            WriteSetProperty(writer, site);
+            return;
+        }
+
         if (site.Operator == OperatorKind.Find)
         {
             // Find is a method of the set, so there is no other source to fall back for.
@@ -278,6 +294,62 @@ internal static class InterceptorEmitter
             .Line($"    {ReaderHelper}({projection.ReaderCode}));")
             .Close();
     }
+
+    // ExecuteUpdate: the setters translated from EF Core 9's expression, or those EF Core 10's delegate records.
+    private static void WriteExecuteUpdate(CodeWriter writer, CallSite site, string source, string fallback)
+    {
+        var parameters = site.Signature!.Parameters;
+        var update = site.Update!;
+        writer
+            .Open($"if (!{SqlQuery}.IsInterceptable({source}))")
+            .Line($"return {fallback};")
+            .Close()
+            .Line();
+
+        string setters;
+        if (update.RecordsSetters)
+        {
+            // The delegate's SetProperty calls are intercepted too; while it runs here, they add their setters.
+            var builder = parameters[1].Type.Substring("global::System.Action<".Length).TrimEnd('>');
+            writer.Line($"var setters = {UpdateSetters}.Record({parameters[1].Name}, new {builder}>());");
+            setters = "setters";
+        }
+        else
+        {
+            if (update.Setters.Any(static s => s.ReadsCaptures))
+            {
+                writer.Line($"var {ProjectionTranslator.Captures} = {CapturedValues}.ReadAll({parameters[1].Name});");
+            }
+
+            setters = $"new {UpdateSetter}[] {{ {string.Join(", ", update.Setters.Select(Setter))} }}";
+        }
+
+        writer
+            .Line(site.IsAsync
+                ? $"return {SqlQuery}.ExecuteUpdateAsync({source}, {setters}, {parameters[parameters.Count - 1].Name});"
+                : $"return {SqlQuery}.ExecuteUpdate({source}, {setters});")
+            .Close();
+    }
+
+    // SetProperty of EF Core 10's builder: the setter is added to the ExecuteUpdate being recorded, else EF Core sets it.
+    private static void WriteSetProperty(CodeWriter writer, CallSite site)
+    {
+        var parameters = site.Signature!.Parameters;
+        var setter = site.Setter!;
+        if (setter.ReadsCaptures)
+        {
+            writer.Line($"var {ProjectionTranslator.Captures} = {CapturedValues}.ReadAll({parameters[2].Name});");
+        }
+
+        writer
+            .Line($"return {UpdateSetters}.TryAdd({Setter(setter)})")
+            .Line($"    ? {parameters[0].Name}")
+            .Line($"    : {parameters[0].Name}.SetProperty({parameters[1].Name}, {parameters[2].Name});")
+            .Close();
+    }
+
+    private static string Setter(SetterModel setter)
+        => $"new {UpdateSetter}(\"{setter.PropertyName}\", {setter.TemplateCode}, {Slots(setter.ValueCodes)})";
 
     // Database.SqlQuery: the result's columns and their CLR types, and the reader that builds each result from them.
     private static void WriteSqlQuery(CodeWriter writer, CallSite site)
@@ -501,6 +573,11 @@ internal static class InterceptorEmitter
             .Close()
             .Line();
 
+        if (groupBy.KeyParameter is { } keyParameter)
+        {
+            writer.Line($"var keyCaptures = {CapturedValues}.ReadAll({keyParameter});");
+        }
+
         // A result selector returns its own results, never the groups, so it reads no element.
         var result = groupBy.Result;
         string elementPaths, elementEntityPaths, elementReader;
@@ -519,7 +596,16 @@ internal static class InterceptorEmitter
         writer
             .Line($"var groups = {SqlGrouping}.GroupBy<{entity}, {key}, {element}>(")
             .Line("    query,")
-            .Line($"    {Strings(groupBy.KeyPaths)},")
+            .Line($"    {Strings(groupBy.KeyPaths)},");
+        if (groupBy.KeyValues.Count > 0)
+        {
+            // The computed parts of the key, and the values their templates read.
+            writer
+                .Line($"    new {ValueTemplate}?[] {{ {string.Join(", ", groupBy.KeyValues)} }},")
+                .Line($"    {Slots(groupBy.KeySlots)},");
+        }
+
+        writer
             .Line($"    ({ProjectionReader}<{key}>)(object){ReaderHelper}({groupBy.KeyReaderCode}),")
             .Line($"    {elementPaths},")
             .Line($"    {elementEntityPaths},")

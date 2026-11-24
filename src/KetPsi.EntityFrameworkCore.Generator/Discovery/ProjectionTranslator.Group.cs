@@ -20,8 +20,10 @@ internal sealed partial class ProjectionTranslator
     private const string GroupingType = "System.Linq.IGrouping<TKey, TElement>";
 
     private const string ReasonKey =
-        "a key must be a property, one through reference navigations, or an anonymous type of them; " +
-        "EF Core groups other keys through a derived table, which KetPsi.EntityFrameworkCore does not support yet";
+        "a key must be a property, one through reference navigations, a value the database can compute from them, or an " +
+        "anonymous type of those";
+    private const string ReasonKeyType = "a computed key must be a number, a string, a boolean, a date or a time, not an enum or a converted type";
+    private const string KeyCaptures = "keyCaptures";
     private const string ReasonTupleKey = "EF Core cannot translate a ValueTuple.Create key; use an anonymous type, such as x => new { x.A, x.B }";
     private const string ReasonGroupItself =
         "the group itself cannot be read; select its key and aggregates, such as g.Key and g.Count()";
@@ -88,7 +90,7 @@ internal sealed partial class ProjectionTranslator
             return (null, keyDiagnostic);
         }
 
-        var (keyParts, keyKind, keyProjection) = key!.Value;
+        var (keyParts, keyKind, keyProjection, keySlots) = key!.Value;
         GroupElement element;
         ProjectionModel elementProjection;
         if (elementLambda is null)
@@ -120,7 +122,9 @@ internal sealed partial class ProjectionTranslator
             elementProjection.EntityPaths,
             elementProjection.ReaderCode,
             elementProjection.CaptureCount,
-            elementProjection.Entities);
+            elementProjection.Entities,
+            KeyValues: keyParts.Any(static p => p.IsComputed) ? keyParts.Select(static p => p.TemplateCode ?? "null").ToEquatableArray() : default,
+            KeySlots: keySlots.ToEquatableArray());
         var group = new GroupShape(entity, keyParts, keyKind, element, groupBy);
         if (resultLambda is null)
         {
@@ -337,7 +341,7 @@ internal sealed partial class ProjectionTranslator
         return parameters;
     }
 
-    private static (( IReadOnlyList<KeyPart> Parts, GroupKeyKind Kind, ProjectionModel Projection)? Key, DiagnosticInfo? Diagnostic) TranslateKey(
+    private static ((IReadOnlyList<KeyPart> Parts, GroupKeyKind Kind, ProjectionModel Projection, List<string> Slots)? Key, DiagnosticInfo? Diagnostic) TranslateKey(
         LambdaExpressionSyntax lambda, INamedTypeSymbol entity, SemanticModel model, LocationInfo location, CancellationToken cancellationToken)
     {
         var node = lambda.Body as SyntaxNode ?? lambda;
@@ -350,20 +354,71 @@ internal sealed partial class ProjectionTranslator
 
         var parameter = parameters[0];
         var parts = new List<KeyPart>();
+        var slots = new List<string>();
+        var writer = new CapturedValueWriter(model, parameter, cancellationToken);
+
+        // A part that is not a property is computed by the database, as EF Core groups by it.
+        KeyPart? Computed(string? memberName, IOperation value)
+        {
+            // A constant key groups every row together, which SQL Server can't group by; EF Core selects it first.
+            if (value.Type is not { } type || value.Syntax is not ExpressionSyntax syntax
+                || !syntax.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>()
+                    .Any(name => SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(name, cancellationToken).Symbol, parameter)))
+            {
+                return null;
+            }
+
+            var underlying = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable ? nullable.TypeArguments[0] : type;
+            if (underlying.TypeKind == TypeKind.Enum || EntityShapeBuilder.NeedsConverter(underlying) || EntityShapeBuilder.ScalarShape(type, "") is null)
+            {
+                throw new TranslationException(KeyNotSupported(syntax, ReasonKeyType));
+            }
+
+            var first = slots.Count;
+            string template;
+            try
+            {
+                template = PredicateTranslator.TranslateProjectedValue(syntax, parameter, model, slots, cancellationToken);
+            }
+            catch (TranslationException)
+            {
+                return null;
+            }
+
+            for (var i = first; i < slots.Count; i++)
+            {
+                slots[i] = writer.ResolveCaptures(slots[i], body).Replace(Captures + "[", KeyCaptures + "[");
+            }
+
+            return new KeyPart(memberName, [], entity, template, type);
+        }
+
         GroupKeyKind kind;
+        try
+        {
         switch (operation)
         {
             case IAnonymousObjectCreationOperation anonymous:
                 kind = GroupKeyKind.Anonymous;
                 foreach (var initializer in anonymous.Initializers)
                 {
-                    if (initializer is not ISimpleAssignmentOperation { Target: IPropertyReferenceOperation target, Value: var value }
-                        || PathOf(value, parameter, entity) is not { } path)
+                    if (initializer is not ISimpleAssignmentOperation { Target: IPropertyReferenceOperation target, Value: var value })
                     {
                         return (null, KeyNotSupported(initializer.Syntax));
                     }
 
-                    parts.Add(new KeyPart(target.Property.Name, path.Path, path.Owner));
+                    if (PathOf(value, parameter, entity) is { } path)
+                    {
+                        parts.Add(new KeyPart(target.Property.Name, path.Path, path.Owner));
+                    }
+                    else if (Computed(target.Property.Name, value) is { } computed)
+                    {
+                        parts.Add(computed);
+                    }
+                    else
+                    {
+                        return (null, KeyNotSupported(initializer.Syntax));
+                    }
                 }
 
                 break;
@@ -374,14 +429,26 @@ internal sealed partial class ProjectionTranslator
                 return (null, KeyNotSupported(node, ReasonTupleKey));
 
             default:
-                if (PathOf(operation, parameter, entity) is not { } single)
+                kind = GroupKeyKind.Single;
+                if (PathOf(operation, parameter, entity) is { } single)
+                {
+                    parts.Add(new KeyPart(null, single.Path, single.Owner));
+                }
+                else if (Computed(null, operation) is { } computed)
+                {
+                    parts.Add(computed);
+                }
+                else
                 {
                     return (null, KeyNotSupported(node));
                 }
 
-                kind = GroupKeyKind.Single;
-                parts.Add(new KeyPart(null, single.Path, single.Owner));
                 break;
+        }
+        }
+        catch (TranslationException exception)
+        {
+            return (null, exception.Diagnostic);
         }
 
         if (parts.Count == 0)
@@ -402,11 +469,16 @@ internal sealed partial class ProjectionTranslator
         var code = kind == GroupKeyKind.Single
             ? reads[0]
             : "new { " + string.Join(", ", parts.Select((part, index) => $"{part.MemberName} = {reads[index]}")) + " }";
-        return ((parts, kind, projection! with { ReaderCode = translator.ReaderLambda(code) }), null);
+        return ((parts, kind, projection! with { ReaderCode = translator.ReaderLambda(code) }, slots), null);
     }
 
     private string ReadGroupedKey(KeyPart part, int index, SyntaxNode syntax)
     {
+        if (part.IsComputed)
+        {
+            return ReadColumn(EntityShapeBuilder.ScalarShape(part.Type!, "")!, Ordinal(index), throughNavigation: true, asNullable: false);
+        }
+
         var shape = PropertyShape(part.Owner, part.Path[part.Path.Count - 1], syntax);
         var ordinal = Ordinal(index);
         var read = ReadColumn(shape, ordinal, throughNavigation: part.Path.Count > 1, asNullable: false);
@@ -579,6 +651,13 @@ internal sealed partial class ProjectionTranslator
         var part = _group!.KeyParts[index];
         valueCode = $"{GroupValueType}.Key({index.ToString(CultureInfo.InvariantCulture)})";
         var ordinal = Ordinal(Register(valueCode, hasPredicate: false));
+
+        // A computed key's null, read into a non-nullable type, throws, as EF Core's does.
+        if (part.IsComputed)
+        {
+            return ReadColumn(EntityShapeBuilder.ScalarShape(part.Type!, "")!, ordinal, throughNavigation: true, asNullable: false);
+        }
+
         var shape = PropertyShape(part.Owner, part.Path[part.Path.Count - 1], syntax);
         return ReadColumn(shape, ordinal, throughNavigation: part.Path.Count > 1, asNullable: false);
     }

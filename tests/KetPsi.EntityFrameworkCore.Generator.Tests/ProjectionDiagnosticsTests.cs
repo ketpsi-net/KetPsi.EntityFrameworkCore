@@ -90,7 +90,7 @@ public sealed class ProjectionDiagnosticsTests
     [InlineData("var r = db.Blogs.Select(b => b.Id + 1).First(i => i > 1);", "First")]
     [InlineData("var r = await db.Blogs.Select(b => new { L = b.Id + 1 }).AnyAsync(x => x.L > 1, ct);", "AnyAsync")]
     [InlineData("var r = db.Blogs.Select(b => b.Id).Take(2).Count(i => i > 1);", "Count")]
-    [InlineData("var r = db.Blogs.Select(b => b.Name + \"!\").Distinct().ToList();", "Distinct")]
+    [InlineData("var r = db.Blogs.Select(b => $\"{b.Name}!\").Distinct().ToList();", "Distinct")]
     [InlineData("var r = db.Blogs.Select(b => new { b.Id, b.Rating }).Sum(x => x.Rating);", "Sum")]
     [InlineData("var r = db.Blogs.Select(b => b.Rating + 1).Sum();", "Sum")]
     [InlineData("var r = db.Blogs.Select(b => b.Author).Max();", "Max")]

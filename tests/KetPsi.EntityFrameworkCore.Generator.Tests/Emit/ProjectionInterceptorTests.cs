@@ -207,13 +207,16 @@ public sealed class ProjectionInterceptorTests : IDisposable
     }
 
     [Fact]
-    public void ComputedMembers_RunInCSharpOnTheColumnsRead()
+    public void ComputedMembers_AreComputedInSqlWhereTheyCanBe_AndInCSharpOtherwise()
     {
-        _connection.Rows = Table(["Id", "Name", "Views", "Status"], [1, "alpha", DBNull.Value, 0]);
+        _connection.Rows = Table(["Id", "Name", "Label", "Upper", "Length", "Views", "State"], [1, "alpha", "alpha!", "ALPHA", 5, 0, "draft"]);
 
         var row = Assert.Single(AsList(Invoke("Computed", "!")));
 
-        Assert.Equal("SELECT [t0].[Id], [t0].[Name], [t0].[Views], [t0].[Status] FROM [Blogs] AS [t0]", _connection.LastCommand.CommandText);
+        var sql = _connection.LastCommand.CommandText;
+        Assert.StartsWith("SELECT [t0].[Id], [t0].[Name], [t0].[Name] + @p0, UPPER([t0].[Name]), CAST(LEN([t0].[Name]) AS int), ", sql, StringComparison.Ordinal);
+        Assert.Contains("CASE WHEN [t0].[Status] = ", sql, StringComparison.Ordinal);
+        Assert.EndsWith(" FROM [Blogs] AS [t0]", sql, StringComparison.Ordinal);
         Assert.Equal("alpha!", Get(row, "Label"));
         Assert.Equal("ALPHA", Get(row, "Upper"));
         Assert.Equal(5, Get(row, "Length"));
@@ -227,10 +230,12 @@ public sealed class ProjectionInterceptorTests : IDisposable
     [Fact]
     public void ComputedMembers_ReadCapturedValuesForEachQuery()
     {
-        _connection.Rows = Table(["Id", "Name", "Views", "Status"], [1, "alpha", 4, 1]);
+        _connection.Rows = Table(["Id", "Name", "Label", "Upper", "Length", "Views", "State"], [1, "alpha", "alpha?", "ALPHA", 5, 4, "published"]);
 
-        Assert.Equal("alpha?", Get(Assert.Single(AsList(Invoke("Computed", "?"))), "Label"));
-        Assert.Equal("alpha.", Get(Assert.Single(AsList(Invoke("Computed", "."))), "Label"));
+        Invoke("Computed", "?");
+        Assert.Equal("?", _connection.LastCommand.Parameters[0].Value);
+        Invoke("Computed", ".");
+        Assert.Equal(".", _connection.LastCommand.Parameters[0].Value);
     }
 
     [Fact]

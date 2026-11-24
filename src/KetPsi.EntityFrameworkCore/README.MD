@@ -54,6 +54,7 @@ targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 i
 | Grouping | `GroupBy` on properties, ones through reference navigations, or an anonymous type of them, with an element or result selector too; then `Where`, `OrderBy`/`ThenBy`, a `Select` of keys and aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups |
 | Raw SQL | `FromSql`, `FromSqlInterpolated` and `FromSqlRaw` on a set, sent as written or composed over with any operator; `Database.SqlQuery<T>` and `SqlQueryRaw<T>` for scalars and unmapped classes and records |
 | Bulk delete | `ExecuteDelete` and `ExecuteDeleteAsync` after the filtering, ordering and paging operators, without loading or tracking the rows |
+| Bulk update | `ExecuteUpdate` and `ExecuteUpdateAsync` with constant, variable and computed values (`p => p.Views + 1`), on EF Core 9's expression and on EF Core 10's delegate setters, including conditional `SetProperty` calls |
 | Lookup by key | `Find` and `FindAsync`, which return a tracked entity without a query, as EF Core does |
 | Terminals | `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault` (after an `OrderBy`, as in EF Core), `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`, their `Async` versions, the predicate overloads, and `foreach` / `await foreach` |
 
@@ -68,6 +69,10 @@ targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 i
   `LIKE` pattern), `ToUpper`, `ToLower`, `Trim`, `TrimStart`, `TrimEnd`, `Length`, `Substring`, `Replace`, `IndexOf`,
   `string.Concat`, `string.IsNullOrEmpty`, `string.IsNullOrWhiteSpace`, `Equals`, `string.Compare` and `CompareTo`, and
   `ToString()` of strings and integers; and `EF.Functions.Like`.
+- Date and math functions as EF Core translates them: date parts (`p.CreatedAt.Year`), `Date`, `TimeOfDay`, the
+  `Add` methods (`DATEADD`, whole amounts), `DateTime.Now`, `UtcNow` and `Today` as the database's clock,
+  `EF.Functions.DateDiff*`, `DateOnly.FromDateTime`, and `Math.Abs`, `Round`, `Truncate`, `Floor`, `Ceiling`, `Pow`,
+  `Sqrt`, `Log`, `Log10`, `Exp`, `Sign` and the trigonometric functions.
 - `string.Equals(value)`, enums, nullable properties.
 - `list.Contains(b.Property)` over arrays and lists, sent as one JSON parameter through `OPENJSON`.
 - Related collections: `Any` and `All` (`b.Posts.Any(p => p.Rating >= b.MinRating)`), counts (`b.Posts.Count`,
@@ -119,9 +124,9 @@ and identity-resolution queries connect the entities the way EF Core does, and i
 navigations (`p.Blog.Owner.Name`, joined like an included reference) and entities (`p`, `p.Blog`). Projected entities
 are tracked, identity-resolved and given the includes below them, as in EF Core. A value through a missing optional
 navigation is null, and a non-nullable value type there throws as it does in EF Core unless it is cast to nullable.
-Computed members run in C# on the values read, as EF Core evaluates a final projection on the client; captured values
-are read each time the query runs. Following C# rather than SQL, `Math.Round` rounds halves to even and string methods
-use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals are allowed, and
+Computed members are computed in SQL when they can be translated, as EF Core computes them (`p.Title.ToUpper()`,
+`p.Created.Year`, `Math.Round(p.Price, 2)`), and otherwise in C# on the values read, as EF Core evaluates the rest of a
+final projection on the client; captured values are read each time the query runs. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals are allowed, and
 `Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read only its entity and column members, before
 any paging.
 Members can also be values of related collections, computed by the database as EF Core does: `Any`, `All`, counts,
@@ -174,8 +179,9 @@ a `Select` on the groups reads `g.Key`, its members and aggregates of one proper
 and `OrderBy` on the groups, before or after the `Select`, become `HAVING` and `ORDER BY`; paging, `Distinct`,
 aggregates and terminals can follow the `Select`. `Count` and `Any` of the groups run on the database. Returning the
 groups themselves (`ToList`, `foreach`) reads the rows ordered by the key and groups them in memory, as EF Core does,
-with tracked elements. Not supported yet: the group's rows inside a `Select` (`g.First()`, `g.ToList()`), aggregates
-through navigations, and computed or constant keys.
+with tracked elements. Keys can be computed from the row (`o => o.CreatedAt.Year`, `o => new { o.CreatedAt.Year,
+Big = o.Price > 100 }`); those groups are selected from rather than returned. Not supported yet: the group's rows inside
+a `Select` (`g.First()`, `g.ToList()`), aggregates through navigations, and constant keys.
 
 ## Native AOT
 
@@ -214,9 +220,10 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP1009 | Query syntax over a query, which interceptors cannot replace; use method syntax |
 | KP2001–KP2008 | Expression, navigation, method, `EF.Functions`, collection, property comparison, value or order key not translatable; a value is KP2007 only when the generated code can't compute it, such as a call to a private method |
 | KP2009 | Projection not supported: a projected collection with other operators or reading the projected row, a `Min` or `Max` of an enum or converted type, an instance method or `this`, a computed aggregate selector, or a type the generated code cannot reach |
-| KP2010 | `GroupBy` key not supported: a computed, constant, entity or `ValueTuple.Create` key |
+| KP2010 | `GroupBy` key not supported: a constant, entity, enum or converted computed, or `ValueTuple.Create` key |
 | KP2011 | Group expression not supported: the group's rows (`g.First()`, `g.ToList()`), an aggregate through a navigation or with a computed selector |
 | KP2012 | Join not supported: an inner sequence that is not a filtered `DbSet`, an inner key through a navigation, or a computed key |
+| KP2013 | `ExecuteUpdate` setter not supported: a property through a navigation or not mapped |
 | KP3001–KP3005 | Property type, value converter, owned/complex/JSON mapping, entity construction or query filter not supported |
 
 ## How it works

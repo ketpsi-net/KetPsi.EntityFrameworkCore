@@ -31,9 +31,11 @@ namespace KetPsi.EntityFrameworkCore.Generated
             var captures = global::KetPsi.EntityFrameworkCore.Infrastructure.CapturedValues.ReadAll(selector);
             return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
                 query,
-                new string[] { "Id", "Name", "Name", "Name", "Id", "Views", "Status", "Id", "Name" },
+                new string[] { "Id", "Id", "Id", "Name" },
                 global::System.Array.Empty<string>(),
-                Reader((reader, ordinals, entities) => new { Id = reader.GetInt32(ordinals[0]), Label = ((reader.IsDBNull(ordinals[1]) ? null ! : reader.GetString(ordinals[1])) + ((string)captures[0]!)), Upper = ((reader.IsDBNull(ordinals[2]) ? null ! : reader.GetString(ordinals[2]))?.ToUpper()), Length = ((reader.IsDBNull(ordinals[3]) ? null ! : reader.GetString(ordinals[3])).Length), Bounded = (global::System.Math.Max(reader.GetInt32(ordinals[4]), ((int)captures[1]!))), Views = ((reader.IsDBNull(ordinals[5]) ? (int? )null : reader.GetInt32(ordinals[5])) ?? 0), State = ((global::Shop.Status)reader.GetInt32(ordinals[6]) == ((global::Shop.Status)(0)) ? "draft" : "published"), Text = ($"{reader.GetInt32(ordinals[7])}:{((string)captures[2]!)}"), Shout = (global::Shop.TextExtensions.Shout((reader.IsDBNull(ordinals[8]) ? null ! : reader.GetString(ordinals[8])))) }));
+                new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueTemplate[] { new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.BinaryValueTemplate(global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueOperator.Concat, new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PropertyValueTemplate("Name"), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.SlotValueTemplate(0)), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.FunctionValueTemplate(global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueFunction.ToUpper, new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PropertyValueTemplate("Name")), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.FunctionValueTemplate(global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueFunction.Length, new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PropertyValueTemplate("Name")), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.CoalesceValueTemplate(new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PropertyValueTemplate("Views"), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.SlotValueTemplate(1)), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ConditionalValueTemplate(new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonTemplate("Status", global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ComparisonOperator.Equal, 2), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.SlotValueTemplate(3), new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.SlotValueTemplate(4)) },
+                new object?[] { (((string)captures[0]!)), (0), (((global::Shop.Status)(0))), ("draft"), ("published") },
+                Reader((reader, ordinals, entities) => new { Id = reader.GetInt32(ordinals[0]), Label = (reader.IsDBNull(ordinals[4]) ? null! : reader.GetString(ordinals[4])), Upper = (reader.IsDBNull(ordinals[5]) ? null! : reader.GetString(ordinals[5])), Length = (reader.IsDBNull(ordinals[6]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : reader.GetInt32(ordinals[6])), Bounded = (global::System.Math.Max(reader.GetInt32(ordinals[1]), ((int)captures[1]!))), Views = (reader.IsDBNull(ordinals[7]) ? throw new global::System.InvalidOperationException(global::KetPsi.EntityFrameworkCore.Infrastructure.NullValue.Message) : reader.GetInt32(ordinals[7])), State = (reader.IsDBNull(ordinals[8]) ? null! : reader.GetString(ordinals[8])), Text = ($"{reader.GetInt32(ordinals[2])}:{((string)captures[2]!)}"), Shout = (global::Shop.TextExtensions.Shout((reader.IsDBNull(ordinals[3]) ? null ! : reader.GetString(ordinals[3])))) }));
         }
 
         [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "tEN9Bv+ZaF3Qp1Rjl/1qDWYJAABRdWVyaWVzLmNz")]
@@ -58,9 +60,11 @@ namespace KetPsi.EntityFrameworkCore.Generated
 
             return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
                 query,
-                new string[] { "Name" },
                 global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => ((reader.IsDBNull(ordinals[0]) ? null ! : reader.GetString(ordinals[0]))?.ToUpper())));
+                global::System.Array.Empty<string>(),
+                new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueTemplate[] { new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.FunctionValueTemplate(global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueFunction.ToUpper, new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PropertyValueTemplate("Name")) },
+                global::System.Array.Empty<object?>(),
+                Reader(static (reader, ordinals, entities) => (reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))));
         }
 
         [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "tEN9Bv+ZaF3Qp1Rjl/1qDcIJAABRdWVyaWVzLmNz")]
@@ -85,9 +89,11 @@ namespace KetPsi.EntityFrameworkCore.Generated
 
             return (global::System.Linq.IQueryable<TResult>)(object)global::KetPsi.EntityFrameworkCore.Infrastructure.SqlQuery.Select(
                 query,
-                new string[] { "Owner.Name" },
                 global::System.Array.Empty<string>(),
-                Reader(static (reader, ordinals, entities) => ((string?)(((reader.IsDBNull(ordinals[0]) ? null ! : reader.GetString(ordinals[0]))?.ToUpper())))));
+                global::System.Array.Empty<string>(),
+                new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueTemplate[] { new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.FunctionValueTemplate(global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.ValueFunction.ToUpper, new global::KetPsi.EntityFrameworkCore.Infrastructure.Templates.PropertyValueTemplate("Owner.Name")) },
+                global::System.Array.Empty<object?>(),
+                Reader(static (reader, ordinals, entities) => ((string?)((reader.IsDBNull(ordinals[0]) ? null! : reader.GetString(ordinals[0]))))));
         }
 
         [global::System.Runtime.CompilerServices.InterceptsLocationAttribute(1, "tEN9Bv+ZaF3Qp1Rjl/1qDTQKAABRdWVyaWVzLmNz")]

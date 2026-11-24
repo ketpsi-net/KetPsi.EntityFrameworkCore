@@ -67,6 +67,72 @@ public sealed class SqlServerDialectTests
     public void StringFunction_IsWrittenAsEfCoreWritesIt(SqlStringFunction function, string[] arguments, string expected)
         => Assert.Equal(expected, Dialect.StringFunction(function, arguments));
 
+    [Theory]
+    [InlineData(SqlDateFunction.Year, new[] { "[a]" }, "DATEPART(year, [a])")]
+    [InlineData(SqlDateFunction.Month, new[] { "[a]" }, "DATEPART(month, [a])")]
+    [InlineData(SqlDateFunction.Day, new[] { "[a]" }, "DATEPART(day, [a])")]
+    [InlineData(SqlDateFunction.Hour, new[] { "[a]" }, "DATEPART(hour, [a])")]
+    [InlineData(SqlDateFunction.Minute, new[] { "[a]" }, "DATEPART(minute, [a])")]
+    [InlineData(SqlDateFunction.Second, new[] { "[a]" }, "DATEPART(second, [a])")]
+    [InlineData(SqlDateFunction.Millisecond, new[] { "[a]" }, "DATEPART(millisecond, [a])")]
+    [InlineData(SqlDateFunction.DayOfYear, new[] { "[a]" }, "DATEPART(dayofyear, [a])")]
+    [InlineData(SqlDateFunction.AddYears, new[] { "@p0", "[a]" }, "DATEADD(year, CAST(@p0 AS int), [a])")]
+    [InlineData(SqlDateFunction.AddMonths, new[] { "@p0", "[a]" }, "DATEADD(month, CAST(@p0 AS int), [a])")]
+    [InlineData(SqlDateFunction.AddDays, new[] { "@p0", "[a]" }, "DATEADD(day, CAST(@p0 AS int), [a])")]
+    [InlineData(SqlDateFunction.AddHours, new[] { "@p0", "[a]" }, "DATEADD(hour, CAST(@p0 AS int), [a])")]
+    [InlineData(SqlDateFunction.AddMinutes, new[] { "@p0", "[a]" }, "DATEADD(minute, CAST(@p0 AS int), [a])")]
+    [InlineData(SqlDateFunction.AddSeconds, new[] { "@p0", "[a]" }, "DATEADD(second, CAST(@p0 AS int), [a])")]
+    [InlineData(SqlDateFunction.AddMilliseconds, new[] { "@p0", "[a]" }, "DATEADD(millisecond, CAST(@p0 AS int), [a])")]
+    [InlineData(SqlDateFunction.DiffYears, new[] { "[a]", "[b]" }, "DATEDIFF(year, [a], [b])")]
+    [InlineData(SqlDateFunction.DiffMonths, new[] { "[a]", "[b]" }, "DATEDIFF(month, [a], [b])")]
+    [InlineData(SqlDateFunction.DiffWeeks, new[] { "[a]", "[b]" }, "DATEDIFF(week, [a], [b])")]
+    [InlineData(SqlDateFunction.DiffDays, new[] { "[a]", "[b]" }, "DATEDIFF(day, [a], [b])")]
+    [InlineData(SqlDateFunction.DiffHours, new[] { "[a]", "[b]" }, "DATEDIFF(hour, [a], [b])")]
+    [InlineData(SqlDateFunction.DiffMinutes, new[] { "[a]", "[b]" }, "DATEDIFF(minute, [a], [b])")]
+    [InlineData(SqlDateFunction.DiffSeconds, new[] { "[a]", "[b]" }, "DATEDIFF(second, [a], [b])")]
+    [InlineData(SqlDateFunction.DiffMilliseconds, new[] { "[a]", "[b]" }, "DATEDIFF(millisecond, [a], [b])")]
+    [InlineData(SqlDateFunction.Date, new[] { "[a]" }, "CONVERT(date, [a])")]
+    [InlineData(SqlDateFunction.TimeOfDay, new[] { "[a]" }, "CONVERT(time, [a])")]
+    [InlineData(SqlDateFunction.ToDate, new[] { "[a]" }, "CAST([a] AS date)")]
+    [InlineData(SqlDateFunction.DayNumber, new[] { "[a]" }, "DATEDIFF(day, '0001-01-01', [a])")]
+    [InlineData(SqlDateFunction.Now, new string[0], "GETDATE()")]
+    [InlineData(SqlDateFunction.UtcNow, new string[0], "GETUTCDATE()")]
+    [InlineData(SqlDateFunction.Today, new string[0], "CONVERT(date, GETDATE())")]
+    public void DateFunction_IsWrittenAsEfCoreWritesIt(SqlDateFunction function, string[] arguments, string expected)
+        => Assert.Equal(expected, Dialect.DateFunction(function, arguments));
+
+    [Theory]
+    [InlineData(SqlMathFunction.Abs, new[] { "[a]" }, "ABS([a])")]
+    [InlineData(SqlMathFunction.Round, new[] { "[a]", "2" }, "ROUND([a], 2)")]
+    [InlineData(SqlMathFunction.Truncate, new[] { "[a]" }, "ROUND([a], 0, 1)")]
+    [InlineData(SqlMathFunction.Floor, new[] { "[a]" }, "FLOOR([a])")]
+    [InlineData(SqlMathFunction.Ceiling, new[] { "[a]" }, "CEILING([a])")]
+    [InlineData(SqlMathFunction.Power, new[] { "[a]", "[b]" }, "POWER([a], [b])")]
+    [InlineData(SqlMathFunction.Sqrt, new[] { "[a]" }, "SQRT([a])")]
+    [InlineData(SqlMathFunction.Log, new[] { "[a]" }, "LOG([a])")]
+    [InlineData(SqlMathFunction.Log10, new[] { "[a]" }, "LOG10([a])")]
+    [InlineData(SqlMathFunction.Exp, new[] { "[a]" }, "EXP([a])")]
+    [InlineData(SqlMathFunction.Sign, new[] { "[a]" }, "SIGN([a])")]
+    [InlineData(SqlMathFunction.Sin, new[] { "[a]" }, "SIN([a])")]
+    [InlineData(SqlMathFunction.Cos, new[] { "[a]" }, "COS([a])")]
+    [InlineData(SqlMathFunction.Tan, new[] { "[a]" }, "TAN([a])")]
+    [InlineData(SqlMathFunction.Asin, new[] { "[a]" }, "ASIN([a])")]
+    [InlineData(SqlMathFunction.Acos, new[] { "[a]" }, "ACOS([a])")]
+    [InlineData(SqlMathFunction.Atan, new[] { "[a]" }, "ATAN([a])")]
+    [InlineData(SqlMathFunction.Atan2, new[] { "[a]", "[b]" }, "ATN2([a], [b])")]
+    public void MathFunction_IsWrittenAsEfCoreWritesIt(SqlMathFunction function, string[] arguments, string expected)
+        => Assert.Equal(expected, Dialect.MathFunction(function, arguments));
+
+    [Fact]
+    public void DateAndMathFunctions_WrongArguments_Throw()
+    {
+        Assert.Throws<ArgumentException>(() => Dialect.DateFunction(SqlDateFunction.Now, ["[a]"]));
+        Assert.Throws<ArgumentException>(() => Dialect.DateFunction(SqlDateFunction.AddDays, ["[a]"]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Dialect.DateFunction((SqlDateFunction)99, ["[a]"]));
+        Assert.Throws<ArgumentException>(() => Dialect.MathFunction(SqlMathFunction.Round, ["[a]"]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Dialect.MathFunction((SqlMathFunction)99, ["[a]"]));
+    }
+
     [Fact]
     public void StringFunction_WrongArguments_Throws()
     {
@@ -139,6 +205,20 @@ public sealed class SqlServerDialectTests
         => Assert.ThrowsAny<ArgumentException>(() => Dialect.Exists(subquery!));
 
     // EF Core 11 sends SET NOCOUNT OFF first, so the row count is right on a server that has NOCOUNT on.
+    [Fact]
+    public void Update_SetsTheAssignmentsOnTheAliasedTable()
+        => Assert.Equal(
+            (typeof(DbContext).Assembly.GetName().Version!.Major >= 11 ? "SET NOCOUNT OFF; " : "")
+                + "UPDATE [b] SET [b].[Name] = @p0, [b].[Rating] = [b].[Rating] + 1 FROM [Blogs] AS [b] WHERE [b].[Id] = @p1",
+            Dialect.Update("[b]", ["[b].[Name] = @p0", "[b].[Rating] = [b].[Rating] + 1"], "[Blogs] AS [b] WHERE [b].[Id] = @p1"));
+
+    [Fact]
+    public void Update_WithoutAssignments_Throws()
+    {
+        Assert.Throws<ArgumentException>(() => Dialect.Update("[b]", [], "[Blogs] AS [b]"));
+        Assert.ThrowsAny<ArgumentException>(() => Dialect.Update("", ["[b].[Name] = @p0"], "[Blogs] AS [b]"));
+    }
+
     [Fact]
     public void Delete_DeletesFromTheAliasedTable()
         => Assert.Equal(

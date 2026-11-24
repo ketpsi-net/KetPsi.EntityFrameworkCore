@@ -42,6 +42,14 @@ public interface ISqlDialect
     /// <exception cref="ArgumentException">The arguments do not match the function.</exception>
     string StringFunction(SqlStringFunction function, IReadOnlyList<string> arguments);
 
+    /// <summary>Returns a date and time function: <see cref="SqlDateFunction"/> lists its arguments.</summary>
+    /// <exception cref="ArgumentException">The arguments do not match the function.</exception>
+    string DateFunction(SqlDateFunction function, IReadOnlyList<string> arguments);
+
+    /// <summary>Returns a math function: <see cref="SqlMathFunction"/> lists its arguments.</summary>
+    /// <exception cref="ArgumentException">The arguments do not match the function.</exception>
+    string MathFunction(SqlMathFunction function, IReadOnlyList<string> arguments);
+
     /// <summary>Returns <c>value LIKE pattern</c>, with <c>ESCAPE escape</c> when <paramref name="escape"/> is given.</summary>
     string Like(string value, string pattern, string? escape);
 
@@ -76,6 +84,15 @@ public interface ISqlDialect
     /// <param name="alias">The quoted alias of the table to delete from.</param>
     /// <param name="from">The table with its alias, the joins and the <c>WHERE</c> clause, as after <c>FROM</c>.</param>
     string Delete(string alias, string from);
+
+    /// <summary>
+    /// Returns the statement that sets <paramref name="assignments"/> on the rows of the table aliased
+    /// <paramref name="alias"/> that <paramref name="from"/> selects: <c>ExecuteUpdate</c>.
+    /// </summary>
+    /// <param name="alias">The quoted alias of the table to update.</param>
+    /// <param name="assignments">Each <c>column = value</c>, in the order of the setters.</param>
+    /// <param name="from">The table with its alias, the joins and the <c>WHERE</c> clause, as after <c>FROM</c>.</param>
+    string Update(string alias, IReadOnlyList<string> assignments, string from);
 
     /// <summary>
     /// Returns the select expression that computes <paramref name="function"/> over <paramref name="column"/>, with

@@ -39,6 +39,8 @@ internal enum OperatorKind
     Any,
     Find,
     ExecuteDelete,
+    ExecuteUpdate,
+    SetProperty,
     Join,
     FromSql,
     FromSqlRaw,

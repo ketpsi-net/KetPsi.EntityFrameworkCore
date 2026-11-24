@@ -659,6 +659,66 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "CountBlogsProjectedWithPosts", [] },
             { "BlogCommentedPostIds", [] },
             { "CategoryGadgetNames", [] },
+            { "UpdateGadgetNames", [] },
+            { "UpdateGadgetNotes", ["set"] },
+            { "UpdateGadgetNotes", [null] },
+            { "UpdateGadgetsComputed", [] },
+            { "UpdateGadgetsWithCaptures", [3] },
+            { "UpdateGadgetsCoalesceAndConditional", [] },
+            { "UpdateGadgetsStringMethods", [] },
+            { "UpdateGadgetsDates", [3] },
+            { "UpdateGadgetsMath", [] },
+            { "UpdateGadgetsOfCategory", [] },
+            { "UpdateGadgetsPaged", [] },
+            { "UpdateGadgetsTopByPrice", [] },
+            { "UpdateGadgetShades", [] },
+            { "UpdateGadgetsNoRows", [] },
+            { "UpdateGadgetsSameColumnTwice", [] },
+            { "UpdateGadgetsAsync", [] },
+            { "UpdateTrackedGadget", [] },
+            { "UpdateTicketsConverted", [] },
+            { "GadgetsByCreatedYear", [] },
+            { "GadgetsByYearAndMonth", [] },
+            { "GadgetsByExpensive", [] },
+            { "GadgetsByQuantityBucket", [] },
+            { "GadgetsByFirstLetter", [] },
+            { "GadgetsByShippedYear", [] },
+            { "GadgetsByNullableShippedYear", [] },
+            { "GadgetsByScaledQuantity", [3] },
+            { "YearsWithManyGadgets", [] },
+            { "GadgetMonthsPaged", [] },
+            { "CountGadgetDays", [] },
+            { "GadgetsByCategoryAndStocked", [] },
+            { "GadgetPricesByDiscount", [] },
+            { "GadgetsByRoundedPrice", [] },
+            { "GadgetsByCreatedDate", [] },
+            { "GadgetsByCategoryName", [] },
+            { "GadgetsCreatedIn", [2026, 1] },
+            { "GadgetsCreatedIn", [2026, 2] },
+            { "GadgetsCreatedAfterHour", [1] },
+            { "GadgetsCreatedOn", [new DateTime(2026, 1, 2, 15, 0, 0)] },
+            { "GadgetsShippedWithinDays", [2] },
+            { "GadgetsShippedInYear", [2026] },
+            { "GadgetsShippedWithinFractionalDays", [] },
+            { "GadgetsCreatedBeforeNow", [] },
+            { "GadgetsShippedDaysLater", [2] },
+            { "GadgetsOrderedByMonthAndDay", [] },
+            { "GadgetsWithAbsoluteRating", [1.0] },
+            { "GadgetsRoundedTo", [3m] },
+            { "GadgetsFloorAndCeiling", [] },
+            { "GadgetsWithPowerAndRoot", [] },
+            { "GadgetsWithSign", [1] },
+            { "GadgetsWithSign", [-1] },
+            { "GadgetsWithSign", [0] },
+            { "GadgetsOrderedByDistanceFromTen", [] },
+            { "GadgetDateParts", [] },
+            { "GadgetDatesAdded", [3] },
+            { "GadgetShippedParts", [] },
+            { "GadgetShippedYearsNonNullable", [] },
+            { "GadgetMath", [] },
+            { "GadgetRoundingHalves", [] },
+            { "GadgetComputedMembersInSql", ["!"] },
+            { "DistinctGadgetYears", [] },
         };
 
 #if NET10_0_OR_GREATER
@@ -668,6 +728,16 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
 
 #if NET10_0_OR_GREATER
         cases.Add("IgnoringTenantFilter", []);
+#endif
+
+#if NET10_0_OR_GREATER
+        // EF Core 10 and later take the setters as a delegate, which can set properties conditionally.
+        cases.Add("UpdateGadgetsConditionally", [true]);
+        cases.Add("UpdateGadgetsConditionally", [false]);
+#endif
+
+#if NET11_0_OR_GREATER
+        cases.Add("GadgetSigns", []);
 #endif
         return cases;
     }
@@ -705,7 +775,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "FindBlog(1)", "FindPostAsync(101)", "FindTrackedTwice(3)", "DeleteTrackedComment()", "JoinEntities()",
         "FromSqlTracked()", "FromSqlAsWrittenTracked()",
         "TicketsTracked()", "FindTicket(2)", "FindTicketTwice(3)", "TicketsWithNotesTracked()", "LoadModifySaveTicket(3)",
-        "BlogsWithPostsTracked()", "BlogsAndPostsTracked()",
+        "BlogsWithPostsTracked()", "BlogsAndPostsTracked()", "UpdateTrackedGadget()",
     };
 
     // Queries whose results have a defined order; other results are compared sorted by Id.
@@ -724,7 +794,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "GadgetsOrderedByNameLength", "GadgetsOrderedByTotal", "GadgetsOrderedByCodeOrName", "GadgetsOrderedByActive",
         "GadgetsOrderedByLowerName", "GadgetsOrderedByDiscount", "GadgetsOrderedByCategoryAndName", "GadgetsOrderedByVariable",
         "GadgetsPagedByTotal", "AuthorsOrderedByBlogCount", "BlogsOrderedByPostCount", "BlogsPagedByPostCount",
-        "CategoriesOrderedByAverageRating", "BlogCountsPaged", "BlogPostsPaged",
+        "CategoriesOrderedByAverageRating", "BlogCountsPaged", "BlogPostsPaged", "GadgetMonthsPaged", "GadgetsOrderedByMonthAndDay", "GadgetsOrderedByDistanceFromTen",
     };
 
     private static string Key(string query, object?[] arguments)

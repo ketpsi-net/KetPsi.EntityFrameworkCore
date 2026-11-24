@@ -40,6 +40,8 @@ internal static partial class CallSiteAnalyzer
     private const string ReasonGroupsAfterFilter =
         "groups filtered or ordered by the database are only read through a Select of their key and aggregates";
     private const string GroupingType = "System.Linq.IGrouping<TKey, TElement>";
+    private const string ReasonGroupsWithComputedKey =
+        "the groups of a computed key are only read through a Select of their key and aggregates";
 
     // Names of every method the classification below handles; anything else is not looked at.
     private static readonly HashSet<string> OperatorNames = new(StringComparer.Ordinal)
@@ -56,7 +58,7 @@ internal static partial class CallSiteAnalyzer
         // EF Core and providers
         "AllAsync", "AnyAsync", "AsAsyncEnumerable", "AsNoTracking", "AsNoTrackingWithIdentityResolution", "AsSingleQuery",
         "AsSplitQuery", "AsTracking", "AverageAsync", "ContainsAsync", "CountAsync", "ElementAtAsync", "ElementAtOrDefaultAsync",
-        "ExecuteDelete", "ExecuteDeleteAsync", "ExecuteUpdate", "ExecuteUpdateAsync", "Find", "FindAsync", "FirstAsync",
+"ExecuteDelete", "ExecuteDeleteAsync", "ExecuteUpdate", "ExecuteUpdateAsync", "Find", "FindAsync", "FirstAsync", "SetProperty",
         "FirstOrDefaultAsync", "ForEachAsync", "FromSql", "FromSqlInterpolated", "FromSqlRaw", "IgnoreAutoIncludes",
         "IgnoreQueryFilters", "Include", "LastAsync", "LastOrDefaultAsync", "Load", "LoadAsync", "LongCountAsync", "MaxAsync",
         "MinAsync", "SingleAsync", "SingleOrDefaultAsync", "SqlQuery", "SqlQueryRaw", "SumAsync", "TagWith", "TagWithCallSite", "TemporalAll",
@@ -106,6 +108,46 @@ internal static partial class CallSiteAnalyzer
         }
     }
 
+    /// <summary>
+    /// A <c>SetProperty</c> call of EF Core 10's setters builder: the interceptor takes the builder as its
+    /// <see langword="this"/> parameter, adds the setter to the <c>ExecuteUpdate</c> being recorded, and otherwise calls
+    /// EF Core's own method.
+    /// </summary>
+    private static CallSite? ClassifySetProperty(
+        IInvocationOperation operation, InvocationExpressionSyntax invocation, SemanticModel model, CancellationToken cancellationToken)
+    {
+        var method = operation.TargetMethod;
+        if (method.ContainingType.TypeArguments[0] is not INamedTypeSymbol entity || method.Parameters.Length != 2
+            || invocation.Expression is not MemberAccessExpressionSyntax access)
+        {
+            return null;
+        }
+
+        var location = LocationInfo.From(access.Name.Identifier.GetLocation());
+        var elementType = EntityDiscovery.TypeName(entity);
+        var builder = new ParameterSignature(method.ContainingType.ToDisplayString(SignatureFormat), "builder");
+        var parameters = new[] { builder }
+            .Concat(method.Parameters.Select(static p => new ParameterSignature(p.Type.ToDisplayString(SignatureFormat), p.Name)))
+            .ToEquatableArray();
+        var (setter, diagnostic) = UpdateTranslator.TranslateCall(operation, entity, parameters[2].Name, model, location, cancellationToken);
+        if (diagnostic is not null)
+        {
+            return new CallSite(elementType, location, Operator: null, IsAsync: false, HasPredicate: false, diagnostic);
+        }
+
+        return new CallSite(
+            elementType,
+            location,
+            OperatorKind.SetProperty,
+            IsAsync: false,
+            HasPredicate: false,
+            Diagnostic: null,
+            Interception: model.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax(),
+            Signature: new InterceptorSignature(
+                method.Name, EntityDiscovery.TypeName(method.ContainingType), method.ReturnType.ToDisplayString(SignatureFormat), parameters),
+            Setter: setter);
+    }
+
     internal static CallSite InternalError(InvocationExpressionSyntax invocation, Exception exception)
         => new(
             UnknownElementType,
@@ -123,6 +165,13 @@ internal static partial class CallSiteAnalyzer
         }
 
         var method = operation.TargetMethod;
+
+        // A SetProperty of EF Core 10's setters builder, which records its setter when an intercepted ExecuteUpdate runs it.
+        if (method.Name == "SetProperty" && method.ContainingType.OriginalDefinition.ToDisplayString() == UpdateTranslator.SettersBuilderType)
+        {
+            return ClassifySetProperty(operation, invocation, semanticModel, cancellationToken);
+        }
+
         var family = GetFamily(method.ContainingType);
         if (family == Family.None)
         {
@@ -261,6 +310,8 @@ internal static partial class CallSiteAnalyzer
                 return site.Supported(OperatorKind.ExecuteDelete);
             case "ExecuteDeleteAsync":
                 return site.Supported(OperatorKind.ExecuteDelete, isAsync: true);
+            case "ExecuteUpdate" or "ExecuteUpdateAsync":
+                return site.ExecuteUpdate(isAsync: method.Name == "ExecuteUpdateAsync");
             case "SumAsync" or "AverageAsync" or "MinAsync" or "MaxAsync" when parameters.Length == 3 && IsSelector(parameters[1].Type):
                 return site.Supported(AggregateKind(method.Name.Substring(0, method.Name.Length - "Async".Length)), lambdaOrdinal: 1, isAsync: true);
             case "FirstAsync" or "FirstOrDefaultAsync" or "LastAsync" or "LastOrDefaultAsync" or "SingleAsync" or "SingleOrDefaultAsync"
@@ -587,7 +638,9 @@ internal static partial class CallSiteAnalyzer
             case Family.Enumerable when parameters.Length == 1 && name is "ToList" or "ToArray":
                 return grouped.IsFiltered
                     ? site.Reject(DiagnosticDescriptors.OperatorOnGroupsNotSupported, method.Name, ReasonGroupsAfterFilter)
-                    : site.OnGroups(name == "ToList" ? OperatorKind.ToList : OperatorKind.ToArray, group, lambdaOrdinal: null, isAsync);
+                    : group.KeyParts.Any(static p => p.IsComputed)
+                        ? site.Reject(DiagnosticDescriptors.OperatorOnGroupsNotSupported, method.Name, ReasonGroupsWithComputedKey)
+                        : site.OnGroups(name == "ToList" ? OperatorKind.ToList : OperatorKind.ToArray, group, lambdaOrdinal: null, isAsync);
             case Family.Enumerable or Family.DbSet:
                 // Enumerating the groups runs the query.
                 return null;
@@ -817,6 +870,47 @@ internal static partial class CallSiteAnalyzer
         }
 
         /// <summary>
+        /// <c>ExecuteUpdate</c> or <c>ExecuteUpdateAsync</c>: EF Core 9's expression of setters is translated here; EF Core
+        /// 10's delegate is run by the interceptor, whose <c>SetProperty</c> calls record their setters.
+        /// </summary>
+        public CallSite ExecuteUpdate(bool isAsync)
+        {
+            var setters = operation.TargetMethod.Parameters[1].Type;
+            UpdateModel update;
+            if (setters.OriginalDefinition.ToDisplayString() == "System.Linq.Expressions.Expression<TDelegate>")
+            {
+                var (lambda, lambdaDiagnostic) = RequireLambda(1);
+                if (lambdaDiagnostic is not null || lambda is null)
+                {
+                    return new CallSite(_elementType, location, Operator: null, isAsync, HasPredicate: false, lambdaDiagnostic);
+                }
+
+                var (translated, diagnostic) = UpdateTranslator.TranslateExpression(lambda, elementSymbol, semanticModel, location, cancellationToken);
+                if (diagnostic is not null)
+                {
+                    return new CallSite(_elementType, location, Operator: null, isAsync, HasPredicate: false, diagnostic);
+                }
+
+                update = new UpdateModel(translated, RecordsSetters: false);
+            }
+            else
+            {
+                update = new UpdateModel(default, RecordsSetters: true);
+            }
+
+            return new CallSite(
+                _elementType,
+                location,
+                OperatorKind.ExecuteUpdate,
+                isAsync,
+                HasPredicate: false,
+                Diagnostic: null,
+                Interception: semanticModel.GetInterceptableLocation(invocation, cancellationToken)?.GetInterceptsLocationAttributeSyntax(),
+                Signature: GetSignature(operation.TargetMethod),
+                Update: update);
+        }
+
+        /// <summary>
         /// <c>Find</c> or <c>FindAsync</c>, which are methods of the set itself: the interceptor takes the set as its
         /// <see langword="this"/> parameter, followed by the method's parameters.
         /// </summary>
@@ -1008,6 +1102,7 @@ internal static partial class CallSiteAnalyzer
             model = model with
             {
                 ElementParameter = hasElementSelector && model.ElementCaptureCount > 0 ? signature.Parameters[2].Name : null,
+                KeyParameter = model.KeySlots.Count > 0 ? signature.Parameters[1].Name : null,
                 Result = model.Result is { } result ? result with { CaptureParameter = signature.Parameters[signature.Parameters.Count - 1].Name } : null,
             };
 

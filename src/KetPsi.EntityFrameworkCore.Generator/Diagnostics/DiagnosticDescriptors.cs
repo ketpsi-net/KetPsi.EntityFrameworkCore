@@ -126,6 +126,11 @@ internal static class DiagnosticDescriptors
         "Join not supported",
         "'{0}' cannot be joined yet: {1}");
 
+    public static readonly DiagnosticDescriptor SetterNotSupported = Error(
+        "KP2013",
+        "ExecuteUpdate setter not supported",
+        "'{0}' cannot be translated as a setter of ExecuteUpdate yet: {1}");
+
     public static readonly DiagnosticDescriptor PropertyTypeNotSupported = Error(
         "KP3001",
         "Property type not supported",

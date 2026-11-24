@@ -65,6 +65,17 @@ var page = await db.Blogs
   which a keyless entity doesn't have (`NotSupportedException`); an ordering without paging, `Distinct` and tracking
   don't change what is deleted. Nothing is loaded and the change tracker is left alone, so a tracked entity that was
   deleted stays `Unchanged`. Not after `Select` (KP1007) or `GroupBy` (KP1008).
+- `ExecuteUpdate(s => s.SetProperty(...))` and `ExecuteUpdateAsync` set properties on the rows the query selects and
+  return how many, as in EF Core: `UPDATE [t0] SET [t0].[Name] = @p0, ... FROM [Posts] AS [t0] ... WHERE ...`.
+  - A value can be a constant or a variable (`SetProperty(p => p.Title, title)`), sent typed and converted like the
+    column, or a lambda over the row computed in SQL (`SetProperty(p => p.Views, p => p.Views + 1)`) with anything a
+    computed value supports: arithmetic, `??`, `?:`, string methods, date and math functions, reference navigations.
+  - EF Core 9 takes the setters as an expression; EF Core 10 and 11 take a delegate, so `SetProperty` can be called in
+    `if` statements and loops (`s => { s.SetProperty(...); if (flag) s.SetProperty(...); }`). Both work.
+  - The rows are chosen as `ExecuteDelete` chooses them: query filters, joined navigations, and after `Skip` or `Take`
+    the keys a derived table selects (`INNER JOIN (SELECT ...)`). Tracked entities keep their values, as in EF Core.
+  - The set property must be a mapped property of the entity itself (KP2013), not one through a navigation.
+    Setting the same column twice fails in SQL Server, as in EF Core; no setter at all throws `InvalidOperationException`.
 - `Last` and `LastOrDefault` need an `OrderBy` before them, on the entities or before a `Select`, as in EF Core: they
   read the query in reverse order and take the first row (`TOP(1) ... ORDER BY ... DESC`). Without an ordering they
   throw EF Core's `InvalidOperationException` ("must have a deterministic sort order") when they run; an ordering before
@@ -74,7 +85,7 @@ var page = await db.Blogs
   The SQL and the empty-set behavior are EF Core's: `Sum` of no rows is 0, a nullable or reference result is null, and
   `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
-**Not supported yet** (build error): `GroupJoin`, `SelectMany`, `TagWith`, `ExecuteUpdate`, `AsAsyncEnumerable`.
+**Not supported yet** (build error): `GroupJoin`, `SelectMany`, `TagWith`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
 on a `DbSet`, but after any KetPsi operator they run the query and finish in memory:
@@ -143,6 +154,20 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
   - `EF.Functions.Like(value, pattern)` and `Like(value, pattern, escape)`, sent as written.
   - Matching follows the column's collation, usually case-insensitive, and `LEN` doesn't count trailing spaces, as in
     EF Core.
+- Date and math functions, as EF Core translates them:
+  - Parts: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Millisecond` and `DayOfYear` of `DateTime`,
+    `DateTimeOffset`, `DateOnly` and `TimeOnly`; `Date` and `TimeOfDay` of a `DateTime`; `DateOnly.DayNumber` and
+    `DateOnly.FromDateTime(d)`.
+  - `AddYears`, `AddMonths`, `AddDays`, `AddHours`, `AddMinutes`, `AddSeconds` and `AddMilliseconds`. The amount is
+    truncated to a whole number, as EF Core's `DATEADD` does: `AddDays(1.5)` adds one day.
+  - `DateTime.Now`, `UtcNow` and `Today` are the database's clock (`GETDATE()`), as in EF Core, not the app's.
+  - `EF.Functions.DateDiffYear`, `DateDiffMonth`, `DateDiffWeek`, `DateDiffDay`, `DateDiffHour`, `DateDiffMinute`,
+    `DateDiffSecond` and `DateDiffMillisecond`.
+  - `Math.Abs`, `Round(x)` and `Round(x, decimals)` (halves away from zero, as SQL rounds them), `Truncate`, `Floor`,
+    `Ceiling`, `Pow`, `Sqrt`, `Log`, `Log10`, `Exp`, `Sign`, `Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan` and
+    `Atan2`, and `decimal.Round`, `Floor`, `Ceiling` and `Truncate`.
+  - Not translated, as in EF Core (KP2003): `DayOfWeek`, `Ticks`, `AddTicks`, `new DateTime(...)`, subtracting dates,
+    `Math.Max` and `Math.Min`, `Math.Log(x, base)`, `MidpointRounding` overloads and `MathF`.
 - Not translatable: comparing a navigation with anything but `null` (KP2002); `StringComparison` overloads,
   `ToUpperInvariant`, `Trim(chars)`, `PadLeft`, the indexer `Name[0]`, `ToString()` of enums, dates and decimals, and
   other methods (KP2003); `EF.Functions` other than `Like` (KP2004); other collection queries, such as
@@ -220,15 +245,16 @@ var rows = await db.Posts
 
 - The statement reads only the columns the lambda uses. Results can be anonymous types (nested too), records and
   other constructors, object initializers, `ValueTuple.Create(...)`, or a single member (`p => p.Title`).
-- Computed members run in C# on the values read, as EF Core evaluates a final projection on the client:
-  `p.Title + "!"`, `p.Title.ToUpper()`, `Math.Round(p.Price, 2)`, `p.Created.Year`, `p.Views ?? 0`, conditionals,
-  interpolated strings, your own static and extension methods. Captured variables, fields of the enclosing instance
-  and static members are read when the query runs, so each run sees their current values. A `string` method on a null
-  column gives null, as the SQL EF Core sends does; any other member of a null value throws, as it does in C#.
-- Because computed members follow C#, a few results can differ from EF Core where EF Core computes in SQL:
-  `Math.Round` rounds halves to even (SQL rounds them away from zero), string methods use the current culture, and
-  `b.Author != null` reads the author entity, which a tracking query then tracks. Compare a foreign key instead
-  (`b.AuthorId != null`), or round explicitly with `MidpointRounding.AwayFromZero`.
+- Computed members are computed where EF Core computes them:
+  - **In SQL** when they can be translated, like predicates: `p.Title + "!"`, `p.Title.ToUpper()`,
+    `Math.Round(p.Price, 2)`, `p.Created.Year`, `p.Created.AddDays(1)`, `p.Views ?? 0`, conditionals, comparisons. So
+    `Math.Round` rounds halves away from zero and string methods follow the column's collation, as in EF Core.
+  - **In C#** on the values read otherwise, as EF Core evaluates the rest of a final projection on the client:
+    interpolated strings, your own static and extension methods, `Math.Max`, lambdas. The largest part of such a
+    member that SQL can compute still is (`Format(p.Price * p.Quantity)` computes the product in SQL).
+  - Captured variables, fields of the enclosing instance and static members are read when the query runs, so each run
+    sees their current values. A `string` method on a null column gives null, as the SQL EF Core sends does; any other
+    member of a null value throws, as it does in C#.
 - Members read entity properties, follow reference navigations (`p.Blog.Owner.Name`), or are entities themselves
   (`p`, `p.Blog`). Each navigation is joined like an included reference: `INNER JOIN` when required, `LEFT JOIN`
   when optional, with the target's query filters in the join.
@@ -270,7 +296,8 @@ var rows = await db.Posts
   are, before any paging: `Select(p => new { p, p.Blog }).Where(x => x.Blog.Rating > 1)`
   is `WHERE` on the blog's column. A member that is computed, or anything after `Skip`, `Take` or `Distinct`, is
   KP1007; filter and order before the `Select` instead.
-- `Distinct` after `Select` compares the projected columns in SQL, so it can't follow computed members (KP1007).
+- `Distinct` after `Select` compares the projected columns in SQL, so it can't follow members computed in C# (KP1007);
+  members computed in SQL are fine.
   An aggregate after `Select` needs a projection of one property.
 - `Count`, `LongCount` and `Any` ignore the projection, so they don't join its navigations, as in EF Core: with a
   required, filtered reference, `Count()` can be higher than `ToList().Count`.
@@ -367,9 +394,13 @@ var stats = await db.Posts
     .ToListAsync(ct);
 ```
 
-- Keys: a property, one through reference navigations (`p => p.Blog.Name`, joined like an included reference), or an
-  anonymous type of them. Computed, constant and entity keys are KP2010, and so are `ValueTuple.Create` keys, which EF
-  Core cannot translate either.
+- Keys: a property, one through reference navigations (`p => p.Blog.Name`, joined like an included reference), a value
+  the database computes from the row (`o => o.CreatedAt.Year`, `o => o.Price > 100`, `o => o.Quantity / 10`,
+  `o => o.Name.Substring(0, 1)`, `o => o.Discount ?? 0`), or an anonymous type of them
+  (`o => new { o.CreatedAt.Year, o.CreatedAt.Month }`). The rows are grouped by the expression itself; a null in a
+  computed key read into a non-nullable type throws, as in EF Core. Constant keys (`o => 1`), enum or converted
+  computed keys, and entity keys are KP2010, and so are `ValueTuple.Create` keys, which EF Core cannot translate
+  either. The groups of a computed key can only be selected from (KP1008), not returned with `ToList`.
 - Group values: `g.Key` and its members, `g.Count()`, `g.LongCount()`, `g.Count(predicate)` and
   `g.Where(predicate).Count()` (`COUNT(CASE WHEN ...)`), `g.Sum/Average/Min/Max(x => x.Property)`, and
   `g.Select(x => x.Property).Distinct().Count()` (`COUNT(DISTINCT ...)`). With an element selector that reads one
@@ -433,7 +464,7 @@ Same behavior as EF Core:
    adding `--nativeaot`, and call `options.UseModel(MyApp.CompiledModel.MyDbModel.Instance)`.
 2. Compiled models cannot hold query filters; filters only work under JIT.
 3. With a `--nativeaot` compiled model, tracking queries, `Find`, `Include`, `FromSql` and `SaveChanges` all work
-   under Native AOT, as do no-tracking queries and `ExecuteDelete`.
+   under Native AOT, as do no-tracking queries, `ExecuteDelete` and `ExecuteUpdate`.
 4. Keep `InvariantGlobalization` off; SqlClient needs culture data.
 5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor, and an IL3050 on
    `Enum.GetValues(Type)` in the compiled model of an entity with an enum stored as a string; KetPsi itself adds none.
@@ -469,8 +500,9 @@ Same behavior as EF Core:
 | KP2007 | Move the value into a local variable before the query, or make what it calls accessible to the assembly |
 | KP2008 | Order by a property, or a value computed from properties with operators, `?:` and `??` |
 | KP2009 | Keep projected collections to `Where`, `OrderBy`/`ThenBy` and one `Select`, ending in `ToList()` or `ToArray()`, without reading the projected row; avoid instance methods in projections; aggregate one property; make projected types accessible |
-| KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
+| KP2010 | Group by properties, ones through reference navigations, values computed from the row, or an anonymous type of them |
 | KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
 | KP2012 | Join a filtered `DbSet` on properties: properties or navigations on the outer side, the inner entity's own properties on the inner side |
+| KP2013 | Set a mapped property of the updated entity itself in `ExecuteUpdate` (`p => p.Title`), with a value the database can compute |
 | KP3001–KP3004 | Change the mapping to a supported type and shape; for KP3002, convert a struct, `string` or `byte[]` property, configured with the generic `Property(x => x.Name)` or `Properties<T>()` |
 | KP3005 | Make the query filter a translatable predicate |

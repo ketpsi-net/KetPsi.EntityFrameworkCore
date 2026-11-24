@@ -247,6 +247,45 @@ internal sealed class SqlBuilder
     }
 
     /// <summary>
+    /// Builds the <c>ExecuteUpdate</c> statement for the chain ending at <paramref name="tail"/>, as EF Core does: the
+    /// rows the chain selects get the setters' values, computed from each row. A chain without paging updates its own
+    /// <c>FROM</c>, joins included; one with paging updates the rows whose keys a derived table selects.
+    /// </summary>
+    /// <param name="entity">The queried entity, bound to the model.</param>
+    /// <param name="tail">The last node of the chain: entity operators only, no projection or grouping.</param>
+    /// <param name="dialect">The database dialect.</param>
+    /// <param name="includes">The navigations included from the queried entity, joined as for <c>ExecuteDelete</c>.</param>
+    /// <param name="filtersFor">The query filters to apply to an entity, already resolved against the context.</param>
+    /// <param name="setters">The properties to set, in order.</param>
+    /// <param name="bindEntity">Binds the target entity of a navigation the chain reads through.</param>
+    /// <exception cref="InvalidOperationException">There is no setter, as EF Core reports.</exception>
+    /// <exception cref="NotSupportedException">The chain pages a keyless entity, whose rows the derived table cannot name.</exception>
+    public static SqlStatement BuildUpdate(
+        BoundEntity entity,
+        QueryNode tail,
+        ISqlDialect dialect,
+        IncludeTree? includes,
+        Func<BoundEntity, IReadOnlyList<ResolvedQueryFilter>> filtersFor,
+        IReadOnlyList<UpdateSetter> setters,
+        Func<Type, BoundEntity>? bindEntity = null)
+    {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(tail);
+        ArgumentNullException.ThrowIfNull(dialect);
+        ArgumentNullException.ThrowIfNull(filtersFor);
+        ArgumentNullException.ThrowIfNull(setters);
+        if (setters.Count == 0)
+        {
+            throw new InvalidOperationException(ExceptionMessages.UpdateWithoutSetters);
+        }
+
+        var builder = new SqlBuilder(entity, dialect, filtersFor(entity), filtersFor, bindEntity, includes);
+        builder.ApplyChain(tail);
+
+        return new SqlStatement(builder.FinishUpdate(setters), builder._parameters);
+    }
+
+    /// <summary>
     /// Builds the <c>ExecuteDelete</c> statement for the chain ending at <paramref name="tail"/>, as EF Core does: the
     /// rows the chain selects are deleted from the queried table. A chain without paging deletes from its own
     /// <c>FROM</c>, joins included; one with paging deletes the rows whose keys a subquery selects.
@@ -409,6 +448,8 @@ internal sealed class SqlBuilder
                 WrapIf(State.Limit is not null || State.Distinct);
                 State.Limit = AddParameter(take.Count, property: null);
                 break;
+            case ProjectionNode when State.Keys is not null && State.Keys.Any(static k => k.Column.IsComputed):
+                throw new NotSupportedException(ExceptionMessages.GroupRowsWithComputedKey);
             case ProjectionNode projection when State.Keys is not null:
                 // The groups themselves: EF Core reads each row's key and element ordered by the key, and groups them in
                 // memory. Groups filtered or ordered by an aggregate can only be selected from.
@@ -447,7 +488,9 @@ internal sealed class SqlBuilder
                 EnsureNotProjected();
                 WrapIf(State.HasPaging || State.Distinct);
                 State.Ordering.Clear();
-                State.Keys = [.. group.KeyPaths.Select(ResolveKey)];
+                State.Keys = [.. group.KeyPaths.Select((path, i) => group.KeyValues?[i] is { } computed
+                    ? ComputedKey(computed, group.KeySlots)
+                    : ResolveKey(path))];
                 break;
             case HavingNode having:
                 EnsureGroupsNotPaged();
@@ -661,6 +704,28 @@ internal sealed class SqlBuilder
     }
 
     /// <summary>The column a key path reads, joining the navigations it goes through.</summary>
+    // A key computed from the row, such as DATEPART(year, ...): the rows are grouped by the expression itself, as SQL
+    // Server allows; EF Core selects it in a derived table first, which groups the same rows.
+    private GroupKey ComputedKey(ValueTemplate template, IReadOnlyList<object?> values)
+    {
+        var value = RenderEntityValue(template, values);
+        var type = value.ClrType ?? typeof(object);
+        var storeType = type == typeof(int) ? "int"
+            : type == typeof(long) ? "bigint"
+            : type == typeof(short) ? "smallint"
+            : type == typeof(byte) ? "tinyint"
+            : type == typeof(bool) ? "bit"
+            : type == typeof(decimal) ? "decimal(38, 17)"
+            : type == typeof(double) ? "float"
+            : type == typeof(float) ? "real"
+            : type == typeof(DateTime) ? "datetime2"
+            : type == typeof(DateOnly) ? "date"
+            : type == typeof(TimeSpan) || type == typeof(TimeOnly) ? "time"
+            : type == typeof(Guid) ? "uniqueidentifier"
+            : "nvarchar(max)";
+        return new GroupKey(Computed(value.Sql), new BoundProperty(GroupValueName, GroupValueName, storeType, value.IsNullable || value.IsNull, type, IsShadow: false));
+    }
+
     private GroupKey ResolveKey(string path)
     {
         var dot = path.LastIndexOf('.');
@@ -908,6 +973,51 @@ internal sealed class SqlBuilder
         return _dialect.Delete(alias, table + " WHERE EXISTS (SELECT 1 FROM (" + selected + ") AS " + keys + " WHERE " + matches + ")");
     }
 
+    /// <summary>
+    /// Sets the properties on the rows the chain selects, as EF Core writes <c>ExecuteUpdate</c>: on the statement's own
+    /// <c>FROM</c>, joins included, without paging; with paging, on the rows whose keys a derived table selects.
+    /// </summary>
+    private string FinishUpdate(IReadOnlyList<UpdateSetter> setters)
+    {
+        EnsureRootComposable();
+        EnsureNotProjected();
+        JoinIncludedReferences(_includes, RootPath);
+
+        // Without paging the rows are the ones the statement's FROM selects; distinct entity rows are the same rows.
+        if (!State.IsDerived && !State.HasPaging)
+        {
+            return _dialect.Update(State.Alias, Assignments(setters), RenderFrom(State));
+        }
+
+        var key = _entity.PrimaryKey ?? throw new NotSupportedException(string.Format(
+            CultureInfo.InvariantCulture, ExceptionMessages.UpdatePagedKeyless, _entity.ClrType));
+        var selected = RenderSelect(State, string.Join(", ", key.Select(k => Column(k, State.Alias))), includeOrdering: State.HasPaging);
+
+        // The values are computed from the updated row, which the keys of the selected ones are joined to.
+        var outer = new SqlBuilder(this, _entity);
+        var alias = NextAlias();
+        outer._state = new SelectState(_dialect.QualifyTable(_entity.Table, _entity.Schema), alias);
+        var assignments = outer.Assignments(setters);
+        var keys = NextAlias();
+        var matches = string.Join(" AND ", key.Select(k => Column(k, alias) + " = " + keys + "." + _dialect.QuoteIdentifier(k.ColumnName)));
+        outer.State.Joins.Add("INNER JOIN (" + selected + ") AS " + keys + " ON " + matches);
+        return _dialect.Update(alias, assignments, RenderFrom(outer.State));
+    }
+
+    // column = value for each setter: a value is sent typed and converted like the column it sets, as EF Core sends it.
+    private List<string> Assignments(IReadOnlyList<UpdateSetter> setters)
+    {
+        var assignments = new List<string>(setters.Count);
+        foreach (var setter in setters)
+        {
+            var property = _entity.GetProperty(setter.PropertyName);
+            var value = RenderEntityValue(setter.Value, setter.Values, property);
+            assignments.Add(Column(property, State.Alias) + " = " + (value.IsNull ? "NULL" : value.Sql));
+        }
+
+        return assignments;
+    }
+
     // EF Core joins the references included on the deleted entity, which a required one with a filtered target can narrow.
     private void JoinIncludedReferences(IncludeTree? includes, string path)
     {
@@ -1043,11 +1153,11 @@ internal sealed class SqlBuilder
     }
 
     /// <summary>A computed value of the queried entity at the current level, such as an order key; its names are property paths.</summary>
-    private SqlValue RenderEntityValue(ValueTemplate template, IReadOnlyList<object?> values)
+    private SqlValue RenderEntityValue(ValueTemplate template, IReadOnlyList<object?> values, BoundProperty? hint = null)
     {
         if (ValueNames(template).All(_entity.HasProperty))
         {
-            return RenderValue(_entity.BindValue(template), values, ColumnsAt(State.Alias), hint: null);
+            return RenderValue(_entity.BindValue(template), values, ColumnsAt(State.Alias), hint);
         }
 
         var (resolve, column) = PathColumns();
@@ -1056,7 +1166,7 @@ internal sealed class SqlBuilder
         _readsCollections = true;
         try
         {
-            return RenderValue(value, values, column, hint: null);
+            return RenderValue(value, values, column, hint);
         }
         finally
         {
@@ -1672,6 +1782,11 @@ internal sealed class SqlBuilder
             arguments.Add(rendered);
         }
 
+        if (RenderDateOrMath(function.Function, arguments) is { } computed)
+        {
+            return computed;
+        }
+
         var value = arguments[0];
         var isNullable = arguments.Exists(static a => a.IsNullable);
         var readsRow = arguments.Exists(static a => a.ReadsRow);
@@ -1718,6 +1833,129 @@ internal sealed class SqlBuilder
                 throw new NotSupportedException(string.Format(CultureInfo.InvariantCulture, ExceptionMessages.ToStringNotSupported, value.ClrType));
             default:
                 throw new UnreachableException(function.Function.ToString());
+        }
+    }
+
+    /// <summary>
+    /// A date or math function, as EF Core writes it, in the type C# gives it; null for any other function. A null
+    /// argument makes the result null, as in EF Core's SQL.
+    /// </summary>
+    private SqlValue? RenderDateOrMath(ValueFunction function, List<SqlValue> arguments)
+    {
+        var isNullable = arguments.Exists(static a => a.IsNullable);
+        var readsRow = arguments.Exists(static a => a.ReadsRow);
+        var sql = arguments.ConvertAll(static a => a.Sql);
+        var type = arguments.Count > 0 ? arguments[0].ClrType : null;
+        SqlValue Date(SqlDateFunction date, Type? clrType, params string[] dateArguments)
+            => new(_dialect.DateFunction(date, dateArguments), isNullable, clrType, readsRow);
+        SqlValue Math(SqlMathFunction math, Type? clrType, params string[] mathArguments)
+            => new(_dialect.MathFunction(math, mathArguments), isNullable, clrType, readsRow);
+
+        // The functions of double work in float; an integer or a decimal argument is converted, as C# converts it.
+        string Double(SqlValue argument) => argument.ClrType == typeof(double) ? argument.Sql : _dialect.Cast(argument.Sql, typeof(double));
+
+        switch (function)
+        {
+            case ValueFunction.Year:
+                return Date(SqlDateFunction.Year, typeof(int), sql[0]);
+            case ValueFunction.Month:
+                return Date(SqlDateFunction.Month, typeof(int), sql[0]);
+            case ValueFunction.Day:
+                return Date(SqlDateFunction.Day, typeof(int), sql[0]);
+            case ValueFunction.Hour:
+                return Date(SqlDateFunction.Hour, typeof(int), sql[0]);
+            case ValueFunction.Minute:
+                return Date(SqlDateFunction.Minute, typeof(int), sql[0]);
+            case ValueFunction.Second:
+                return Date(SqlDateFunction.Second, typeof(int), sql[0]);
+            case ValueFunction.Millisecond:
+                return Date(SqlDateFunction.Millisecond, typeof(int), sql[0]);
+            case ValueFunction.DayOfYear:
+                return Date(SqlDateFunction.DayOfYear, typeof(int), sql[0]);
+            case ValueFunction.Date:
+                return Date(SqlDateFunction.Date, type, sql[0]);
+            case ValueFunction.TimeOfDay:
+                return Date(SqlDateFunction.TimeOfDay, typeof(TimeSpan), sql[0]);
+            case ValueFunction.AddYears:
+                return Date(SqlDateFunction.AddYears, type, sql[1], sql[0]);
+            case ValueFunction.AddMonths:
+                return Date(SqlDateFunction.AddMonths, type, sql[1], sql[0]);
+            case ValueFunction.AddDays:
+                return Date(SqlDateFunction.AddDays, type, sql[1], sql[0]);
+            case ValueFunction.AddHours:
+                return Date(SqlDateFunction.AddHours, type, sql[1], sql[0]);
+            case ValueFunction.AddMinutes:
+                return Date(SqlDateFunction.AddMinutes, type, sql[1], sql[0]);
+            case ValueFunction.AddSeconds:
+                return Date(SqlDateFunction.AddSeconds, type, sql[1], sql[0]);
+            case ValueFunction.AddMilliseconds:
+                return Date(SqlDateFunction.AddMilliseconds, type, sql[1], sql[0]);
+            case ValueFunction.DayNumber:
+                return Date(SqlDateFunction.DayNumber, typeof(int), sql[0]);
+            case ValueFunction.DateFromDateTime:
+                return Date(SqlDateFunction.ToDate, typeof(DateOnly), sql[0]);
+            case ValueFunction.DateDiffYear:
+                return Date(SqlDateFunction.DiffYears, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffMonth:
+                return Date(SqlDateFunction.DiffMonths, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffWeek:
+                return Date(SqlDateFunction.DiffWeeks, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffDay:
+                return Date(SqlDateFunction.DiffDays, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffHour:
+                return Date(SqlDateFunction.DiffHours, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffMinute:
+                return Date(SqlDateFunction.DiffMinutes, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffSecond:
+                return Date(SqlDateFunction.DiffSeconds, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffMillisecond:
+                return Date(SqlDateFunction.DiffMilliseconds, typeof(int), sql[0], sql[1]);
+            case ValueFunction.Now:
+                return Date(SqlDateFunction.Now, typeof(DateTime));
+            case ValueFunction.UtcNow:
+                return Date(SqlDateFunction.UtcNow, typeof(DateTime));
+            case ValueFunction.Today:
+                return Date(SqlDateFunction.Today, typeof(DateTime));
+            case ValueFunction.Abs:
+                return Math(SqlMathFunction.Abs, type, sql[0]);
+            case ValueFunction.Round:
+                return Math(SqlMathFunction.Round, type, sql[0], arguments.Count > 1 ? sql[1] : "0");
+            case ValueFunction.Truncate:
+                return Math(SqlMathFunction.Truncate, type, sql[0]);
+            case ValueFunction.Floor:
+                return Math(SqlMathFunction.Floor, type, sql[0]);
+            case ValueFunction.Ceiling:
+                return Math(SqlMathFunction.Ceiling, type, sql[0]);
+            case ValueFunction.Sign:
+                // SIGN returns its argument's type; Math.Sign returns an int, which EF Core 10 casts to.
+                var sign = _dialect.MathFunction(SqlMathFunction.Sign, [sql[0]]);
+                return new SqlValue(type == typeof(int) ? sign : _dialect.Cast(sign, typeof(int)), isNullable, typeof(int), readsRow);
+            case ValueFunction.Pow:
+                return Math(SqlMathFunction.Power, typeof(double), Double(arguments[0]), Double(arguments[1]));
+            case ValueFunction.Sqrt:
+                return Math(SqlMathFunction.Sqrt, typeof(double), Double(arguments[0]));
+            case ValueFunction.Log:
+                return Math(SqlMathFunction.Log, typeof(double), Double(arguments[0]));
+            case ValueFunction.Log10:
+                return Math(SqlMathFunction.Log10, typeof(double), Double(arguments[0]));
+            case ValueFunction.Exp:
+                return Math(SqlMathFunction.Exp, typeof(double), Double(arguments[0]));
+            case ValueFunction.Sin:
+                return Math(SqlMathFunction.Sin, typeof(double), Double(arguments[0]));
+            case ValueFunction.Cos:
+                return Math(SqlMathFunction.Cos, typeof(double), Double(arguments[0]));
+            case ValueFunction.Tan:
+                return Math(SqlMathFunction.Tan, typeof(double), Double(arguments[0]));
+            case ValueFunction.Asin:
+                return Math(SqlMathFunction.Asin, typeof(double), Double(arguments[0]));
+            case ValueFunction.Acos:
+                return Math(SqlMathFunction.Acos, typeof(double), Double(arguments[0]));
+            case ValueFunction.Atan:
+                return Math(SqlMathFunction.Atan, typeof(double), Double(arguments[0]));
+            case ValueFunction.Atan2:
+                return Math(SqlMathFunction.Atan2, typeof(double), Double(arguments[0]), Double(arguments[1]));
+            default:
+                return null;
         }
     }
 
