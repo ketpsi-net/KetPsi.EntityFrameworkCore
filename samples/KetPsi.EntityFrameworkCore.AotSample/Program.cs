@@ -530,6 +530,31 @@ await CheckAsync(
         .Select(x => Invariant($"{x.Id}:{x.Count}:{x.Top?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "-"}:{string.Join(",", x.Stars)}")))),
     "1:2:5:5,1;2:1:3:3;3:0:-:");
 
+await CheckAsync(
+    "Date and math functions, computed members and group keys in SQL, and ExecuteUpdate",
+    async db =>
+    {
+        var early = string.Join(",", db.Products.Where(p => p.CreatedAt.Day <= 3 && p.CreatedAt.AddDays(1).Month == 1).OrderBy(p => p.Id).Select(p => p.Id).ToList());
+        var computed = string.Join(";", db.Products
+            .Where(p => Math.Abs(p.Price - 10m) < 3m)
+            .OrderBy(p => p.Id)
+            .Select(p => new { p.Id, p.CreatedAt.Year, Half = Math.Round(p.Price / 2, 1), Upper = p.Name.ToUpper() })
+            .ToList()
+            .Select(x => Invariant($"{x.Id}:{x.Year}:{x.Half:0.0}:{x.Upper}")));
+        var groups = string.Join(";", db.Products
+            .GroupBy(p => p.Price > 15m)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .OrderBy(x => x.Key)
+            .ToList()
+            .Select(x => Invariant($"{x.Key}:{x.Count}")));
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+        var updated = await db.Products.Where(p => p.Id <= 2).ExecuteUpdateAsync(s => s.SetProperty(p => p.Stock, p => (p.Stock ?? 0) + 1), cancellationToken);
+        var stocks = string.Join(",", db.Products.AsNoTracking().Where(p => p.Id <= 2).OrderBy(p => p.Id).Select(p => p.Stock).ToList());
+        await transaction.RollbackAsync(cancellationToken);
+        return $"{early}|{computed}|{groups}|{updated}:{stocks}";
+    },
+    "1,2,3|1:2024:5.0:DUNE;5:2024:3.6:NEUROMANCER;6:2024:6.0:KIND OF BLUE;8:2024:4.4:FOUNDATION|False:4;True:4|2:13,1");
+
 var title = "dune";
 var cheapest = 10m;
 await CheckAsync(

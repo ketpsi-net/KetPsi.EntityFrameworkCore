@@ -357,7 +357,9 @@ internal sealed partial class ProjectionTranslator
     /// <c>x.Name.ToUpper()</c> or <c>x.CreatedAt.AddDays(1)</c>: selected as a value computed in SQL, as EF Core
     /// computes a final projection, and read after the property paths; null for anything else, which C# computes.
     /// </summary>
-    private string? ComputedInSql(IOperation operation)
+    /// <param name="operation">The value.</param>
+    /// <param name="asNullable">Whether it is read as a nullable type, null where SQL computes null, as a cast to one reads it.</param>
+    private string? ComputedInSql(IOperation operation, bool asNullable = false)
     {
         if (!AllowsValues || operation.Syntax is not ExpressionSyntax expression || operation.Type is not { } type
             || operation.ConstantValue.HasValue || operation is IParenthesizedOperation
@@ -398,7 +400,7 @@ internal sealed partial class ProjectionTranslator
 
         var index = _values.Count;
         _values.Add(template);
-        return Hoist(ReadColumn(shape, $"{Ordinals}[{ValueOrdinalPlaceholder(index)}]", throughNavigation: true, asNullable: false));
+        return Hoist(ReadColumn(shape, $"{Ordinals}[{ValueOrdinalPlaceholder(index)}]", throughNavigation: true, asNullable));
     }
 
     // A column or an entity, which the reader reads as it is.
@@ -543,6 +545,11 @@ internal sealed partial class ProjectionTranslator
 
             case IInvocationOperation or IPropertyReferenceOperation when ProjectedCollection(operation) is { } collection:
                 return collection;
+
+            // (int?)x.ShippedAt.Value.Year is null where SQL computes null, as in EF Core.
+            case IConversionOperation conversion when IsNullableOf(conversion.Type, conversion.Operand.Type)
+                && ComputedInSql(conversion.Operand, asNullable: true) is { } nullableComputed:
+                return nullableComputed;
 
             case IConversionOperation conversion when IsNullableOf(conversion.Type, conversion.Operand.Type)
                 && MemberPath(conversion.Operand) is { } path && IsReadable(path, conversion.Operand.Syntax):
@@ -1028,7 +1035,13 @@ internal sealed partial class ProjectionTranslator
                 return collection;
             }
 
-            // The largest part the database can compute, as EF Core computes it in SQL.
+            // The largest part the database can compute, as EF Core computes it in SQL; a cast to nullable reads its null.
+            if (operation is IConversionOperation { IsImplicit: false } computedConversion && IsNullableOf(computedConversion.Type, computedConversion.Operand.Type)
+                && translator.ComputedInSql(computedConversion.Operand, asNullable: true) is { } nullableComputed)
+            {
+                return nullableComputed;
+            }
+
             if (operation is not null && translator.ComputedInSql(operation) is { } computed)
             {
                 return computed;
