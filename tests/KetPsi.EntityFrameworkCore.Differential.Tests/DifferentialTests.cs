@@ -659,6 +659,24 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
             { "CountBlogsProjectedWithPosts", [] },
             { "BlogCommentedPostIds", [] },
             { "CategoryGadgetNames", [] },
+            { "UpdateGadgetNames", [] },
+            { "UpdateGadgetNotes", ["set"] },
+            { "UpdateGadgetNotes", [null] },
+            { "UpdateGadgetsComputed", [] },
+            { "UpdateGadgetsWithCaptures", [3] },
+            { "UpdateGadgetsCoalesceAndConditional", [] },
+            { "UpdateGadgetsStringMethods", [] },
+            { "UpdateGadgetsDates", [3] },
+            { "UpdateGadgetsMath", [] },
+            { "UpdateGadgetsOfCategory", [] },
+            { "UpdateGadgetsPaged", [] },
+            { "UpdateGadgetsTopByPrice", [] },
+            { "UpdateGadgetShades", [] },
+            { "UpdateGadgetsNoRows", [] },
+            { "UpdateGadgetsSameColumnTwice", [] },
+            { "UpdateGadgetsAsync", [] },
+            { "UpdateTrackedGadget", [] },
+            { "UpdateTicketsConverted", [] },
         };
 
 #if NET10_0_OR_GREATER
@@ -668,6 +686,12 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
 
 #if NET10_0_OR_GREATER
         cases.Add("IgnoringTenantFilter", []);
+#endif
+
+#if NET10_0_OR_GREATER
+        // EF Core 10 and later take the setters as a delegate, which can set properties conditionally.
+        cases.Add("UpdateGadgetsConditionally", [true]);
+        cases.Add("UpdateGadgetsConditionally", [false]);
 #endif
         return cases;
     }
@@ -705,7 +729,7 @@ public sealed class DifferentialTests(SqlServerFixture fixture)
         "FindBlog(1)", "FindPostAsync(101)", "FindTrackedTwice(3)", "DeleteTrackedComment()", "JoinEntities()",
         "FromSqlTracked()", "FromSqlAsWrittenTracked()",
         "TicketsTracked()", "FindTicket(2)", "FindTicketTwice(3)", "TicketsWithNotesTracked()", "LoadModifySaveTicket(3)",
-        "BlogsWithPostsTracked()", "BlogsAndPostsTracked()",
+        "BlogsWithPostsTracked()", "BlogsAndPostsTracked()", "UpdateTrackedGadget()",
     };
 
     // Queries whose results have a defined order; other results are compared sorted by Id.

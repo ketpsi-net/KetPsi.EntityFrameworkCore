@@ -65,6 +65,17 @@ var page = await db.Blogs
   which a keyless entity doesn't have (`NotSupportedException`); an ordering without paging, `Distinct` and tracking
   don't change what is deleted. Nothing is loaded and the change tracker is left alone, so a tracked entity that was
   deleted stays `Unchanged`. Not after `Select` (KP1007) or `GroupBy` (KP1008).
+- `ExecuteUpdate(s => s.SetProperty(...))` and `ExecuteUpdateAsync` set properties on the rows the query selects and
+  return how many, as in EF Core: `UPDATE [t0] SET [t0].[Name] = @p0, ... FROM [Posts] AS [t0] ... WHERE ...`.
+  - A value can be a constant or a variable (`SetProperty(p => p.Title, title)`), sent typed and converted like the
+    column, or a lambda over the row computed in SQL (`SetProperty(p => p.Views, p => p.Views + 1)`) with anything a
+    computed value supports: arithmetic, `??`, `?:`, string methods, date and math functions, reference navigations.
+  - EF Core 9 takes the setters as an expression; EF Core 10 and 11 take a delegate, so `SetProperty` can be called in
+    `if` statements and loops (`s => { s.SetProperty(...); if (flag) s.SetProperty(...); }`). Both work.
+  - The rows are chosen as `ExecuteDelete` chooses them: query filters, joined navigations, and after `Skip` or `Take`
+    the keys a derived table selects (`INNER JOIN (SELECT ...)`). Tracked entities keep their values, as in EF Core.
+  - The set property must be a mapped property of the entity itself (KP2013), not one through a navigation.
+    Setting the same column twice fails in SQL Server, as in EF Core; no setter at all throws `InvalidOperationException`.
 - `Last` and `LastOrDefault` need an `OrderBy` before them, on the entities or before a `Select`, as in EF Core: they
   read the query in reverse order and take the first row (`TOP(1) ... ORDER BY ... DESC`). Without an ordering they
   throw EF Core's `InvalidOperationException` ("must have a deterministic sort order") when they run; an ordering before
@@ -74,7 +85,7 @@ var page = await db.Blogs
   The SQL and the empty-set behavior are EF Core's: `Sum` of no rows is 0, a nullable or reference result is null, and
   `Min`, `Max` or `Average` of no rows into a non-nullable value type throws.
 
-**Not supported yet** (build error): `GroupJoin`, `SelectMany`, `TagWith`, `ExecuteUpdate`, `AsAsyncEnumerable`.
+**Not supported yet** (build error): `GroupJoin`, `SelectMany`, `TagWith`, `AsAsyncEnumerable`.
 
 Other `System.Linq.Enumerable` methods (`AsEnumerable`, `ToDictionary`, `ToHashSet`, ...) are rejected directly
 on a `DbSet`, but after any KetPsi operator they run the query and finish in memory:
@@ -449,7 +460,7 @@ Same behavior as EF Core:
    adding `--nativeaot`, and call `options.UseModel(MyApp.CompiledModel.MyDbModel.Instance)`.
 2. Compiled models cannot hold query filters; filters only work under JIT.
 3. With a `--nativeaot` compiled model, tracking queries, `Find`, `Include`, `FromSql` and `SaveChanges` all work
-   under Native AOT, as do no-tracking queries and `ExecuteDelete`.
+   under Native AOT, as do no-tracking queries, `ExecuteDelete` and `ExecuteUpdate`.
 4. Keep `InvariantGlobalization` off; SqlClient needs culture data.
 5. Expect EF Core's own IL2026/IL3050 warnings on the `DbContext` constructor, and an IL3050 on
    `Enum.GetValues(Type)` in the compiled model of an entity with an enum stored as a string; KetPsi itself adds none.
@@ -488,5 +499,6 @@ Same behavior as EF Core:
 | KP2010 | Group by properties, ones through reference navigations, or an anonymous type of them |
 | KP2011 | Read groups through `g.Key` and aggregates of one property of the grouped entity; query the rows separately |
 | KP2012 | Join a filtered `DbSet` on properties: properties or navigations on the outer side, the inner entity's own properties on the inner side |
+| KP2013 | Set a mapped property of the updated entity itself in `ExecuteUpdate` (`p => p.Title`), with a value the database can compute |
 | KP3001–KP3004 | Change the mapping to a supported type and shape; for KP3002, convert a struct, `string` or `byte[]` property, configured with the generic `Property(x => x.Name)` or `Properties<T>()` |
 | KP3005 | Make the query filter a translatable predicate |

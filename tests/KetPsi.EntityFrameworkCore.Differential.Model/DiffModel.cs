@@ -409,8 +409,9 @@ public sealed class CommandCounter : DbCommandInterceptor
         return ValueTask.FromResult(result);
     }
 
-    // ExecuteDelete runs as a query does, outside SaveChanges, and so does FromSql of a stored procedure. EF Core 11
-    // sends ExecuteDelete after SET NOCOUNT OFF, so its row count is right on a server that has NOCOUNT on.
+    // ExecuteDelete and ExecuteUpdate run as a query does, outside SaveChanges, and so does FromSql of a stored
+    // procedure. EF Core 11 sends them after SET NOCOUNT OFF, so their row count is right on a server that has NOCOUNT on.
+    // ExecuteUpdate updates a table's alias, such as UPDATE [g] SET ... FROM; SaveChanges updates the table itself.
     private void Record(DbCommand command)
     {
         var text = command.CommandText.TrimStart();
@@ -420,7 +421,7 @@ public sealed class CommandCounter : DbCommandInterceptor
         }
 
         if (text.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase) || text.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase)
-            || text.StartsWith("EXEC", StringComparison.OrdinalIgnoreCase))
+            || text.StartsWith("EXEC", StringComparison.OrdinalIgnoreCase) || IsExecuteUpdate(text))
         {
             Reads++;
         }
@@ -428,5 +429,17 @@ public sealed class CommandCounter : DbCommandInterceptor
         {
             Writes.Add(command.CommandText);
         }
+    }
+
+    private static bool IsExecuteUpdate(string text)
+    {
+        if (!text.StartsWith("UPDATE ", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var target = text["UPDATE ".Length..].TrimStart();
+        var end = target.IndexOfAny([' ', '\r', '\n']);
+        return end > 0 && !target[..end].Contains('.', StringComparison.Ordinal);
     }
 }

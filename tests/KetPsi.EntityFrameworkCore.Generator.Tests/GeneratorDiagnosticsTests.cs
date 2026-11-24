@@ -56,7 +56,6 @@ public sealed class GeneratorDiagnosticsTests
     [InlineData("var r = db.Blogs.SkipLast(1).ToList();", "SkipLast")]
     [InlineData("var r = db.Blogs.IgnoreAutoIncludes().ToList();", "IgnoreAutoIncludes")]
     [InlineData("var r = db.Blogs.TagWith(\"x\").ToList();", "TagWith")]
-    [InlineData("var r = db.Blogs.ExecuteUpdate(s => s.SetProperty(b => b.Rating, 1));", "ExecuteUpdate")]
     [InlineData("var r = db.Blogs.TemporalAll().ToList();", "TemporalAll")]
     [InlineData("var r = db.Blogs.AsAsyncEnumerable();", "AsAsyncEnumerable")]
     [InlineData("var r = db.Blogs.AsEnumerable().ToList();", "AsEnumerable")]

@@ -202,6 +202,35 @@ internal sealed class PredicateTranslator
     }
 
     /// <summary>
+    /// Translates the value lambda of a <c>SetProperty</c> of EF Core 10's setters builder, such as
+    /// <c>o =&gt; o.Quantity + 1</c>, into a value template; its values are computed from the variables it captures.
+    /// </summary>
+    /// <exception cref="TranslationException">The value cannot be translated.</exception>
+    public static PredicateModel TranslateSetterValue(LambdaExpressionSyntax lambda, SemanticModel model, CancellationToken cancellationToken)
+    {
+        var parameterSyntax = lambda switch
+        {
+            SimpleLambdaExpressionSyntax simple => simple.Parameter,
+            ParenthesizedLambdaExpressionSyntax { ParameterList.Parameters.Count: 1 } parenthesized => parenthesized.ParameterList.Parameters[0],
+            _ => null,
+        };
+
+        if (parameterSyntax is null
+            || model.GetDeclaredSymbol(parameterSyntax, cancellationToken) is not { } parameter
+            || lambda.Body is not ExpressionSyntax body)
+        {
+            throw Fail(DiagnosticDescriptors.ExpressionNotSupported, lambda);
+        }
+
+        var translator = new PredicateTranslator(
+            model, parameter, readValue: null, operands: null, valueSlots: null, allowNavigations: true, cancellationToken)
+        {
+            _valuesFromCaptures = true,
+        };
+        return translator.Finish(translator.TranslateValue(StripParentheses(body)), body);
+    }
+
+    /// <summary>
     /// Translates the condition of a <c>Where</c> on a projected collection, such as <c>p =&gt; p.IsPublic</c>, into a
     /// predicate template over the related entity. Its values are computed from the captured variables, with the
     /// placeholders <see cref="CapturedValueWriter"/> describes, and appended to <paramref name="valueSlots"/>.

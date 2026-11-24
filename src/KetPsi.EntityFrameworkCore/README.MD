@@ -54,6 +54,7 @@ targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 i
 | Grouping | `GroupBy` on properties, ones through reference navigations, or an anonymous type of them, with an element or result selector too; then `Where`, `OrderBy`/`ThenBy`, a `Select` of keys and aggregates, `Count`, `LongCount`, `Any`, `ToList` and `ToArray` on the groups |
 | Raw SQL | `FromSql`, `FromSqlInterpolated` and `FromSqlRaw` on a set, sent as written or composed over with any operator; `Database.SqlQuery<T>` and `SqlQueryRaw<T>` for scalars and unmapped classes and records |
 | Bulk delete | `ExecuteDelete` and `ExecuteDeleteAsync` after the filtering, ordering and paging operators, without loading or tracking the rows |
+| Bulk update | `ExecuteUpdate` and `ExecuteUpdateAsync` with constant, variable and computed values (`p => p.Views + 1`), on EF Core 9's expression and on EF Core 10's delegate setters, including conditional `SetProperty` calls |
 | Lookup by key | `Find` and `FindAsync`, which return a tracked entity without a query, as EF Core does |
 | Terminals | `ToList`, `ToArray`, `First`, `FirstOrDefault`, `Last`, `LastOrDefault` (after an `OrderBy`, as in EF Core), `Single`, `SingleOrDefault`, `Count`, `LongCount`, `Any`, their `Async` versions, the predicate overloads, and `foreach` / `await foreach` |
 
@@ -221,6 +222,7 @@ KetPsi itself produces no trim or AOT warnings. EF Core still needs a few things
 | KP2010 | `GroupBy` key not supported: a computed, constant, entity or `ValueTuple.Create` key |
 | KP2011 | Group expression not supported: the group's rows (`g.First()`, `g.ToList()`), an aggregate through a navigation or with a computed selector |
 | KP2012 | Join not supported: an inner sequence that is not a filtered `DbSet`, an inner key through a navigation, or a computed key |
+| KP2013 | `ExecuteUpdate` setter not supported: a property through a navigation or not mapped |
 | KP3001–KP3005 | Property type, value converter, owned/complex/JSON mapping, entity construction or query filter not supported |
 
 ## How it works
