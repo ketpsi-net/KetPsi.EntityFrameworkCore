@@ -143,6 +143,20 @@ on a `DbSet`, but after any KetPsi operator they run the query and finish in mem
   - `EF.Functions.Like(value, pattern)` and `Like(value, pattern, escape)`, sent as written.
   - Matching follows the column's collation, usually case-insensitive, and `LEN` doesn't count trailing spaces, as in
     EF Core.
+- Date and math functions, as EF Core translates them:
+  - Parts: `Year`, `Month`, `Day`, `Hour`, `Minute`, `Second`, `Millisecond` and `DayOfYear` of `DateTime`,
+    `DateTimeOffset`, `DateOnly` and `TimeOnly`; `Date` and `TimeOfDay` of a `DateTime`; `DateOnly.DayNumber` and
+    `DateOnly.FromDateTime(d)`.
+  - `AddYears`, `AddMonths`, `AddDays`, `AddHours`, `AddMinutes`, `AddSeconds` and `AddMilliseconds`. The amount is
+    truncated to a whole number, as EF Core's `DATEADD` does: `AddDays(1.5)` adds one day.
+  - `DateTime.Now`, `UtcNow` and `Today` are the database's clock (`GETDATE()`), as in EF Core, not the app's.
+  - `EF.Functions.DateDiffYear`, `DateDiffMonth`, `DateDiffWeek`, `DateDiffDay`, `DateDiffHour`, `DateDiffMinute`,
+    `DateDiffSecond` and `DateDiffMillisecond`.
+  - `Math.Abs`, `Round(x)` and `Round(x, decimals)` (halves away from zero, as SQL rounds them), `Truncate`, `Floor`,
+    `Ceiling`, `Pow`, `Sqrt`, `Log`, `Log10`, `Exp`, `Sign`, `Sin`, `Cos`, `Tan`, `Asin`, `Acos`, `Atan` and
+    `Atan2`, and `decimal.Round`, `Floor`, `Ceiling` and `Truncate`.
+  - Not translated, as in EF Core (KP2003): `DayOfWeek`, `Ticks`, `AddTicks`, `new DateTime(...)`, subtracting dates,
+    `Math.Max` and `Math.Min`, `Math.Log(x, base)`, `MidpointRounding` overloads and `MathF`.
 - Not translatable: comparing a navigation with anything but `null` (KP2002); `StringComparison` overloads,
   `ToUpperInvariant`, `Trim(chars)`, `PadLeft`, the indexer `Name[0]`, `ToString()` of enums, dates and decimals, and
   other methods (KP2003); `EF.Functions` other than `Like` (KP2004); other collection queries, such as

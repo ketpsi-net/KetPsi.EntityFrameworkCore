@@ -866,6 +866,10 @@ internal sealed class PredicateTranslator
             case IInvocationOperation when _operands is not null && _operands(syntax) is { } groupValue:
                 return $"new {Templates}.PropertyValueTemplate(\"{groupValue.Name}\")";
 
+            // Date parts and arithmetic, the database's clock, Math and EF.Functions.DateDiff*, as EF Core translates them.
+            case IPropertyReferenceOperation or IInvocationOperation when DateOrMathFunction(operation) is { } dateOrMath:
+                return dateOrMath;
+
             // Count and the aggregates of a collection navigation: x.Posts.Count(), x.Posts.Sum(p => p.Rating).
             case IInvocationOperation invocation when TranslateCollectionValue(invocation) is { } collectionValue:
                 return collectionValue;
@@ -948,7 +952,97 @@ internal sealed class PredicateTranslator
     }
 
     private string Function(string function, params IOperation[] arguments)
-        => $"new {Templates}.FunctionValueTemplate({Templates}.ValueFunction.{function}, {string.Join(", ", arguments.Select(TranslateValue))})";
+        => $"new {Templates}.FunctionValueTemplate({string.Join(", ", new[] { $"{Templates}.ValueFunction.{function}" }.Concat(arguments.Select(TranslateValue)))})";
+
+    /// <summary>
+    /// A member or method of a date or time that EF Core translates (<c>x.CreatedAt.Year</c>, <c>x.CreatedAt.AddDays(1)</c>,
+    /// <c>DateOnly.FromDateTime(x.CreatedAt)</c>), the database's clock (<c>DateTime.Now</c>), a <see cref="Math"/> or
+    /// <see cref="decimal"/> function (<c>Math.Round(x.Price, 2)</c>), or <c>EF.Functions.DateDiffDay</c>; null for
+    /// anything else, such as <c>DayOfWeek</c>, <c>Ticks</c> or <c>Math.Max</c>, which EF Core doesn't translate on every version.
+    /// </summary>
+    private string? DateOrMathFunction(IOperation operation)
+    {
+        switch (operation)
+        {
+            case IPropertyReferenceOperation { Instance: null, Property: { Name: "Now" or "UtcNow" or "Today" } clock }
+                when clock.ContainingType.SpecialType == SpecialType.System_DateTime:
+                return Function(clock.Name);
+
+            case IPropertyReferenceOperation { Instance: { } instance, Property.Name: var name } when DateKind(instance.Type) is { } kind:
+                return name switch
+                {
+                    "Year" or "Month" or "Day" or "DayOfYear" when kind is KindDateTime or KindDateOnly or KindOffset => Function(name, instance),
+                    "Hour" or "Minute" or "Second" or "Millisecond" when kind is KindDateTime or KindTimeOnly or KindOffset => Function(name, instance),
+                    "Date" or "TimeOfDay" when kind is KindDateTime => Function(name, instance),
+                    "DayNumber" when kind is KindDateOnly => Function(name, instance),
+                    _ => null,
+                };
+
+            case IInvocationOperation { Instance: { } instance, TargetMethod: { Name: var name, Parameters.Length: 1 }, Arguments: { Length: 1 } added }
+                when DateKind(instance.Type) is { } kind && IsNumber(added[0].Value.Type):
+                return name switch
+                {
+                    "AddYears" or "AddMonths" or "AddDays" when kind is KindDateTime or KindDateOnly or KindOffset => Function(name, instance, added[0].Value),
+                    "AddHours" or "AddMinutes" when kind is KindDateTime or KindTimeOnly or KindOffset => Function(name, instance, added[0].Value),
+                    "AddSeconds" or "AddMilliseconds" when kind is KindDateTime or KindOffset => Function(name, instance, added[0].Value),
+                    _ => null,
+                };
+
+            case IInvocationOperation { Instance: null, TargetMethod: { Name: "FromDateTime", Parameters.Length: 1 } method, Arguments: { Length: 1 } date }
+                when DateKind(method.ContainingType) == KindDateOnly:
+                return Function("DateFromDateTime", date[0].Value);
+
+            case IInvocationOperation { Instance: null, TargetMethod: var method, Arguments: var arguments } when IsMathType(method.ContainingType):
+                // Overloads of numbers only: one with MidpointRounding is evaluated by EF Core on the client.
+                if (!method.Parameters.All(static p => IsNumber(p.Type)))
+                {
+                    return null;
+                }
+
+                var isDecimal = method.ContainingType.SpecialType == SpecialType.System_Decimal;
+                return (method.Name, arguments.Length) switch
+                {
+                    ("Round", 1 or 2) or ("Truncate" or "Floor" or "Ceiling", 1) => Function(method.Name, [.. arguments.Select(static a => a.Value)]),
+                    _ when isDecimal => null,
+                    ("Abs" or "Sqrt" or "Log" or "Log10" or "Exp" or "Sign" or "Sin" or "Cos" or "Tan" or "Asin" or "Acos" or "Atan", 1)
+                        => Function(method.Name, arguments[0].Value),
+                    ("Pow" or "Atan2", 2) => Function(method.Name, arguments[0].Value, arguments[1].Value),
+                    _ => null,
+                };
+
+            case IInvocationOperation { TargetMethod: { Name: var name } method, Arguments: { Length: 3 } diff }
+                when name.StartsWith("DateDiff", System.StringComparison.Ordinal)
+                    && (method.ReducedFrom ?? method).Parameters.FirstOrDefault()?.Type.ToDisplayString() == DbFunctions
+                    && name is "DateDiffYear" or "DateDiffMonth" or "DateDiffWeek" or "DateDiffDay" or "DateDiffHour" or "DateDiffMinute"
+                        or "DateDiffSecond" or "DateDiffMillisecond":
+                return Function(name, diff[1].Value, diff[2].Value);
+
+            default:
+                return null;
+        }
+    }
+
+    private const int KindDateTime = 0;
+    private const int KindDateOnly = 1;
+    private const int KindTimeOnly = 2;
+    private const int KindOffset = 3;
+
+    // Which date or time type a value is, nullable or not; null for any other type.
+    private static int? DateKind(ITypeSymbol? type) => Underlying(type) switch
+    {
+        { SpecialType: SpecialType.System_DateTime } => KindDateTime,
+        { Name: "DateOnly", ContainingNamespace.Name: "System" } => KindDateOnly,
+        { Name: "TimeOnly", ContainingNamespace.Name: "System" } => KindTimeOnly,
+        { Name: "DateTimeOffset", ContainingNamespace.Name: "System" } => KindOffset,
+        _ => null,
+    };
+
+    private static bool IsMathType(INamedTypeSymbol type)
+        => type.SpecialType == SpecialType.System_Decimal || type is { Name: "Math", ContainingNamespace.Name: "System" };
+
+    private static bool IsNumber(ITypeSymbol? type) => Underlying(type)?.SpecialType is SpecialType.System_Int32 or SpecialType.System_Int64
+        or SpecialType.System_Int16 or SpecialType.System_SByte or SpecialType.System_Byte or SpecialType.System_Double
+        or SpecialType.System_Single or SpecialType.System_Decimal;
 
     // The condition of ?: as a predicate; one that does not read the row is decided by its value.
     private string TranslateCondition(IOperation condition)
@@ -1339,8 +1433,15 @@ internal sealed class PredicateTranslator
     // The prefix of a name of the row a number of collection conditions out.
     private static string Outer(int depth) => depth == 0 ? "" : new string('^', depth);
 
+    // A value that reads the row, or the database's clock, which EF Core reads in SQL rather than when the query is built.
     private bool ReferencesParameter(SyntaxNode node)
-        => node.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any(IsParameter);
+        => node.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any(IsParameter) || ReadsClock(node);
+
+    // DateTime.Now, UtcNow or Today: GETDATE() and the like, as EF Core writes them.
+    private bool ReadsClock(SyntaxNode node)
+        => node.DescendantNodesAndSelf().OfType<MemberAccessExpressionSyntax>().Any(member =>
+            member.Name.Identifier.ValueText is "Now" or "UtcNow" or "Today"
+            && _model.GetSymbolInfo(member, _cancellationToken).Symbol is IPropertySymbol { IsStatic: true, ContainingType.SpecialType: SpecialType.System_DateTime });
 
     private bool IsNullLiteral(ExpressionSyntax node)
         => StripParentheses(node) is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.NullLiteralExpression)

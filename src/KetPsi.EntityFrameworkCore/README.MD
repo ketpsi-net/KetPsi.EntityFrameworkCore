@@ -68,6 +68,10 @@ targets `net9.0`, `net10.0` and `net11.0` with EF Core 9, 10 and 11; EF Core 8 i
   `LIKE` pattern), `ToUpper`, `ToLower`, `Trim`, `TrimStart`, `TrimEnd`, `Length`, `Substring`, `Replace`, `IndexOf`,
   `string.Concat`, `string.IsNullOrEmpty`, `string.IsNullOrWhiteSpace`, `Equals`, `string.Compare` and `CompareTo`, and
   `ToString()` of strings and integers; and `EF.Functions.Like`.
+- Date and math functions as EF Core translates them: date parts (`p.CreatedAt.Year`), `Date`, `TimeOfDay`, the
+  `Add` methods (`DATEADD`, whole amounts), `DateTime.Now`, `UtcNow` and `Today` as the database's clock,
+  `EF.Functions.DateDiff*`, `DateOnly.FromDateTime`, and `Math.Abs`, `Round`, `Truncate`, `Floor`, `Ceiling`, `Pow`,
+  `Sqrt`, `Log`, `Log10`, `Exp`, `Sign` and the trigonometric functions.
 - `string.Equals(value)`, enums, nullable properties.
 - `list.Contains(b.Property)` over arrays and lists, sent as one JSON parameter through `OPENJSON`.
 - Related collections: `Any` and `All` (`b.Posts.Any(p => p.Rating >= b.MinRating)`), counts (`b.Posts.Count`,
