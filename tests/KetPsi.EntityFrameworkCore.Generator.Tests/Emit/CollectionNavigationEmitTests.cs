@@ -93,8 +93,8 @@ public sealed class CollectionNavigationEmitTests
     }
 
     [Theory]
-    [InlineData("new { L = b.Name + suffix, C = b.Posts.Count(p => p.Id > min) }", "((string)captures[0]!)", "new object?[] { (((int)captures[1]!)) }")]
-    [InlineData("new { C = b.Posts.Count(p => p.Id > min), L = b.Name + suffix }", "((string)captures[1]!)", "new object?[] { (((int)captures[0]!)) }")]
+    [InlineData("new { L = $\"{b.Name}{suffix}\", C = b.Posts.Count(p => p.Id > min) }", "((string)captures[0]!)", "new object?[] { (((int)captures[1]!)) }")]
+    [InlineData("new { C = b.Posts.Count(p => p.Id > min), L = $\"{b.Name}{suffix}\" }", "((string)captures[1]!)", "new object?[] { (((int)captures[0]!)) }")]
     public void CapturesOfValuesAndComputedMembers_AreNumberedInSourceOrder(string selector, string suffix, string slots)
     {
         var run = GeneratorHost.Run(TestSources.WithBody($"var suffix = \"!\"; var min = 2; var r = db.Blogs.Select(b => {selector}).ToList();"));

@@ -95,6 +95,31 @@ public sealed class DateMathEmitTests
     }
 
     [Theory]
+    [InlineData("var r = db.Orders.Select(o => new { o.Id, o.CreatedAt.Year, Next = o.CreatedAt.AddDays(1), Rounded = Math.Round(o.Price, 2), Total = o.Price * o.Quantity }).ToList();")]
+    [InlineData("var bonus = 2; var r = db.Orders.Select(o => new { Label = $\"{o.CreatedAt.Year}-{o.Quantity + bonus}\", Max = Math.Max(o.Quantity, bonus) }).ToList();")]
+    [InlineData("var r = db.Orders.Select(o => o.CreatedAt.Date).Distinct().ToList();")]
+    [InlineData("var r = db.Orders.Select(o => new { o.Id, Days = EF.Functions.DateDiffDay(o.CreatedAt, o.ShippedAt), Now = DateTime.Now }).ToList();")]
+    [InlineData("var r = db.Orders.Select(o => new { o.Id, Big = o.Quantity > 5, Items = new[] { 1, 2 }.Select(x => x + o.Quantity).ToList() }).ToList();")]
+    public void ComputedMembers_CompileWhetherSqlOrCSharpComputesThem(string body)
+    {
+        var run = GeneratorHost.Run(Source(body));
+
+        Assert.Empty(run.Diagnostics);
+        Assert.Empty(run.OutputProblems());
+    }
+
+    [Fact]
+    public void ComputedMember_IsAValueTheDatabaseComputes_AndPartsOfOneOnlyCSharpComputes()
+    {
+        var generated = GeneratorHost.Run(Source("var r = db.Orders.Select(o => new { o.CreatedAt.Year, Label = Math.Max(o.Quantity * 2, 1) }).ToList();"))
+            .Generated(InterceptorEmitter.HintName);
+
+        Assert.Contains($"new {Templates}.FunctionValueTemplate({Templates}.ValueFunction.Year, new {Templates}.PropertyValueTemplate(\"CreatedAt\"))", generated, StringComparison.Ordinal);
+        Assert.Contains($"new {Templates}.BinaryValueTemplate({Templates}.ValueOperator.Multiply, new {Templates}.PropertyValueTemplate(\"Quantity\"), ", generated, StringComparison.Ordinal);
+        Assert.Contains("global::System.Math.Max(", generated, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("var r = db.Orders.Where(o => o.CreatedAt.DayOfWeek == DayOfWeek.Monday).ToList();")]
     [InlineData("var r = db.Orders.Where(o => o.CreatedAt.Ticks > 0).ToList();")]
     [InlineData("var r = db.Orders.Where(o => o.CreatedAt.AddTicks(1) > o.CreatedAt).ToList();")]

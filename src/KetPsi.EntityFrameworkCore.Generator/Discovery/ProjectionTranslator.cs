@@ -139,6 +139,12 @@ internal sealed partial class ProjectionTranslator
                 translator = new ProjectionTranslator(model, symbols, parameters, location, cancellationToken) { _deferred = true };
                 code = translator.Translate(operation);
             }
+            else if (translator._readsInLambda)
+            {
+                // A lambda inside the projection can't use the reader's spans: the row is read into locals first.
+                translator = new ProjectionTranslator(model, symbols, parameters, location, cancellationToken) { _hoistReads = true };
+                code = translator.Translate(operation);
+            }
 
             // A lambda whose body converts to the result type, such as x => x.Id for an object result.
             var typeInfo = model.GetTypeInfo(body, cancellationToken);
@@ -276,20 +282,42 @@ internal sealed partial class ProjectionTranslator
     // A reader that uses captured values closes over them; one that doesn't is static.
     private string ReaderLambda(string body)
     {
-        if (!_deferred)
+        var modifier = CaptureCount == 0 ? "static " : "";
+        if (!_deferred && !_hoistReads)
         {
-            return $"{(CaptureCount == 0 ? "static " : "")}({Reader}, {Ordinals}, {Entities}) => {ResolveValueOrdinals(ResolveCaptures(body))}";
+            return $"{modifier}({Reader}, {Ordinals}, {Entities}) => {ResolveValueOrdinals(ResolveCaptures(body))}";
         }
 
         // The row is read first, since the reader can't be kept; the result is built from what was read.
         var reads = string.Concat(_hoisted.Select((read, i) => $"var {HoistedName(i)} = {read}; "));
-        return ResolveValueOrdinals(ResolveCaptures($"({Reader}, {Ordinals}, {Entities}) => {{ {reads}return {BuildHelper}(() => {body}); }}"));
+        return _deferred
+            ? ResolveValueOrdinals(ResolveCaptures($"({Reader}, {Ordinals}, {Entities}) => {{ {reads}return {BuildHelper}(() => {body}); }}"))
+            : ResolveValueOrdinals(ResolveCaptures($"{modifier}({Reader}, {Ordinals}, {Entities}) => {{ {reads}return {body}; }}"));
+    }
+
+    // Whether the row is read into locals first, because a lambda inside the projection reads it.
+    private bool _hoistReads;
+
+    // Whether a column or entity is read inside a lambda inside the projection.
+    private bool _readsInLambda;
+
+    // Notes a read inside a lambda inside the selector, which the reader's spans can't reach.
+    private void NoteRead(SyntaxNode syntax)
+    {
+        for (var node = syntax.Parent; node is not null; node = node.Parent)
+        {
+            if (node is AnonymousFunctionExpressionSyntax lambda)
+            {
+                _readsInLambda |= !_parameter.DeclaringSyntaxReferences.Any(r => lambda.Span.Contains(r.Span));
+                return;
+            }
+        }
     }
 
     // With collections, what the reader reads from the row goes in a local the result is built from later.
     private string Hoist(string read)
     {
-        if (!_deferred)
+        if (!_deferred && !_hoistReads)
         {
             return read;
         }
@@ -323,6 +351,114 @@ internal sealed partial class ProjectionTranslator
     private bool AllowsValues
         => _group is null && !_readsNoMembers && !_isElement && _parameters.Count == 1
             && _parameters.Values.First() is { Count: 1 } aliases && aliases[0] is { MemberPath: "", Path: "", IsEntity: true };
+
+    /// <summary>
+    /// A value computed from the row that the database can compute, such as <c>x.Price * x.Quantity</c>,
+    /// <c>x.Name.ToUpper()</c> or <c>x.CreatedAt.AddDays(1)</c>: selected as a value computed in SQL, as EF Core
+    /// computes a final projection, and read after the property paths; null for anything else, which C# computes.
+    /// </summary>
+    private string? ComputedInSql(IOperation operation)
+    {
+        if (!AllowsValues || operation.Syntax is not ExpressionSyntax expression || operation.Type is not { } type
+            || operation.ConstantValue.HasValue || operation is IParenthesizedOperation
+            || IsReadDirectly(operation)
+            || !ReadsOnlyTheRow(expression))
+        {
+            return null;
+        }
+
+        // A value of a converted or an enum type would be read as the store's value.
+        var underlying = type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable ? nullable.TypeArguments[0] : type;
+        if (underlying.TypeKind == TypeKind.Enum || EntityShapeBuilder.NeedsConverter(underlying) || EntityShapeBuilder.ScalarShape(type, "") is not { } shape)
+        {
+            return null;
+        }
+
+        var firstSlot = _valueSlots.Count;
+        string template;
+        try
+        {
+            template = PredicateTranslator.TranslateProjectedValue(expression, _parameter, _model, _valueSlots, _cancellationToken);
+        }
+        catch (TranslationException)
+        {
+            _valueSlots.RemoveRange(firstSlot, _valueSlots.Count - firstSlot);
+            return null;
+        }
+
+        for (var i = firstSlot; i < _valueSlots.Count; i++)
+        {
+            _valueSlots[i] = SlotCapture.Replace(_valueSlots[i], match =>
+            {
+                var span = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+                _captureSpans.Add(span);
+                return CapturePlaceholder(span);
+            });
+        }
+
+        var index = _values.Count;
+        _values.Add(template);
+        return Hoist(ReadColumn(shape, $"{Ordinals}[{ValueOrdinalPlaceholder(index)}]", throughNavigation: true, asNullable: false));
+    }
+
+    // A column or an entity, which the reader reads as it is.
+    private bool IsReadDirectly(IOperation operation)
+    {
+        if (operation is not (IParameterReferenceOperation or IPropertyReferenceOperation) || MemberPath(operation) is not { } path)
+        {
+            return false;
+        }
+
+        try
+        {
+            return IsReadable(path, operation.Syntax);
+        }
+        catch (TranslationException)
+        {
+            return true;
+        }
+    }
+
+    // Whether an expression reads the selector's parameter and no other lambda's, outside any lambda inside the selector.
+    private bool ReadsOnlyTheRow(ExpressionSyntax expression)
+    {
+        for (var node = expression.Parent; node is not null; node = node.Parent)
+        {
+            if (node is AnonymousFunctionExpressionSyntax lambda)
+            {
+                if (!_parameter.DeclaringSyntaxReferences.Any(r => lambda.Span.Contains(r.Span)))
+                {
+                    return false;
+                }
+
+                break;
+            }
+        }
+
+        var readsRow = false;
+        foreach (var name in expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
+        {
+            if (_model.GetSymbolInfo(name, _cancellationToken).Symbol is not IParameterSymbol parameter)
+            {
+                continue;
+            }
+
+            if (!SymbolEqualityComparer.Default.Equals(parameter, _parameter))
+            {
+                // A parameter of a lambda inside the value, which only C# can run.
+                if (parameter.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.AnonymousFunction })
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            readsRow = true;
+        }
+
+        return readsRow;
+    }
 
     /// <summary>
     /// <c>Any</c>, <c>All</c>, a count or an aggregate of a collection navigation, such as <c>x.Posts.Count()</c>: a
@@ -437,7 +573,7 @@ internal sealed partial class ProjectionTranslator
                 return Rebuild(group.Type, group.Aliases, group.Prefix, operation.Syntax);
 
             default:
-                return Computed(operation.Syntax);
+                return ComputedInSql(operation) ?? Computed(operation.Syntax);
         }
     }
 
@@ -654,6 +790,7 @@ internal sealed partial class ProjectionTranslator
         var shape = PropertyShape(entity, property, syntax);
         var ordinal = Ordinal(_propertyPaths.Count);
         _propertyPaths.Add(path);
+        NoteRead(syntax);
         return Hoist(ReadColumn(shape, ordinal, throughNavigation: ThroughNavigation(path), asNullable));
     }
 
@@ -663,6 +800,7 @@ internal sealed partial class ProjectionTranslator
         var shape = EntityShapeBuilder.ScalarShape(type, path) ?? throw Fail(syntax, $"the type '{type.ToDisplayString()}' cannot be read");
         var ordinal = Ordinal(_propertyPaths.Count);
         _propertyPaths.Add(path);
+        NoteRead(syntax);
         return Hoist(ReadColumn(shape, ordinal, throughNavigation: true, asNullable));
     }
 
@@ -729,6 +867,7 @@ internal sealed partial class ProjectionTranslator
             _entities.Add(shape);
         }
 
+        NoteRead(syntax);
         return Hoist($"(({NameOf(entity, syntax)}){Entities}[{index.ToString(CultureInfo.InvariantCulture)}]!)");
     }
 
@@ -887,6 +1026,12 @@ internal sealed partial class ProjectionTranslator
             if (operation is not null && translator.ProjectedCollection(operation) is { } collection)
             {
                 return collection;
+            }
+
+            // The largest part the database can compute, as EF Core computes it in SQL.
+            if (operation is not null && translator.ComputedInSql(operation) is { } computed)
+            {
+                return computed;
             }
 
             // A column or entity of the lambda's parameter, read like any projected member.

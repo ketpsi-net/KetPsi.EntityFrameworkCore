@@ -123,9 +123,9 @@ and identity-resolution queries connect the entities the way EF Core does, and i
 navigations (`p.Blog.Owner.Name`, joined like an included reference) and entities (`p`, `p.Blog`). Projected entities
 are tracked, identity-resolved and given the includes below them, as in EF Core. A value through a missing optional
 navigation is null, and a non-nullable value type there throws as it does in EF Core unless it is cast to nullable.
-Computed members run in C# on the values read, as EF Core evaluates a final projection on the client; captured values
-are read each time the query runs. Following C# rather than SQL, `Math.Round` rounds halves to even and string methods
-use the current culture. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals are allowed, and
+Computed members are computed in SQL when they can be translated, as EF Core computes them (`p.Title.ToUpper()`,
+`p.Created.Year`, `Math.Round(p.Price, 2)`), and otherwise in C# on the values read, as EF Core evaluates the rest of a
+final projection on the client; captured values are read each time the query runs. After `Select`, `Skip`, `Take`, `Distinct`, aggregates and terminals are allowed, and
 `Where`, `OrderBy`, `Select`, `Join` and terminals with a predicate that read only its entity and column members, before
 any paging.
 Members can also be values of related collections, computed by the database as EF Core does: `Any`, `All`, counts,

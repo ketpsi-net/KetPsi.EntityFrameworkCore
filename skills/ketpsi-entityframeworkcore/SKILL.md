@@ -234,15 +234,16 @@ var rows = await db.Posts
 
 - The statement reads only the columns the lambda uses. Results can be anonymous types (nested too), records and
   other constructors, object initializers, `ValueTuple.Create(...)`, or a single member (`p => p.Title`).
-- Computed members run in C# on the values read, as EF Core evaluates a final projection on the client:
-  `p.Title + "!"`, `p.Title.ToUpper()`, `Math.Round(p.Price, 2)`, `p.Created.Year`, `p.Views ?? 0`, conditionals,
-  interpolated strings, your own static and extension methods. Captured variables, fields of the enclosing instance
-  and static members are read when the query runs, so each run sees their current values. A `string` method on a null
-  column gives null, as the SQL EF Core sends does; any other member of a null value throws, as it does in C#.
-- Because computed members follow C#, a few results can differ from EF Core where EF Core computes in SQL:
-  `Math.Round` rounds halves to even (SQL rounds them away from zero), string methods use the current culture, and
-  `b.Author != null` reads the author entity, which a tracking query then tracks. Compare a foreign key instead
-  (`b.AuthorId != null`), or round explicitly with `MidpointRounding.AwayFromZero`.
+- Computed members are computed where EF Core computes them:
+  - **In SQL** when they can be translated, like predicates: `p.Title + "!"`, `p.Title.ToUpper()`,
+    `Math.Round(p.Price, 2)`, `p.Created.Year`, `p.Created.AddDays(1)`, `p.Views ?? 0`, conditionals, comparisons. So
+    `Math.Round` rounds halves away from zero and string methods follow the column's collation, as in EF Core.
+  - **In C#** on the values read otherwise, as EF Core evaluates the rest of a final projection on the client:
+    interpolated strings, your own static and extension methods, `Math.Max`, lambdas. The largest part of such a
+    member that SQL can compute still is (`Format(p.Price * p.Quantity)` computes the product in SQL).
+  - Captured variables, fields of the enclosing instance and static members are read when the query runs, so each run
+    sees their current values. A `string` method on a null column gives null, as the SQL EF Core sends does; any other
+    member of a null value throws, as it does in C#.
 - Members read entity properties, follow reference navigations (`p.Blog.Owner.Name`), or are entities themselves
   (`p`, `p.Blog`). Each navigation is joined like an included reference: `INNER JOIN` when required, `LEFT JOIN`
   when optional, with the target's query filters in the join.
@@ -284,7 +285,8 @@ var rows = await db.Posts
   are, before any paging: `Select(p => new { p, p.Blog }).Where(x => x.Blog.Rating > 1)`
   is `WHERE` on the blog's column. A member that is computed, or anything after `Skip`, `Take` or `Distinct`, is
   KP1007; filter and order before the `Select` instead.
-- `Distinct` after `Select` compares the projected columns in SQL, so it can't follow computed members (KP1007).
+- `Distinct` after `Select` compares the projected columns in SQL, so it can't follow members computed in C# (KP1007);
+  members computed in SQL are fine.
   An aggregate after `Select` needs a projection of one property.
 - `Count`, `LongCount` and `Any` ignore the projection, so they don't join its navigations, as in EF Core: with a
   required, filtered reference, `Count()` can be higher than `ToList().Count`.

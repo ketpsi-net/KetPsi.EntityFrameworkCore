@@ -184,6 +184,24 @@ internal sealed class PredicateTranslator
     }
 
     /// <summary>
+    /// Translates a value a projection computes, such as <c>x.Price * x.Quantity</c> or <c>x.CreatedAt.Year</c>, into a
+    /// value template the database computes, as EF Core computes a final projection in SQL where it can. Its values are
+    /// computed from the captured variables, with the placeholders <see cref="CapturedValueWriter"/> describes, and
+    /// appended to <paramref name="valueSlots"/>.
+    /// </summary>
+    /// <exception cref="TranslationException">The value cannot be translated; the projection computes it in C# instead.</exception>
+    public static string TranslateProjectedValue(
+        ExpressionSyntax expression, IParameterSymbol parameter, SemanticModel model, List<string> valueSlots, CancellationToken cancellationToken)
+    {
+        var translator = new PredicateTranslator(
+            model, parameter, readValue: null, operands: null, valueSlots, allowNavigations: true, cancellationToken)
+        {
+            _valuesFromCaptures = true,
+        };
+        return translator.TranslateValue(StripParentheses(expression));
+    }
+
+    /// <summary>
     /// Translates the condition of a <c>Where</c> on a projected collection, such as <c>p =&gt; p.IsPublic</c>, into a
     /// predicate template over the related entity. Its values are computed from the captured variables, with the
     /// placeholders <see cref="CapturedValueWriter"/> describes, and appended to <paramref name="valueSlots"/>.
