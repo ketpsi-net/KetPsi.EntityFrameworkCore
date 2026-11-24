@@ -2,7 +2,10 @@ using System.ComponentModel;
 
 namespace KetPsi.EntityFrameworkCore.Infrastructure.Templates;
 
-/// <summary>A method or member of a value, such as <c>x.Name.ToUpper()</c> or <c>x.Name.Length</c>.</summary>
+/// <summary>
+/// A method or member of a value, such as <c>x.Name.ToUpper()</c>, <c>x.Name.Length</c> or <c>x.CreatedAt.Year</c>, or a
+/// static function, such as <c>Math.Abs(x.Score)</c> or <c>DateTime.Now</c>.
+/// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class FunctionValueTemplate : ValueTemplate
 {
@@ -23,6 +26,11 @@ public sealed class FunctionValueTemplate : ValueTemplate
             ValueFunction.Substring => (2, 3),
             ValueFunction.Replace => (3, 3),
             ValueFunction.IndexOf => (2, 2),
+            ValueFunction.Now or ValueFunction.UtcNow or ValueFunction.Today => (0, 0),
+            ValueFunction.Round => (1, 2),
+            >= ValueFunction.AddYears and <= ValueFunction.AddMilliseconds => (2, 2),
+            >= ValueFunction.DateDiffYear and <= ValueFunction.DateDiffMillisecond => (2, 2),
+            ValueFunction.Pow or ValueFunction.Atan2 => (2, 2),
             _ => (1, 1),
         };
 

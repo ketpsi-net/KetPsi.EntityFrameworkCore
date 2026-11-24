@@ -1672,6 +1672,11 @@ internal sealed class SqlBuilder
             arguments.Add(rendered);
         }
 
+        if (RenderDateOrMath(function.Function, arguments) is { } computed)
+        {
+            return computed;
+        }
+
         var value = arguments[0];
         var isNullable = arguments.Exists(static a => a.IsNullable);
         var readsRow = arguments.Exists(static a => a.ReadsRow);
@@ -1718,6 +1723,129 @@ internal sealed class SqlBuilder
                 throw new NotSupportedException(string.Format(CultureInfo.InvariantCulture, ExceptionMessages.ToStringNotSupported, value.ClrType));
             default:
                 throw new UnreachableException(function.Function.ToString());
+        }
+    }
+
+    /// <summary>
+    /// A date or math function, as EF Core writes it, in the type C# gives it; null for any other function. A null
+    /// argument makes the result null, as in EF Core's SQL.
+    /// </summary>
+    private SqlValue? RenderDateOrMath(ValueFunction function, List<SqlValue> arguments)
+    {
+        var isNullable = arguments.Exists(static a => a.IsNullable);
+        var readsRow = arguments.Exists(static a => a.ReadsRow);
+        var sql = arguments.ConvertAll(static a => a.Sql);
+        var type = arguments.Count > 0 ? arguments[0].ClrType : null;
+        SqlValue Date(SqlDateFunction date, Type? clrType, params string[] dateArguments)
+            => new(_dialect.DateFunction(date, dateArguments), isNullable, clrType, readsRow);
+        SqlValue Math(SqlMathFunction math, Type? clrType, params string[] mathArguments)
+            => new(_dialect.MathFunction(math, mathArguments), isNullable, clrType, readsRow);
+
+        // The functions of double work in float; an integer or a decimal argument is converted, as C# converts it.
+        string Double(SqlValue argument) => argument.ClrType == typeof(double) ? argument.Sql : _dialect.Cast(argument.Sql, typeof(double));
+
+        switch (function)
+        {
+            case ValueFunction.Year:
+                return Date(SqlDateFunction.Year, typeof(int), sql[0]);
+            case ValueFunction.Month:
+                return Date(SqlDateFunction.Month, typeof(int), sql[0]);
+            case ValueFunction.Day:
+                return Date(SqlDateFunction.Day, typeof(int), sql[0]);
+            case ValueFunction.Hour:
+                return Date(SqlDateFunction.Hour, typeof(int), sql[0]);
+            case ValueFunction.Minute:
+                return Date(SqlDateFunction.Minute, typeof(int), sql[0]);
+            case ValueFunction.Second:
+                return Date(SqlDateFunction.Second, typeof(int), sql[0]);
+            case ValueFunction.Millisecond:
+                return Date(SqlDateFunction.Millisecond, typeof(int), sql[0]);
+            case ValueFunction.DayOfYear:
+                return Date(SqlDateFunction.DayOfYear, typeof(int), sql[0]);
+            case ValueFunction.Date:
+                return Date(SqlDateFunction.Date, type, sql[0]);
+            case ValueFunction.TimeOfDay:
+                return Date(SqlDateFunction.TimeOfDay, typeof(TimeSpan), sql[0]);
+            case ValueFunction.AddYears:
+                return Date(SqlDateFunction.AddYears, type, sql[1], sql[0]);
+            case ValueFunction.AddMonths:
+                return Date(SqlDateFunction.AddMonths, type, sql[1], sql[0]);
+            case ValueFunction.AddDays:
+                return Date(SqlDateFunction.AddDays, type, sql[1], sql[0]);
+            case ValueFunction.AddHours:
+                return Date(SqlDateFunction.AddHours, type, sql[1], sql[0]);
+            case ValueFunction.AddMinutes:
+                return Date(SqlDateFunction.AddMinutes, type, sql[1], sql[0]);
+            case ValueFunction.AddSeconds:
+                return Date(SqlDateFunction.AddSeconds, type, sql[1], sql[0]);
+            case ValueFunction.AddMilliseconds:
+                return Date(SqlDateFunction.AddMilliseconds, type, sql[1], sql[0]);
+            case ValueFunction.DayNumber:
+                return Date(SqlDateFunction.DayNumber, typeof(int), sql[0]);
+            case ValueFunction.DateFromDateTime:
+                return Date(SqlDateFunction.ToDate, typeof(DateOnly), sql[0]);
+            case ValueFunction.DateDiffYear:
+                return Date(SqlDateFunction.DiffYears, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffMonth:
+                return Date(SqlDateFunction.DiffMonths, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffWeek:
+                return Date(SqlDateFunction.DiffWeeks, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffDay:
+                return Date(SqlDateFunction.DiffDays, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffHour:
+                return Date(SqlDateFunction.DiffHours, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffMinute:
+                return Date(SqlDateFunction.DiffMinutes, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffSecond:
+                return Date(SqlDateFunction.DiffSeconds, typeof(int), sql[0], sql[1]);
+            case ValueFunction.DateDiffMillisecond:
+                return Date(SqlDateFunction.DiffMilliseconds, typeof(int), sql[0], sql[1]);
+            case ValueFunction.Now:
+                return Date(SqlDateFunction.Now, typeof(DateTime));
+            case ValueFunction.UtcNow:
+                return Date(SqlDateFunction.UtcNow, typeof(DateTime));
+            case ValueFunction.Today:
+                return Date(SqlDateFunction.Today, typeof(DateTime));
+            case ValueFunction.Abs:
+                return Math(SqlMathFunction.Abs, type, sql[0]);
+            case ValueFunction.Round:
+                return Math(SqlMathFunction.Round, type, sql[0], arguments.Count > 1 ? sql[1] : "0");
+            case ValueFunction.Truncate:
+                return Math(SqlMathFunction.Truncate, type, sql[0]);
+            case ValueFunction.Floor:
+                return Math(SqlMathFunction.Floor, type, sql[0]);
+            case ValueFunction.Ceiling:
+                return Math(SqlMathFunction.Ceiling, type, sql[0]);
+            case ValueFunction.Sign:
+                // SIGN returns its argument's type; Math.Sign returns an int, which EF Core 10 casts to.
+                var sign = _dialect.MathFunction(SqlMathFunction.Sign, [sql[0]]);
+                return new SqlValue(type == typeof(int) ? sign : _dialect.Cast(sign, typeof(int)), isNullable, typeof(int), readsRow);
+            case ValueFunction.Pow:
+                return Math(SqlMathFunction.Power, typeof(double), Double(arguments[0]), Double(arguments[1]));
+            case ValueFunction.Sqrt:
+                return Math(SqlMathFunction.Sqrt, typeof(double), Double(arguments[0]));
+            case ValueFunction.Log:
+                return Math(SqlMathFunction.Log, typeof(double), Double(arguments[0]));
+            case ValueFunction.Log10:
+                return Math(SqlMathFunction.Log10, typeof(double), Double(arguments[0]));
+            case ValueFunction.Exp:
+                return Math(SqlMathFunction.Exp, typeof(double), Double(arguments[0]));
+            case ValueFunction.Sin:
+                return Math(SqlMathFunction.Sin, typeof(double), Double(arguments[0]));
+            case ValueFunction.Cos:
+                return Math(SqlMathFunction.Cos, typeof(double), Double(arguments[0]));
+            case ValueFunction.Tan:
+                return Math(SqlMathFunction.Tan, typeof(double), Double(arguments[0]));
+            case ValueFunction.Asin:
+                return Math(SqlMathFunction.Asin, typeof(double), Double(arguments[0]));
+            case ValueFunction.Acos:
+                return Math(SqlMathFunction.Acos, typeof(double), Double(arguments[0]));
+            case ValueFunction.Atan:
+                return Math(SqlMathFunction.Atan, typeof(double), Double(arguments[0]));
+            case ValueFunction.Atan2:
+                return Math(SqlMathFunction.Atan2, typeof(double), Double(arguments[0]), Double(arguments[1]));
+            default:
+                return null;
         }
     }
 

@@ -158,6 +158,86 @@ public sealed class SqlServerDialect : ISqlDialect
     }
 
     /// <inheritdoc/>
+    public string DateFunction(SqlDateFunction function, IReadOnlyList<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        // As EF Core writes them: DATEADD takes a whole number, so a fractional amount is truncated.
+        var (count, format) = function switch
+        {
+            SqlDateFunction.Year => (1, "DATEPART(year, {0})"),
+            SqlDateFunction.Month => (1, "DATEPART(month, {0})"),
+            SqlDateFunction.Day => (1, "DATEPART(day, {0})"),
+            SqlDateFunction.Hour => (1, "DATEPART(hour, {0})"),
+            SqlDateFunction.Minute => (1, "DATEPART(minute, {0})"),
+            SqlDateFunction.Second => (1, "DATEPART(second, {0})"),
+            SqlDateFunction.Millisecond => (1, "DATEPART(millisecond, {0})"),
+            SqlDateFunction.DayOfYear => (1, "DATEPART(dayofyear, {0})"),
+            SqlDateFunction.AddYears => (2, "DATEADD(year, CAST({0} AS int), {1})"),
+            SqlDateFunction.AddMonths => (2, "DATEADD(month, CAST({0} AS int), {1})"),
+            SqlDateFunction.AddDays => (2, "DATEADD(day, CAST({0} AS int), {1})"),
+            SqlDateFunction.AddHours => (2, "DATEADD(hour, CAST({0} AS int), {1})"),
+            SqlDateFunction.AddMinutes => (2, "DATEADD(minute, CAST({0} AS int), {1})"),
+            SqlDateFunction.AddSeconds => (2, "DATEADD(second, CAST({0} AS int), {1})"),
+            SqlDateFunction.AddMilliseconds => (2, "DATEADD(millisecond, CAST({0} AS int), {1})"),
+            SqlDateFunction.DiffYears => (2, "DATEDIFF(year, {0}, {1})"),
+            SqlDateFunction.DiffMonths => (2, "DATEDIFF(month, {0}, {1})"),
+            SqlDateFunction.DiffWeeks => (2, "DATEDIFF(week, {0}, {1})"),
+            SqlDateFunction.DiffDays => (2, "DATEDIFF(day, {0}, {1})"),
+            SqlDateFunction.DiffHours => (2, "DATEDIFF(hour, {0}, {1})"),
+            SqlDateFunction.DiffMinutes => (2, "DATEDIFF(minute, {0}, {1})"),
+            SqlDateFunction.DiffSeconds => (2, "DATEDIFF(second, {0}, {1})"),
+            SqlDateFunction.DiffMilliseconds => (2, "DATEDIFF(millisecond, {0}, {1})"),
+            SqlDateFunction.Date => (1, "CONVERT(date, {0})"),
+            SqlDateFunction.TimeOfDay => (1, "CONVERT(time, {0})"),
+            SqlDateFunction.ToDate => (1, "CAST({0} AS date)"),
+            SqlDateFunction.DayNumber => (1, "DATEDIFF(day, '0001-01-01', {0})"),
+            SqlDateFunction.Now => (0, "GETDATE()"),
+            SqlDateFunction.UtcNow => (0, "GETUTCDATE()"),
+            SqlDateFunction.Today => (0, "CONVERT(date, GETDATE())"),
+            _ => throw new ArgumentOutOfRangeException(nameof(function), function, message: null),
+        };
+
+        return Format(function, count, format, arguments);
+    }
+
+    /// <inheritdoc/>
+    public string MathFunction(SqlMathFunction function, IReadOnlyList<string> arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+
+        var (count, format) = function switch
+        {
+            SqlMathFunction.Abs => (1, "ABS({0})"),
+            SqlMathFunction.Round => (2, "ROUND({0}, {1})"),
+            SqlMathFunction.Truncate => (1, "ROUND({0}, 0, 1)"),
+            SqlMathFunction.Floor => (1, "FLOOR({0})"),
+            SqlMathFunction.Ceiling => (1, "CEILING({0})"),
+            SqlMathFunction.Power => (2, "POWER({0}, {1})"),
+            SqlMathFunction.Sqrt => (1, "SQRT({0})"),
+            SqlMathFunction.Log => (1, "LOG({0})"),
+            SqlMathFunction.Log10 => (1, "LOG10({0})"),
+            SqlMathFunction.Exp => (1, "EXP({0})"),
+            SqlMathFunction.Sign => (1, "SIGN({0})"),
+            SqlMathFunction.Sin => (1, "SIN({0})"),
+            SqlMathFunction.Cos => (1, "COS({0})"),
+            SqlMathFunction.Tan => (1, "TAN({0})"),
+            SqlMathFunction.Asin => (1, "ASIN({0})"),
+            SqlMathFunction.Acos => (1, "ACOS({0})"),
+            SqlMathFunction.Atan => (1, "ATAN({0})"),
+            SqlMathFunction.Atan2 => (2, "ATN2({0}, {1})"),
+            _ => throw new ArgumentOutOfRangeException(nameof(function), function, message: null),
+        };
+
+        return Format(function, count, format, arguments);
+    }
+
+    private static string Format(Enum function, int count, string format, IReadOnlyList<string> arguments)
+        => arguments.Count == count
+            ? string.Format(CultureInfo.InvariantCulture, format, [.. arguments])
+            : throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, ExceptionMessages.FunctionArgumentCount, function, count), nameof(arguments));
+
+    /// <inheritdoc/>
     public string Like(string value, string pattern, string? escape)
         => value + " LIKE " + pattern + (escape is null ? "" : " ESCAPE " + escape);
 

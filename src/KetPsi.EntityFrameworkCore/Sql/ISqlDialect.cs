@@ -42,6 +42,14 @@ public interface ISqlDialect
     /// <exception cref="ArgumentException">The arguments do not match the function.</exception>
     string StringFunction(SqlStringFunction function, IReadOnlyList<string> arguments);
 
+    /// <summary>Returns a date and time function: <see cref="SqlDateFunction"/> lists its arguments.</summary>
+    /// <exception cref="ArgumentException">The arguments do not match the function.</exception>
+    string DateFunction(SqlDateFunction function, IReadOnlyList<string> arguments);
+
+    /// <summary>Returns a math function: <see cref="SqlMathFunction"/> lists its arguments.</summary>
+    /// <exception cref="ArgumentException">The arguments do not match the function.</exception>
+    string MathFunction(SqlMathFunction function, IReadOnlyList<string> arguments);
+
     /// <summary>Returns <c>value LIKE pattern</c>, with <c>ESCAPE escape</c> when <paramref name="escape"/> is given.</summary>
     string Like(string value, string pattern, string? escape);
 
